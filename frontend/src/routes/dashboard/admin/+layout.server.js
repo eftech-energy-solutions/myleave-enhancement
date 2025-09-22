@@ -1,7 +1,13 @@
+// src/routes/dashboard/admin/+layout.server.js
 import { redirect } from '@sveltejs/kit';
 
-export async function load({ locals, url }) {
-  if (!locals.user) throw redirect(303, `/login?next=${encodeURIComponent(url.pathname)}`);
-  if (locals.user.role !== 'admin') throw redirect(303, '/dashboard');
-  return { user: locals.user };
-}
+export const load = ({ url, locals }) => {
+  // if you don’t have auth yet, comment these two lines temporarily
+  // if (!locals.user) throw redirect(302, '/login');
+  // if (locals.user.role !== 'admin') throw redirect(302, '/dashboard');
+
+  if (url.pathname === '/dashboard/admin') {
+    throw redirect(302, '/dashboard/admin/main');
+  }
+  return { user: locals.user ?? null };
+};

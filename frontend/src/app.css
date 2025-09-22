@@ -282,6 +282,29 @@ canvas {
   top: 1rem;
   right: 1rem;
 }
+.container {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  min-height: 100dvh;
+  gap: 0;
+  background: url('/images/bg.png') center/cover no-repeat; /* 👈 bg here */
+}
+
+
+.aside {
+ background: #ffff;   /* keep sidebar white */
+  border-right: none; /* no seam */
+}
+.container{
+  display:grid;
+  grid-template-columns: 220px 1fr;
+  min-height:100dvh;
+  gap:0;
+  background: url('/images/bg.png') center/cover no-repeat;
+}
+.dash-main{ padding:0; background: transparent; }
+.aside{ background:#fff; border-right:none; }
+
 
 
 

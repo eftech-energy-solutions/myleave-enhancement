@@ -1,14 +1,15 @@
 <script>
-  import Sidebar from '$lib/components/Sidebarlayout.svelte';
-  export let data; // { user }
+  import Sidebar from '$lib/components/Sidebar.svelte'; // the “normal” sidebar
+  import { page } from '$app/stores';
+  export let data;
+  $: pathname = $page.url.pathname;
 </script>
 
-<div class="app">
-  <Sidebar user={data.user} />
-  <main class="content"><slot /></main>
+<div class="container">
+  <aside class="aside">
+    <Sidebar user={data.user} pathname={pathname} />
+  </aside>
+  <main class="main dash-main">
+    <div class="container-inner"><slot /></div>
+  </main>
 </div>
-
-<style>
-  .app{display:flex;min-height:100vh}
-  .content{flex:1;padding:16px}
-</style>
