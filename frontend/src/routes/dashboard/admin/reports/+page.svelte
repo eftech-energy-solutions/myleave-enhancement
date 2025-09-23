@@ -236,14 +236,15 @@
         <div class="days">
           {#each days as d (d.key)}
             <button
-              class:muted={d.muted}
-              class:today={d.today}
-              disabled={atStartOfDay(d.date) < today}
-              on:click={() => openLeaveForm(d.date)}
-              aria-label={`Select ${d.date.toDateString()}`}
-            >
-              {d.label}
-            </button>
+  class:muted={d.muted}
+  class:today={d.today}
+  disabled={!d.today && atStartOfDay(d.date) < today}
+  on:click={() => openLeaveForm(d.date)}
+  aria-label={`Select ${d.date.toDateString()}`}
+>
+  {d.label}
+</button>
+
           {/each}
         </div>
       </div>
@@ -419,7 +420,12 @@
   .days button{
     border:1px solid var(--ring); border-radius:8px; background:#fff; cursor:pointer;
   }
-  .days button.today{ box-shadow:inset 0 0 0 2px #3b82f6; }
+  .days button.today {
+  border: 2px solid #49bdb3;   /* teal border */
+  font-weight: 700;            /* bold text */
+  color: #111827;              /* dark text so it's readable */
+  background: #ffff;         /* light teal background (optional) */
+}
   .days button.muted{ opacity:.5; }
   .days button:disabled{ background:#f3f4f6; color:#9ca3af; cursor:not-allowed; }
 
