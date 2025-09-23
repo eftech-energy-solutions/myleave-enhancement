@@ -164,7 +164,7 @@
   .icon-btn{ border:none; background:transparent; cursor:pointer; font-size:18px; line-height:1; padding:6px; border-radius:8px; color:#fff; }
   .icon-btn:hover{ background:rgba(255,255,255,.12); }
   .profile-info{ display:flex; align-items:center; gap:10px; color:#fff; }
-  .avatar-img{ height:36px; width:36px; border-radius:9999px; display:block; box-shadow:0 0 0 2px rgba(255,255,255,.25); }
+  .avatar-img{ height:70px; width:70px; border-radius:9999px; display:block; box-shadow:0 0 0 2px rgba(255,255,255,.25); }
   .who .name{ font-size: 20px; font-weight:700; }
   .who .sub{ font-size:12px; opacity:.95; color:#fff; }
   .caret{ font-size:16px; color:#fff; }

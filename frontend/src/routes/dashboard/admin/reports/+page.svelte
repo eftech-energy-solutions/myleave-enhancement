@@ -22,7 +22,7 @@
   ];
   const pct = (s, t) => Math.min(100, Math.max(0, Math.round((s / t) * 100)));
 
-  // ----- calendar -----
+  // ----- calendar helpers -----
   const atStartOfDay = (d) => { const x = new Date(d); x.setHours(0,0,0,0); return x; };
   const sameDay = (a, b) => atStartOfDay(a).getTime() === atStartOfDay(b).getTime();
 
@@ -54,17 +54,51 @@
   }
   onMount(() => buildMonth(new Date()));
 
+  // ===== Leave form state (auto-calc total) =====
+  let duration = 'Full';     // 'Full' | 'Half'
+  let dateFrom = '';
+  let dateUntil = '';
+  let totalDays = 1;
+
+  const dayMs = 24 * 60 * 60 * 1000;
+  const diffDays = (from, until) => {
+    if (!from) return 0;
+    const a = atStartOfDay(from);
+    const b = atStartOfDay(until || from);
+    return Math.max(1, Math.floor((b - a) / dayMs) + 1); // inclusive
+  };
+
+  // keep until >= from
+  $: if (dateFrom && dateUntil && atStartOfDay(dateUntil) < atStartOfDay(dateFrom)) {
+    dateUntil = dateFrom;
+  }
+
+  // auto-calc total
+  $: if (duration === 'Half') {
+    totalDays = 0.5;
+    if (dateFrom) dateUntil = dateFrom; // lock same day
+  } else {
+    totalDays = dateFrom ? diffDays(dateFrom, dateUntil || dateFrom) : 0;
+  }
+
+  function onFromChange() {
+    if (!dateFrom) return;
+    if (duration === 'Half') dateUntil = dateFrom;
+    if (!dateUntil) dateUntil = dateFrom;
+  }
+
   async function openLeaveForm(date) {
+    const iso = atStartOfDay(date).toISOString().slice(0,10);
+    // initialize form state for the clicked date
+    duration = 'Full';
+    dateFrom = iso;
+    dateUntil = iso;
+    totalDays = 1;
+
     if (!modal?.open) modal.showModal();
     await tick();
-    const from = modal.querySelector('input[name="dateFrom"]');
-    const until = modal.querySelector('input[name="dateUntil"]');
-    const total = modal.querySelector('input[name="totalDays"]');
-    const iso = atStartOfDay(date).toISOString().slice(0,10);
-    if (from) from.value = iso;
-    if (until) until.value = iso;
-    if (total) total.value = 1;
   }
+
   function submitLeave(e) {
     const fd = new FormData(e.currentTarget);
     // TODO: post to backend
@@ -81,109 +115,108 @@
 
 <main class="main">
   <!-- HEADER (simple row, no boxed container) -->
-<div class="topbar">
-  <div class="title-wrap">
-    <div class="hello">Welcome back, {user?.name || 'admin'}!</div>
-    <h1 class="page-title">My Dashboard</h1>
-  </div>
-
-  <div class="profile" use:clickOutside>
-    <button class="icon-btn bell" aria-label="Notifications">🔔</button>
-
-    <div class="profile-info">
-      <img src="/images/icontest1.png" alt="" class="avatar-img"
-           on:error={(e)=> e.currentTarget.style.display='none'} />
-      <div class="who">
-        <div class="name">{user?.name || 'Afiq Mikail'}</div>
-        <div class="sub">{user?.role || 'Human Resources'}</div>
-        <div class="sub">#{user?.staffId || 'E8505'}</div>
-      </div>
+  <div class="topbar">
+    <div class="title-wrap">
+      <div class="hello">Welcome back, {user?.name || 'admin'}!</div>
+      <h1 class="page-title">My Dashboard</h1>
     </div>
 
-    <button
-      class="icon-btn caret"
-      aria-haspopup="menu"
-      aria-expanded={profileMenuOpen}
-      on:click={() => (profileMenuOpen = !profileMenuOpen)}
-      aria-label="Open profile menu"
-    >▾</button>
+    <div class="profile" use:clickOutside>
+      <button class="icon-btn bell" aria-label="Notifications">🔔</button>
 
-    {#if profileMenuOpen}
-      <div class="menu" role="menu">
-        <a role="menuitem" href="/dashboard/admin/profile">Update Profile</a>
-      </div>
-    {/if}
-  </div>
-</div>
-
-
-    <!-- ===== DONUT ROW HEADER: Download on top-right ===== -->
-    <div class="donut-row-header">
-      <a class="download" href="#">Download</a>
-    </div>
-
-    <!-- ===== GRID ===== -->
-    <div class="grid">
-      <!-- Top: 3 donuts -->
-      {#each donuts as d}
-        <div class="card" style="grid-column: span 4;">
-          <h3 class="donut-title">{d.title}</h3>
-          <div
-            class="donut fancy"
-            style="--size:110px; --spent:{pct(d.spent,d.total)}; --spent-color: var(--spentRed); --rest-color: var(--restBlue);"
-          ></div>
-          <div class="legend-row">
-            <div class="legend-item"><span class="chip spent"></span><span>Spent Leave</span></div>
-            <div class="legend-item"><span class="chip unspent"></span><span>Unspent Leave</span></div>
-          </div>
-          <div class="total-line">Total spent: {d.spent}/{d.total}</div>
+      <div class="profile-info">
+        <img src="/images/icontest1.png" alt="" class="avatar-img"
+             on:error={(e)=> e.currentTarget.style.display='none'} />
+        <div class="who">
+          <div class="name">{user?.name || 'Afiq Mikail'}</div>
+          <div class="sub">{user?.role || 'Human Resources'}</div>
+          <div class="sub">#{user?.staffId || 'E8505'}</div>
         </div>
-      {/each}
+      </div>
 
-      <!-- Bottom: Calendar (4) + Recent (8) -->
+      <button
+        class="icon-btn caret"
+        aria-haspopup="menu"
+        aria-expanded={profileMenuOpen}
+        on:click={() => (profileMenuOpen = !profileMenuOpen)}
+        aria-label="Open profile menu"
+      >▾</button>
+
+      {#if profileMenuOpen}
+        <div class="menu" role="menu">
+          <a role="menuitem" href="/dashboard/admin/profile">Update Profile</a>
+        </div>
+      {/if}
+    </div>
+  </div>
+
+  <!-- ===== DONUT ROW HEADER: Download on top-right ===== -->
+  <div class="donut-row-header">
+    <a class="download" href="#">Download</a>
+  </div>
+
+  <!-- ===== GRID ===== -->
+  <div class="grid">
+    <!-- Top: 3 donuts -->
+    {#each donuts as d}
       <div class="card" style="grid-column: span 4;">
-        <h3>Calendar of Application</h3>
-        <div class="calendar calendar-small">
-          <div class="month">{monthLabel}</div>
-
-          <div class="weekdays">
-            <div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div>
-            <div>Fri</div><div>Sat</div><div>Sun</div>
-          </div>
-
-          <div class="days">
-            {#each days as d (d.key)}
-              <button
-                class:muted={d.muted}
-                class:today={d.today}
-                disabled={atStartOfDay(d.date) < today}
-                on:click={() => openLeaveForm(d.date)}
-                aria-label={`Select ${d.date.toDateString()}`}
-              >
-                {d.label}
-              </button>
-            {/each}
-          </div>
+        <h3 class="donut-title">{d.title}</h3>
+        <div
+          class="donut fancy"
+          style="--size:110px; --spent:{pct(d.spent,d.total)}; --spent-color: var(--spentRed); --rest-color: var(--restBlue);"
+        ></div>
+        <div class="legend-row">
+          <div class="legend-item"><span class="chip spent"></span><span>Spent Leave</span></div>
+          <div class="legend-item"><span class="chip unspent"></span><span>Unspent Leave</span></div>
         </div>
+        <div class="total-line">Total spent: {d.spent}/{d.total}</div>
       </div>
+    {/each}
 
-      <div class="card" style="grid-column: span 8;">
-        <h3>Recent Application</h3>
-        <div class="recent-wrap">
-          {#each recent as r}
-            <div class="recent-item">
-              <div class="when">{fmt(r.from)} – {fmt(r.to)}</div>
-              <div class="cols">
-                <div><div class="muted">Total Days:</div><div>{r.totalDays}</div></div>
-                <div><div class="muted">Leave Type:</div><div>{r.type}</div></div>
-                <div><div class="muted">Status:</div><div>{r.status}</div></div>
-              </div>
-              <a class="link" href={`/dashboard/admin/reports/${r.id}`}>Details</a>
-            </div>
+    <!-- Bottom: Calendar (4) + Recent (8) -->
+    <div class="card" style="grid-column: span 4;">
+      <h3>Calendar of Application</h3>
+      <div class="calendar calendar-small">
+        <div class="month">{monthLabel}</div>
+
+        <div class="weekdays">
+          <div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div>
+          <div>Fri</div><div>Sat</div><div>Sun</div>
+        </div>
+
+        <div class="days">
+          {#each days as d (d.key)}
+            <button
+              class:muted={d.muted}
+              class:today={d.today}
+              disabled={atStartOfDay(d.date) < today}
+              on:click={() => openLeaveForm(d.date)}
+              aria-label={`Select ${d.date.toDateString()}`}
+            >
+              {d.label}
+            </button>
           {/each}
         </div>
       </div>
     </div>
+
+    <div class="card" style="grid-column: span 8;">
+      <h3>Recent Application</h3>
+      <div class="recent-wrap">
+        {#each recent as r}
+          <div class="recent-item">
+            <div class="when">{fmt(r.from)} – {fmt(r.to)}</div>
+            <div class="cols">
+              <div><div class="muted">Total Days:</div><div>{r.totalDays}</div></div>
+              <div><div class="muted">Leave Type:</div><div>{r.type}</div></div>
+              <div><div class="muted">Status:</div><div>{r.status}</div></div>
+            </div>
+            <a class="link" href={`/dashboard/admin/reports/${r.id}`}>Details</a>
+          </div>
+        {/each}
+      </div>
+    </div>
+  </div>
 </main>
 
 <!-- ===== MODAL ===== -->
@@ -197,27 +230,58 @@
       <select name="type" required>
         <option value="Annual">Annual / Emergency</option>
         <option value="Medical">Medical</option>
-        <option value="Unpaid">Maternity</option>
-        <option value="Unpaid">Paternity</option>
-        <option value="Unpaid">Compassionate A (Death of parent, children, husband, wife)</option>
-        <option value="Unpaid">Compassionate B (Death of grandparent, sibling)</option>
-        <option value="Unpaid">Marriage</option>
-        <option value="Unpaid">Hospitalization</option>
+        <option value="Maternity">Maternity</option>
+        <option value="Paternity">Paternity</option>
+        <option value="Compassionate">Compassionate A (Death of parent, children, husband, wife)</option>
+        <option value="Compassionate">Compassionate B (Death of grandparent, sibling)</option>
+        <option value="Marriage">Marriage</option>
+        <option value="Hospitalization">Hospitalization</option>
       </select>
     </label>
 
+    <!-- keep position/order of these inputs exactly -->
     <div class="duration">
       <span>Leave Duration</span>
-      <label><input type="radio" name="duration" value="Full" checked /> Full Day</label>
-      <label><input type="radio" name="duration" value="Half" /> Half Day</label>
+      <label><input type="radio" name="duration" value="Full" bind:group={duration}> Full Day</label>
+      <label><input type="radio" name="duration" value="Half" bind:group={duration}> Half Day</label>
     </div>
 
     <div class="dates">
-      <label><span>Date from</span><input type="date" name="dateFrom" required /></label>
-      <label><span>Date until</span><input type="date" name="dateUntil" required /></label>
+      <label>
+        <span>Date from</span>
+        <input type="date" name="dateFrom" bind:value={dateFrom} required on:change={onFromChange} />
+      </label>
+
+      <label>
+        <span>Date until</span>
+        <input
+          type="date"
+          name="dateUntil"
+          bind:value={dateUntil}
+          min={dateFrom}
+          disabled={duration === 'Half'}
+          aria-disabled={duration === 'Half'}
+        />
+        {#if duration === 'Half'}
+          <!-- disabled inputs are NOT posted; send value anyway -->
+          <input type="hidden" name="dateUntil" value={dateUntil} />
+        {/if}
+      </label>
     </div>
 
-    <label><span>Total day</span><input type="number" name="totalDays" min="1" required /></label>
+    <label>
+      <span>Total day</span>
+      <input
+        type="number"
+        name="totalDays"
+        bind:value={totalDays}
+        min="0.5"
+        step="0.5"
+        required
+        readonly 
+      />
+    </label>
+
     <label><span>Reason</span><textarea name="reason" rows="3" required></textarea></label>
     <label><span>Attachment</span><input type="file" name="attachment" /></label>
 
@@ -228,6 +292,7 @@
 <style>
   /* page container */
   .main { padding: 18px; }
+
   /* donut-row header */
   .donut-row-header{
     display:flex; justify-content:flex-end; align-items:center;
@@ -242,7 +307,7 @@
   .icon-btn{ border:none; background:transparent; cursor:pointer; font-size:18px; line-height:1; padding:6px; border-radius:8px; color:#fff; }
   .icon-btn:hover{ background:rgba(255,255,255,.12); }
   .profile-info{ display:flex; align-items:center; gap:10px; color:#fff; position:relative; }
-  .avatar-img{ height:70px; width: 70px; border-radius:9999px; display:block; box-shadow:0 0 0 2px rgba(255,255,255,.25); }
+  .avatar-img{ height:70px; width:70px; border-radius:9999px; display:block; box-shadow:0 0 0 2px rgba(255,255,255,.25); }
   .who .name{  font-size: 20px; font-weight:700; }
   .who .sub{ font-size:16px; opacity:.95; }
   .caret{ font-size:16px; }
@@ -286,85 +351,87 @@
   .recent-item .muted{ color:#6b7280; }
 
   .download {
-  color: #fff;             /* make text white */
-  text-decoration: underline; /* add underline */
-  font-size: 14px;         /* optional: smaller to match screenshot */
-}
-.download:hover {
-  opacity: 0.85;           /* subtle hover effect */
-}
+    color: #fff;
+    text-decoration: underline;
+    font-size: 14px;
+  }
+  .download:hover { opacity: 0.85; }
 
-/* row layout */
-.topbar{
-  display:flex;
-  align-items:flex-start;        /* keep right cluster aligned to top */
-  justify-content:space-between; /* left title vs right profile */
-  gap: 16px;
-  margin-bottom: 8px;            /* tiny space before donut row */
-}
+  /* row layout */
+  .topbar{
+    display:flex;
+    align-items:flex-start;        /* keep right cluster aligned to top */
+    justify-content:space-between; /* left title vs right profile */
+    gap: 16px;
+    margin-bottom: 8px;            /* tiny space before donut row */
+  }
 
-/* left side */
-.title-wrap{ color:#fff; }
-.hello{
-  font-size:18px;
-  font-weight:400;
-  margin: 4px 0 6px;
-  opacity:.95;
-}
-.page-title{
-  margin:0;
-  font-size:60px;      /* big like your ref */
-  line-height:0.80;
-  color:#fff;
-  letter-spacing:.3px;
-}
+  /* left side */
+  .title-wrap{ color:#fff; }
+  .hello{
+    font-size:18px;
+    font-weight:400;
+    margin: 4px 0 6px;
+    opacity:.95;
+  }
+  .page-title{
+    margin:0;
+    font-size:60px;      /* big like your ref */
+    line-height:0.80;
+    color:#fff;
+    letter-spacing:.3px;
+  }
 
-/* right side cluster (reuses your existing profile/dropdown styles) */
-.profile{ position:relative; display:flex; align-items:center; gap:10px; }
-.icon-btn{ border:none; background:transparent; cursor:pointer; font-size:18px; line-height:1; padding:6px; border-radius:8px; color:#fff; }
-.icon-btn:hover{ background:rgba(255,255,255,.12); }
+  /* right side cluster (reuses your existing profile/dropdown styles) */
+  .profile{ position:relative; display:flex; align-items:center; gap:10px; }
+  .icon-btn{ border:none; background:transparent; cursor:pointer; font-size:18px; line-height:1; padding:6px; border-radius:8px; color:#fff; }
+  .icon-btn:hover{ background:rgba(255,255,255,.12); }
+  .profile-info{ display:flex; align-items:center; gap:10px; color:#fff; }
+  .avatar-img{ box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25); }
+  .who .name{ font-weight:700; color:#fff; }
+  .who .sub{ font-size:12px; opacity:.95; color:#fff; }
+  .caret{ font-size:16px; color:#fff; }
 
-.profile-info{ display:flex; align-items:center; gap:10px; color:#fff; }
-.avatar-img{ height:36px; width:36px; border-radius:9999px; display:block; box-shadow:0 0 0 2px rgba(255,255,255,.25); }
-.avatar-fallback.avatar{ height:36px; width:36px; border-radius:9999px; background:#fff; color:#111827; display:grid; place-items:center; font-weight:700; }
-.who .name{ font-weight:700; color:#fff; }
-.who .sub{ font-size:12px; opacity:.95; color:#fff; }
-.caret{ font-size:16px; color:#fff; }
+  .profile .menu{
+    position:absolute; right:0; top:calc(100% + 8px);
+    background:#fff; border:1px solid var(--ring); border-radius:10px; box-shadow:var(--shadow);
+    min-width:200px; padding:6px; z-index:30;
+  }
+  .profile .menu a{ display:block; padding:10px 12px; border-radius:8px; color:#111827; font-weight:600; text-decoration:none; }
+  .profile .menu a:hover{ background:#f3f4f6; }
 
-.profile .menu{
-  position:absolute; right:0; top:calc(100% + 8px);
-  background:#fff; border:1px solid var(--ring); border-radius:10px; box-shadow:var(--shadow);
-  min-width:200px; padding:6px; z-index:30;
-}
-.profile .menu a{ display:block; padding:10px 12px; border-radius:8px; color:#111827; font-weight:600; text-decoration:none; }
-.profile .menu a:hover{ background:#f3f4f6; }
+  /* responsive tweak: reduce title on small screens */
+  @media (max-width: 740px){
+    .page-title{ font-size:40px; }
+  }
 
-/* responsive tweak: reduce title on small screens */
-@media (max-width: 740px){
-  .page-title{ font-size:40px; }
-}
+  /* --- Keep radios inline/left without changing their markup position --- */
+  .leave-form .duration {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+    align-items: flex-start;
+  }
+  .leave-form .duration label {
+    display: inline-flex;
+    flex-direction: row;
+    align-items: center;
+    gap: .5rem;
+    cursor: pointer;
+    text-align: left;
+  }
+  .leave-form .duration input[type="radio"] {
+    accent-color: #3FADA4; /* slightly darker than #49bdb3 */
+    width: 16px;
+    height: 16px;
+    margin: 0;
+  }
 
-/* --- Fix radio alignment in Leave Duration --- */
-.leave-form .duration {            /* keep the section vertical */
-  display: flex;
-  flex-direction: column;
-  gap: .5rem;
-  align-items: flex-start;         /* left-align, not centered */
-}
-
-.leave-form .duration label {      /* override the global label rule */
-  display: inline-flex;
-  flex-direction: row !important;  /* radio ✚ text on one line */
-  align-items: center;
-  gap: .5rem;
-  text-align: left;
-}
-
-.leave-form .duration input[type="radio"] {
-  accent-color: #3FADA4;           /* theme color (slightly darker than #49bdb3) */
-  width: 16px;
-  height: 16px;
-  margin: 0;                       /* remove default vertical offset */
-}
-
+  /* Greyed-out look for locked fields */
+  .leave-form input[readonly],
+  .leave-form input:disabled {
+    background:#f3f4f6;
+    color:#6b7280;
+    cursor:not-allowed;
+  }
 </style>
