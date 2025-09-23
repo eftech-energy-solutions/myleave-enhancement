@@ -91,7 +91,7 @@
   <button
     type="submit"
     class="mt-2 w-full rounded-full px-6 py-3 font-semibold tracking-wide
-           bg-[#49bdb3] hover:bg-[#3fa8a0] active:bg-[#38948e]
+           bg-[#49bdb3] hover:bg-[#40B1A7] active:bg-[#38948e]
            text-white shadow-md transition disabled:opacity-60"
     disabled={loading}
   >

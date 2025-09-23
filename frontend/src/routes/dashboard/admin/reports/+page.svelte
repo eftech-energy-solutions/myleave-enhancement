@@ -190,14 +190,19 @@
 <dialog bind:this={modal} class="leave-modal" aria-labelledby="leave-title">
   <form method="dialog" class="leave-form" on:submit|preventDefault={submitLeave}>
     <button type="button" class="close-btn" on:click={() => modal.close()} aria-label="Close">✕</button>
-    <h2 id="leave-title" class="title">Leave Application</h2>
+    <h2 id="leave-title" class="title">Leave Application Form</h2>
 
     <label>
       <span>Type</span>
       <select name="type" required>
         <option value="Annual">Annual / Emergency</option>
         <option value="Medical">Medical</option>
-        <option value="Unpaid">Unpaid</option>
+        <option value="Unpaid">Maternity</option>
+        <option value="Unpaid">Paternity</option>
+        <option value="Unpaid">Compassionate A (Death of parent, children, husband, wife)</option>
+        <option value="Unpaid">Compassionate B (Death of grandparent, sibling)</option>
+        <option value="Unpaid">Marriage</option>
+        <option value="Unpaid">Hospitalization</option>
       </select>
     </label>
 
@@ -337,6 +342,29 @@
 /* responsive tweak: reduce title on small screens */
 @media (max-width: 740px){
   .page-title{ font-size:40px; }
+}
+
+/* --- Fix radio alignment in Leave Duration --- */
+.leave-form .duration {            /* keep the section vertical */
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+  align-items: flex-start;         /* left-align, not centered */
+}
+
+.leave-form .duration label {      /* override the global label rule */
+  display: inline-flex;
+  flex-direction: row !important;  /* radio ✚ text on one line */
+  align-items: center;
+  gap: .5rem;
+  text-align: left;
+}
+
+.leave-form .duration input[type="radio"] {
+  accent-color: #3FADA4;           /* theme color (slightly darker than #49bdb3) */
+  width: 16px;
+  height: 16px;
+  margin: 0;                       /* remove default vertical offset */
 }
 
 </style>
