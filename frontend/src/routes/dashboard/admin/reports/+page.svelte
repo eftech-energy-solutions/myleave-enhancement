@@ -27,6 +27,11 @@
   const sameDay = (a, b) => atStartOfDay(a).getTime() === atStartOfDay(b).getTime();
 
   let today = atStartOfDay(new Date());
+  const todayISO = today.toISOString().slice(0,10); // handy for <input min=...>
+
+  // moving "view base" for the visible calendar
+  let viewBase = atStartOfDay(new Date());
+
   let monthLabel = '';
   let days = [];
   let modal;
@@ -52,7 +57,38 @@
     monthLabel = new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(first);
     days = arr;
   }
-  onMount(() => buildMonth(new Date()));
+
+  onMount(() => buildMonth(viewBase));
+
+  // ===== navigation (prev/next + jump to today) =====
+  function prevMonth() {
+    const d = new Date(viewBase);
+    d.setMonth(d.getMonth() - 1, 1);
+    viewBase = atStartOfDay(d);
+    buildMonth(viewBase);
+  }
+  function nextMonth() {
+    const d = new Date(viewBase);
+    d.setMonth(d.getMonth() + 1, 1);
+    viewBase = atStartOfDay(d);
+    buildMonth(viewBase);
+  }
+  function prevYear() {
+    const d = new Date(viewBase);
+    d.setFullYear(d.getFullYear() - 1, d.getMonth(), 1);
+    viewBase = atStartOfDay(d);
+    buildMonth(viewBase);
+  }
+  function nextYear() {
+    const d = new Date(viewBase);
+    d.setFullYear(d.getFullYear() + 1, d.getMonth(), 1);
+    viewBase = atStartOfDay(d);
+    buildMonth(viewBase);
+  }
+  function goToday() {
+    viewBase = atStartOfDay(new Date());
+    buildMonth(viewBase);
+  }
 
   // ===== Leave form state (auto-calc total) =====
   let duration = 'Full';     // 'Full' | 'Half'
@@ -177,7 +213,20 @@
     <div class="card" style="grid-column: span 4;">
       <h3>Calendar of Application</h3>
       <div class="calendar calendar-small">
-        <div class="month">{monthLabel}</div>
+        <div class="month">
+          <div class="nav">
+            <button class="nav-btn" on:click={prevYear} aria-label="Previous year">«</button>
+            <button class="nav-btn" on:click={prevMonth} aria-label="Previous month">‹</button>
+          </div>
+
+          <span aria-live="polite">{monthLabel}</span>
+
+          <div class="nav">
+            <button class="nav-btn" on:click={goToday} aria-label="Go to current month">Today</button>
+            <button class="nav-btn" on:click={nextMonth} aria-label="Next month">›</button>
+            <button class="nav-btn" on:click={nextYear} aria-label="Next year">»</button>
+          </div>
+        </div>
 
         <div class="weekdays">
           <div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div>
@@ -249,7 +298,14 @@
     <div class="dates">
       <label>
         <span>Date from</span>
-        <input type="date" name="dateFrom" bind:value={dateFrom} required on:change={onFromChange} />
+        <input
+          type="date"
+          name="dateFrom"
+          bind:value={dateFrom}
+          required
+          min={todayISO}
+          on:change={onFromChange}
+        />
       </label>
 
       <label>
@@ -258,7 +314,7 @@
           type="date"
           name="dateUntil"
           bind:value={dateUntil}
-          min={dateFrom}
+          min={dateFrom || todayISO}
           disabled={duration === 'Half'}
           aria-disabled={duration === 'Half'}
         />
@@ -278,7 +334,7 @@
         min="0.5"
         step="0.5"
         required
-        readonly 
+        readonly
       />
     </label>
 
@@ -343,6 +399,30 @@
   .calendar-small{ max-width:360px; margin:0 auto; }
   .calendar-small .days button{ padding:6px; }
 
+  /* month header with full nav */
+  .calendar .month{
+    display:flex; align-items:center; justify-content:space-between;
+    font-weight:700; margin-bottom:6px;
+    gap:8px;
+  }
+  .calendar .month > span { text-align:center; min-width:160px; }
+  .calendar .month .nav{ display:flex; gap:6px; flex-wrap:wrap; }
+  .calendar .month .nav-btn{
+    border:none; background:#eef2ff; padding:6px 10px; border-radius:8px; cursor:pointer;
+    font-weight:700; line-height:1;
+  }
+  .calendar .month .nav-btn:hover{ background:#e5e7eb; }
+
+  /* weekdays/days grid */
+  .weekdays{ display:grid; grid-template-columns:repeat(7,1fr); gap:4px; font-size:12px; color:#6b7280; margin-bottom:4px; }
+  .days{ display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
+  .days button{
+    border:1px solid var(--ring); border-radius:8px; background:#fff; cursor:pointer;
+  }
+  .days button.today{ box-shadow:inset 0 0 0 2px #3b82f6; }
+  .days button.muted{ opacity:.5; }
+  .days button:disabled{ background:#f3f4f6; color:#9ca3af; cursor:not-allowed; }
+
   /* recent card */
   .recent-wrap{ display:grid; gap:12px; }
   .recent-item{ border:1px solid var(--ring); border-radius:12px; padding:12px; display:grid; gap:6px; background:#f9fafb; }
@@ -360,10 +440,10 @@
   /* row layout */
   .topbar{
     display:flex;
-    align-items:flex-start;        /* keep right cluster aligned to top */
-    justify-content:space-between; /* left title vs right profile */
+    align-items:flex-start;
+    justify-content:space-between;
     gap: 16px;
-    margin-bottom: 8px;            /* tiny space before donut row */
+    margin-bottom: 8px;
   }
 
   /* left side */
@@ -376,13 +456,13 @@
   }
   .page-title{
     margin:0;
-    font-size:60px;      /* big like your ref */
+    font-size:60px;
     line-height:0.80;
     color:#fff;
     letter-spacing:.3px;
   }
 
-  /* right side cluster (reuses your existing profile/dropdown styles) */
+  /* right side cluster */
   .profile{ position:relative; display:flex; align-items:center; gap:10px; }
   .icon-btn{ border:none; background:transparent; cursor:pointer; font-size:18px; line-height:1; padding:6px; border-radius:8px; color:#fff; }
   .icon-btn:hover{ background:rgba(255,255,255,.12); }
