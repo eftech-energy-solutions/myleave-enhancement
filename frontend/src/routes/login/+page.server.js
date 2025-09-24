@@ -1,7 +1,7 @@
 import { fail, redirect } from '@sveltejs/kit';
 
 const USERS = {
-  'admin@demo.com':   { password: 'admin123',    role: 'admin',    redirect: '/dashboard/admin' },
+  'admin@demo.com':   { password: 'admin123',    role: 'admin',    redirect: '/dashboard/admin/main' },
   'director@demo.com':{ password: 'director123', role: 'director', redirect: '/dashboard/director' },
   'manager@demo.com': { password: 'manager123',  role: 'manager',  redirect: '/dashboard/manager' },
   'staff@demo.com':   { password: 'staff123',    role: 'staff',    redirect: '/dashboard/staff' }

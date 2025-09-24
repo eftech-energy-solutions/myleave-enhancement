@@ -22,12 +22,12 @@
 
   // employees (chart + numbers)
   const dataByDept = [
-    { name: "Administrator",                count: 12, color: "#7c3aed" },
-    { name: "Operations Support",           count: 35, color: "#22c55e" },
-    { name: "Technical Data",               count: 22, color: "#f59e0b" },
-    { name: "Operations – RTOC",            count: 18, color: "#3b82f6" },
-    { name: "Sales & Technical Excellence", count: 27, color: "#ef4444" },
-    { name: "Director",                     count:  3, color: "#14b8a6" }
+    { name: "Administrator",                count: 12, color: "#FCF9BE" },
+    { name: "Operations Support",           count: 35, color: "#F2C6DE" },
+    { name: "Technical Data",               count: 22, color: "#DBCDF0" },
+    { name: "Operations – RTOC",            count: 18, color: "#C6DEF1" },
+    { name: "Sales & Technical Excellence", count: 27, color: "#C9E4DE" },
+    { name: "Director",                     count:  3, color: "#FFD9CC" }
   ];
   $: totalEmployees = dataByDept.reduce((a,b)=>a+b.count, 0);
 

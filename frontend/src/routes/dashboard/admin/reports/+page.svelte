@@ -14,12 +14,13 @@
     return { destroy: () => document.removeEventListener('click', onClick) };
   }
 
-  // ----- donuts -----
-  const donuts = [
-    { title: 'Annual Leave Summary',          spent: 1,  total: 14 },
-    { title: 'Medical Leave Summary',         spent: 0,  total: 14 },
-    { title: 'Hospitalization Leave Summary', spent: 0,  total: 60 }
-  ];
+  // ----- donuts with dummy carry-forward -----
+const donuts = [
+  { title: 'Annual Leave Summary',          spent: 3,  total: 14, carryForward: 5 }, // pretend this staff has 5
+  { title: 'Medical Leave Summary',         spent: 0,  total: 14 },
+  { title: 'Hospitalization Leave Summary', spent: 0,  total: 60 }
+];
+
   const pct = (s, t) => Math.min(100, Math.max(0, Math.round((s / t) * 100)));
 
   // ----- calendar helpers -----
@@ -90,12 +91,26 @@
     buildMonth(viewBase);
   }
 
-  // ===== Leave form state (auto-calc total) =====
+  // ===== Leave form state =====
   let duration = 'Full';     // 'Full' | 'Half'
   let dateFrom = '';
   let dateUntil = '';
   let totalDays = 1;
 
+  // NEW: track selected type + whether end date is locked
+  let leaveType = 'Annual';
+  let endLocked = false;
+
+  // NEW: fixed-duration mapping (days)
+  const fixedDurations = {
+    Maternity: 98,
+    Paternity: 7,
+    'Compassionate A': 3,
+    'Compassionate B': 1,
+    Marriage: 3
+  };
+
+  // Helpers
   const dayMs = 24 * 60 * 60 * 1000;
   const diffDays = (from, until) => {
     if (!from) return 0;
@@ -103,18 +118,37 @@
     const b = atStartOfDay(until || from);
     return Math.max(1, Math.floor((b - a) / dayMs) + 1); // inclusive
   };
+  const addDaysISO = (iso, days) => {
+    const d = new Date(iso);
+    d.setDate(d.getDate() + days);
+    return d.toISOString().slice(0, 10);
+  };
 
   // keep until >= from
   $: if (dateFrom && dateUntil && atStartOfDay(dateUntil) < atStartOfDay(dateFrom)) {
     dateUntil = dateFrom;
   }
 
-  // auto-calc total
-  $: if (duration === 'Half') {
-    totalDays = 0.5;
-    if (dateFrom) dateUntil = dateFrom; // lock same day
-  } else {
-    totalDays = dateFrom ? diffDays(dateFrom, dateUntil || dateFrom) : 0;
+  // AUTO-LOCK/SET end date when the type has a fixed duration
+  $: {
+    const n = fixedDurations[leaveType];
+    endLocked = Boolean(n);
+    if (dateFrom && endLocked) {
+      // mirror your jQuery: end = start + N (not N-1)
+      dateUntil = addDaysISO(dateFrom, n);
+    }
+  }
+
+  // AUTO-FILL totalDays (supports Half Day, fixed types, and manual types)
+  $: {
+    if (duration === 'Half') {
+      totalDays = 0.5;
+      if (dateFrom) dateUntil = dateFrom; // same-day
+    } else if (endLocked) {
+      totalDays = dateFrom ? fixedDurations[leaveType] : 0;
+    } else {
+      totalDays = dateFrom ? diffDays(dateFrom, dateUntil || dateFrom) : 0;
+    }
   }
 
   function onFromChange() {
@@ -126,8 +160,9 @@
   async function openLeaveForm(date) {
     const iso = atStartOfDay(date).toISOString().slice(0,10);
     // initialize form state for the clicked date
-    duration = 'Full';
-    dateFrom = iso;
+    leaveType = 'Annual';
+    duration  = 'Full';
+    dateFrom  = iso;
     dateUntil = iso;
     totalDays = 1;
 
@@ -194,20 +229,32 @@
   <!-- ===== GRID ===== -->
   <div class="grid">
     <!-- Top: 3 donuts -->
-    {#each donuts as d}
-      <div class="card" style="grid-column: span 4;">
-        <h3 class="donut-title">{d.title}</h3>
-        <div
-          class="donut fancy"
-          style="--size:110px; --spent:{pct(d.spent,d.total)}; --spent-color: var(--spentRed); --rest-color: var(--restBlue);"
-        ></div>
-        <div class="legend-row">
-          <div class="legend-item"><span class="chip spent"></span><span>Spent Leave</span></div>
-          <div class="legend-item"><span class="chip unspent"></span><span>Unspent Leave</span></div>
-        </div>
-        <div class="total-line">Total spent: {d.spent}/{d.total}</div>
+    {#each donuts as d, i}
+  <div class="card" style="grid-column: span 4;">
+    <h3 class="donut-title">{d.title}</h3>
+    <div
+      class="donut fancy"
+      style="--size:110px; --spent:{pct(d.spent,d.total)}; --spent-color: var(--spentRed); --rest-color: var(--restBlue);"
+    ></div>
+    <div class="legend-row">
+      <div class="legend-item"><span class="chip spent"></span><span>Spent Leave</span></div>
+      <div class="legend-item"><span class="chip unspent"></span><span>Unspent Leave</span></div>
+    </div>
+
+    <div class="total-line">Total spent: {d.spent}/{d.total}</div>
+
+    {#if d.title === 'Annual Leave Summary'}
+      <div class="cf-line">
+        Carry forward: {d.carryForward}/7
+        <button type="button" class="info-btn" aria-describedby={"cf-tip-" + i} tabindex="0">ⓘ</button>
+        <span class="tooltip" id={"cf-tip-" + i} role="tooltip">
+          Carry-forward from previous year is only limit up to 7 days.
+        </span>
       </div>
-    {/each}
+    {/if}
+  </div>
+{/each}
+
 
     <!-- Bottom: Calendar (4) + Recent (8) -->
     <div class="card" style="grid-column: span 4;">
@@ -236,15 +283,14 @@
         <div class="days">
           {#each days as d (d.key)}
             <button
-  class:muted={d.muted}
-  class:today={d.today}
-  disabled={!d.today && atStartOfDay(d.date) < today}
-  on:click={() => openLeaveForm(d.date)}
-  aria-label={`Select ${d.date.toDateString()}`}
->
-  {d.label}
-</button>
-
+              class:muted={d.muted}
+              class:today={d.today}
+              disabled={!d.today && atStartOfDay(d.date) < today}
+              on:click={() => openLeaveForm(d.date)}
+              aria-label={`Select ${d.date.toDateString()}`}
+            >
+              {d.label}
+            </button>
           {/each}
         </div>
       </div>
@@ -277,13 +323,13 @@
 
     <label>
       <span>Type</span>
-      <select name="type" required>
+      <select name="type" bind:value={leaveType} required>
         <option value="Annual">Annual / Emergency</option>
         <option value="Medical">Medical</option>
         <option value="Maternity">Maternity</option>
         <option value="Paternity">Paternity</option>
-        <option value="Compassionate">Compassionate A (Death of parent, children, husband, wife)</option>
-        <option value="Compassionate">Compassionate B (Death of grandparent, sibling)</option>
+        <option value="Compassionate A">Compassionate A (Death of parent, children, husband, wife)</option>
+        <option value="Compassionate B">Compassionate B (Death of grandparent, sibling)</option>
         <option value="Marriage">Marriage</option>
         <option value="Hospitalization">Hospitalization</option>
       </select>
@@ -316,12 +362,16 @@
           name="dateUntil"
           bind:value={dateUntil}
           min={dateFrom || todayISO}
-          disabled={duration === 'Half'}
-          aria-disabled={duration === 'Half'}
+          disabled={duration === 'Half' || endLocked}
+          aria-disabled={duration === 'Half' || endLocked}
+          readonly={endLocked}
         />
         {#if duration === 'Half'}
           <!-- disabled inputs are NOT posted; send value anyway -->
           <input type="hidden" name="dateUntil" value={dateUntil} />
+        {/if}
+        {#if endLocked}
+          <small class="muted">End date is auto-set for {leaveType}.</small>
         {/if}
       </label>
     </div>
@@ -421,11 +471,11 @@
     border:1px solid var(--ring); border-radius:8px; background:#fff; cursor:pointer;
   }
   .days button.today {
-  border: 2px solid #49bdb3;   /* teal border */
-  font-weight: 700;            /* bold text */
-  color: #111827;              /* dark text so it's readable */
-  background: #ffff;         /* light teal background (optional) */
-}
+    border: 2px solid #49bdb3;
+    font-weight: 700;
+    color: #111827;
+    background: #ffff;
+  }
   .days button.muted{ opacity:.5; }
   .days button:disabled{ background:#f3f4f6; color:#9ca3af; cursor:not-allowed; }
 
@@ -462,7 +512,7 @@
   }
   .page-title{
     margin:0;
-    font-size:60px;
+    font-size:58px;
     line-height:0.80;
     color:#fff;
     letter-spacing:.3px;
@@ -520,4 +570,56 @@
     color:#6b7280;
     cursor:not-allowed;
   }
+
+  .cf-line{
+  margin-top:6px;
+  text-align:center;
+  font-size:12px;
+  color:#6b7280;
+  position:relative;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+}
+.info-btn{
+  border:none;
+  background:#eef2ff;
+  border-radius:999px;
+  width:18px; height:18px;
+  line-height:18px;
+  font-size:12px;
+  font-weight:700;
+  cursor:pointer;
+  padding:0;
+  display:inline-grid;
+  place-items:center;
+  color:#374151;
+}
+.info-btn:hover{ background:#e5e7eb; }
+.tooltip{
+  position:absolute;
+  bottom:130%;
+  left:50%;
+  transform:translateX(-50%);
+  background:#111827;
+  color:#fff;
+  padding:6px 8px;
+  border-radius:6px;
+  font-size:12px;
+  white-space:nowrap;
+  box-shadow:0 4px 18px rgba(0,0,0,.18);
+  opacity:0; visibility:hidden;
+  transition:opacity .15s ease, visibility .15s ease;
+  pointer-events:none;
+}
+.tooltip::after{
+  content:"";
+  position:absolute; top:100%; left:50%;
+  transform:translateX(-50%);
+  border:6px solid transparent; border-top-color:#111827;
+}
+.info-btn:hover + .tooltip,
+.info-btn:focus + .tooltip{ opacity:1; visibility:visible; }
+
 </style>
