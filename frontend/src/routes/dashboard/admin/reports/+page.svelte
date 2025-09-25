@@ -1,26 +1,24 @@
 <script>
   import { onMount, tick } from 'svelte';
-  export let data; // comes from +layout.server.js -> { user }
+  export let data; // { user, donuts, holidaysByYear }
 
   // ----- user/profile -----
   const user = data?.user ?? { name: 'admin', role: 'Human Resources', staffId: 'E8505' };
   const initials = (name) => (name || 'A B').split(' ').map(x => x[0]).slice(0,2).join('').toUpperCase();
   let profileMenuOpen = false;
 
-  // click-outside action for dropdown
   function clickOutside(node) {
     const onClick = (e) => { if (!node.contains(e.target)) profileMenuOpen = false; };
     document.addEventListener('click', onClick);
     return { destroy: () => document.removeEventListener('click', onClick) };
   }
 
-  // ----- donuts with dummy carry-forward -----
-const donuts = [
-  { title: 'Annual Leave Summary',          spent: 3,  total: 14, carryForward: 5 }, // pretend this staff has 5
-  { title: 'Medical Leave Summary',         spent: 0,  total: 14 },
-  { title: 'Hospitalization Leave Summary', spent: 0,  total: 60 }
-];
-
+  // ----- donuts (from server, includes carryForward for Annual) -----
+  const donuts = data?.donuts ?? [
+    { title: 'Annual Leave Summary', spent: 3, total: 14, carryForward: 5 },
+    { title: 'Medical Leave Summary', spent: 0, total: 14 },
+    { title: 'Hospitalization Leave Summary', spent: 0, total: 60 }
+  ];
   const pct = (s, t) => Math.min(100, Math.max(0, Math.round((s / t) * 100)));
 
   // ----- calendar helpers -----
@@ -28,15 +26,46 @@ const donuts = [
   const sameDay = (a, b) => atStartOfDay(a).getTime() === atStartOfDay(b).getTime();
 
   let today = atStartOfDay(new Date());
-  const todayISO = today.toISOString().slice(0,10); // handy for <input min=...>
+  const todayISO = today.toISOString().slice(0,10);
 
-  // moving "view base" for the visible calendar
+  // ----- rolling 5-year window -----
+  const windowStartYear = new Date().getFullYear();
+  const minDate = new Date(windowStartYear, 0, 1);        // Jan 1, current year
+  const maxDate = new Date(windowStartYear + 5, 11, 31);  // Dec 31, +5 years
+
+  const monthStart = (d) => new Date(d.getFullYear(), d.getMonth(), 1);
+  const minMonthStart = monthStart(minDate);
+  const maxMonthStart = monthStart(maxDate);
+
   let viewBase = atStartOfDay(new Date());
+  const canGoPrev = () => monthStart(viewBase) > minMonthStart;
+  const canGoNext = () => monthStart(viewBase) < maxMonthStart;
+  function clampToWindowMonth(d) {
+    const ms = monthStart(d).getTime();
+    if (ms < minMonthStart.getTime()) return new Date(minMonthStart);
+    if (ms > maxMonthStart.getTime()) return new Date(maxMonthStart);
+    return new Date(d);
+  }
+  viewBase = clampToWindowMonth(viewBase);
 
   let monthLabel = '';
   let days = [];
   let modal;
 
+  // ----- holidays lookup (server-fed; fast Set per year) -----
+  const holidaysByYear = {};
+  if (data?.holidaysByYear) {
+    for (const y in data.holidaysByYear) {
+      holidaysByYear[y] = new Set(data.holidaysByYear[y].map(h => h.date));
+    }
+  }
+  const isHoliday = (d) => {
+    const y = d.getFullYear();
+    const iso = d.toISOString().slice(0,10);
+    return holidaysByYear[y]?.has(iso) ?? false;
+  };
+
+  // ----- build month (with holiday + window flags) -----
   function buildMonth(base = new Date()) {
     const y = base.getFullYear(), m = base.getMonth();
     const first = new Date(y, m, 1);
@@ -46,13 +75,16 @@ const donuts = [
 
     const arr = [];
     for (let i = 0; i < 42; i++) {
-      const d = new Date(start); d.setDate(start.getDate() + i);
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
       arr.push({
         key: d.toISOString().slice(0,10),
         label: d.getDate(),
         date: d,
         muted: d.getMonth() !== m,
-        today: sameDay(d, today)
+        today: sameDay(d, today),
+        holiday: isHoliday(d),
+        outOfWindow: d < minDate || d > maxDate
       });
     }
     monthLabel = new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(first);
@@ -63,31 +95,35 @@ const donuts = [
 
   // ===== navigation (prev/next + jump to today) =====
   function prevMonth() {
+    if (!canGoPrev()) return;
     const d = new Date(viewBase);
     d.setMonth(d.getMonth() - 1, 1);
-    viewBase = atStartOfDay(d);
+    viewBase = clampToWindowMonth(d);
     buildMonth(viewBase);
   }
   function nextMonth() {
+    if (!canGoNext()) return;
     const d = new Date(viewBase);
     d.setMonth(d.getMonth() + 1, 1);
-    viewBase = atStartOfDay(d);
+    viewBase = clampToWindowMonth(d);
     buildMonth(viewBase);
   }
   function prevYear() {
+    if (!canGoPrev()) return;
     const d = new Date(viewBase);
     d.setFullYear(d.getFullYear() - 1, d.getMonth(), 1);
-    viewBase = atStartOfDay(d);
+    viewBase = clampToWindowMonth(d);
     buildMonth(viewBase);
   }
   function nextYear() {
+    if (!canGoNext()) return;
     const d = new Date(viewBase);
     d.setFullYear(d.getFullYear() + 1, d.getMonth(), 1);
-    viewBase = atStartOfDay(d);
+    viewBase = clampToWindowMonth(d);
     buildMonth(viewBase);
   }
   function goToday() {
-    viewBase = atStartOfDay(new Date());
+    viewBase = clampToWindowMonth(atStartOfDay(new Date()));
     buildMonth(viewBase);
   }
 
@@ -97,11 +133,9 @@ const donuts = [
   let dateUntil = '';
   let totalDays = 1;
 
-  // NEW: track selected type + whether end date is locked
   let leaveType = 'Annual';
   let endLocked = false;
 
-  // NEW: fixed-duration mapping (days)
   const fixedDurations = {
     Maternity: 98,
     Paternity: 7,
@@ -110,7 +144,6 @@ const donuts = [
     Marriage: 3
   };
 
-  // Helpers
   const dayMs = 24 * 60 * 60 * 1000;
   const diffDays = (from, until) => {
     if (!from) return 0;
@@ -124,26 +157,22 @@ const donuts = [
     return d.toISOString().slice(0, 10);
   };
 
-  // keep until >= from
   $: if (dateFrom && dateUntil && atStartOfDay(dateUntil) < atStartOfDay(dateFrom)) {
     dateUntil = dateFrom;
   }
 
-  // AUTO-LOCK/SET end date when the type has a fixed duration
   $: {
     const n = fixedDurations[leaveType];
     endLocked = Boolean(n);
     if (dateFrom && endLocked) {
-      // mirror your jQuery: end = start + N (not N-1)
       dateUntil = addDaysISO(dateFrom, n);
     }
   }
 
-  // AUTO-FILL totalDays (supports Half Day, fixed types, and manual types)
   $: {
     if (duration === 'Half') {
       totalDays = 0.5;
-      if (dateFrom) dateUntil = dateFrom; // same-day
+      if (dateFrom) dateUntil = dateFrom;
     } else if (endLocked) {
       totalDays = dateFrom ? fixedDurations[leaveType] : 0;
     } else {
@@ -159,7 +188,6 @@ const donuts = [
 
   async function openLeaveForm(date) {
     const iso = atStartOfDay(date).toISOString().slice(0,10);
-    // initialize form state for the clicked date
     leaveType = 'Annual';
     duration  = 'Full';
     dateFrom  = iso;
@@ -185,7 +213,7 @@ const donuts = [
 </script>
 
 <main class="main">
-  <!-- HEADER (simple row, no boxed container) -->
+  <!-- HEADER -->
   <div class="topbar">
     <div class="title-wrap">
       <div class="hello">Welcome back, {user?.name || 'admin'}!</div>
@@ -230,31 +258,30 @@ const donuts = [
   <div class="grid">
     <!-- Top: 3 donuts -->
     {#each donuts as d, i}
-  <div class="card" style="grid-column: span 4;">
-    <h3 class="donut-title">{d.title}</h3>
-    <div
-      class="donut fancy"
-      style="--size:110px; --spent:{pct(d.spent,d.total)}; --spent-color: var(--spentRed); --rest-color: var(--restBlue);"
-    ></div>
-    <div class="legend-row">
-      <div class="legend-item"><span class="chip spent"></span><span>Spent Leave</span></div>
-      <div class="legend-item"><span class="chip unspent"></span><span>Unspent Leave</span></div>
-    </div>
+      <div class="card" style="grid-column: span 4;">
+        <h3 class="donut-title">{d.title}</h3>
+        <div
+          class="donut fancy"
+          style="--size:110px; --spent:{pct(d.spent,d.total)}; --spent-color: var(--spentRed); --rest-color: var(--restBlue);"
+        ></div>
+        <div class="legend-row">
+          <div class="legend-item"><span class="chip spent"></span><span>Spent Leave</span></div>
+          <div class="legend-item"><span class="chip unspent"></span><span>Unspent Leave</span></div>
+        </div>
 
-    <div class="total-line">Total spent: {d.spent}/{d.total}</div>
+        <div class="total-line">Total spent: {d.spent}/{d.total}</div>
 
-    {#if d.title === 'Annual Leave Summary'}
-      <div class="cf-line">
-        Carry forward: {d.carryForward}/7
-        <button type="button" class="info-btn" aria-describedby={"cf-tip-" + i} tabindex="0">ⓘ</button>
-        <span class="tooltip" id={"cf-tip-" + i} role="tooltip">
-          Carry-forward from previous year is only limit up to 7 days.
-        </span>
+        {#if d.title === 'Annual Leave Summary'}
+          <div class="cf-line">
+            Carry forward: {d.carryForward}/7
+            <button type="button" class="info-btn" aria-describedby={"cf-tip-" + i} tabindex="0">ⓘ</button>
+            <span class="tooltip" id={"cf-tip-" + i} role="tooltip">
+              Carry-forward from previous year is capped at 7 days.
+            </span>
+          </div>
+        {/if}
       </div>
-    {/if}
-  </div>
-{/each}
-
+    {/each}
 
     <!-- Bottom: Calendar (4) + Recent (8) -->
     <div class="card" style="grid-column: span 4;">
@@ -262,16 +289,16 @@ const donuts = [
       <div class="calendar calendar-small">
         <div class="month">
           <div class="nav">
-            <button class="nav-btn" on:click={prevYear} aria-label="Previous year">«</button>
-            <button class="nav-btn" on:click={prevMonth} aria-label="Previous month">‹</button>
+            <button class="nav-btn" on:click={prevYear} aria-label="Previous year" disabled={!canGoPrev()}>«</button>
+            <button class="nav-btn" on:click={prevMonth} aria-label="Previous month" disabled={!canGoPrev()}>‹</button>
           </div>
 
           <span aria-live="polite">{monthLabel}</span>
 
           <div class="nav">
             <button class="nav-btn" on:click={goToday} aria-label="Go to current month">Today</button>
-            <button class="nav-btn" on:click={nextMonth} aria-label="Next month">›</button>
-            <button class="nav-btn" on:click={nextYear} aria-label="Next year">»</button>
+            <button class="nav-btn" on:click={nextMonth} aria-label="Next month" disabled={!canGoNext()}>›</button>
+            <button class="nav-btn" on:click={nextYear} aria-label="Next year" disabled={!canGoNext()}>»</button>
           </div>
         </div>
 
@@ -285,7 +312,9 @@ const donuts = [
             <button
               class:muted={d.muted}
               class:today={d.today}
-              disabled={!d.today && atStartOfDay(d.date) < today}
+              class:holiday={d.holiday}
+              class:out={d.outOfWindow}
+              disabled={d.outOfWindow || (!d.today && atStartOfDay(d.date) < today)}
               on:click={() => openLeaveForm(d.date)}
               aria-label={`Select ${d.date.toDateString()}`}
             >
@@ -335,7 +364,6 @@ const donuts = [
       </select>
     </label>
 
-    <!-- keep position/order of these inputs exactly -->
     <div class="duration">
       <span>Leave Duration</span>
       <label><input type="radio" name="duration" value="Full" bind:group={duration}> Full Day</label>
@@ -367,7 +395,6 @@ const donuts = [
           readonly={endLocked}
         />
         {#if duration === 'Half'}
-          <!-- disabled inputs are NOT posted; send value anyway -->
           <input type="hidden" name="dateUntil" value={dateUntil} />
         {/if}
         {#if endLocked}
@@ -397,19 +424,15 @@ const donuts = [
 </dialog>
 
 <style>
-  /* page container */
   .main { padding: 18px; }
 
-  /* donut-row header */
   .donut-row-header{
     display:flex; justify-content:flex-end; align-items:center;
     margin: 12px 0 6px;
   }
 
-  /* grid spacing */
   .grid{ margin-top:6px; display:grid; gap:10px; grid-template-columns:repeat(12, minmax(0,1fr)); }
 
-  /* profile cluster + dropdown */
   .profile{ position:relative; display:flex; align-items:center; gap:10px; }
   .icon-btn{ border:none; background:transparent; cursor:pointer; font-size:18px; line-height:1; padding:6px; border-radius:8px; color:#fff; }
   .icon-btn:hover{ background:rgba(255,255,255,.12); }
@@ -417,6 +440,7 @@ const donuts = [
   .avatar-img{ height:70px; width:70px; border-radius:9999px; display:block; box-shadow:0 0 0 2px rgba(255,255,255,.25); }
   .who .name{  font-size: 20px; font-weight:700; }
   .who .sub{ font-size:16px; opacity:.95; }
+
   .caret{ font-size:16px; }
   .profile .menu{
     position:absolute; right:0; top:calc(100% + 8px);
@@ -425,9 +449,9 @@ const donuts = [
   }
   .profile .menu a{ display:block; padding:10px 12px; border-radius:8px; color:#111827; font-weight:600; text-decoration:none; }
   .profile .menu a:hover{ background:#f3f4f6; }
+
   @media (max-width:640px){ .who .sub{ display:none; } }
 
-  /* donut colors & size */
   :global(:root){ --spentRed:#ef4444; --restBlue:#3b82f6; }
   .donut.fancy{
     height: var(--size, 110px); width: var(--size, 110px);
@@ -446,15 +470,55 @@ const donuts = [
   .chip.unspent{ background: var(--restBlue); }
   .total-line{ text-align:center; font-size:12px; color:#6b7280; margin-top:4px; }
 
-  /* calendar sizing */
+  .cf-line{
+    margin-top:6px;
+    text-align:center;
+    font-size:12px;
+    color:#6b7280;
+    position:relative;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:6px;
+  }
+  .info-btn{
+    border:none;
+    background:#eef2ff;
+    border-radius:999px;
+    width:18px; height:18px;
+    line-height:18px;
+    font-size:12px;
+    font-weight:700;
+    cursor:pointer;
+    padding:0;
+    display:inline-grid;
+    place-items:center;
+    color:#374151;
+  }
+  .info-btn:hover{ background:#e5e7eb; }
+  .tooltip{
+    position:absolute;
+    bottom:130%;
+    left:50%;
+    transform:translateX(-50%);
+    background:#111827; color:#fff;
+    padding:6px 8px; border-radius:6px; font-size:12px; white-space:nowrap;
+    box-shadow:0 4px 18px rgba(0,0,0,.18);
+    opacity:0; visibility:hidden; transition:opacity .15s ease, visibility .15s ease;
+    pointer-events:none;
+  }
+  .tooltip::after{
+    content:""; position:absolute; top:100%; left:50%; transform:translateX(-50%);
+    border:6px solid transparent; border-top-color:#111827;
+  }
+  .info-btn:hover + .tooltip, .info-btn:focus + .tooltip{ opacity:1; visibility:visible; }
+
   .calendar-small{ max-width:360px; margin:0 auto; }
   .calendar-small .days button{ padding:6px; }
 
-  /* month header with full nav */
   .calendar .month{
     display:flex; align-items:center; justify-content:space-between;
-    font-weight:700; margin-bottom:6px;
-    gap:8px;
+    font-weight:700; margin-bottom:6px; gap:8px;
   }
   .calendar .month > span { text-align:center; min-width:160px; }
   .calendar .month .nav{ display:flex; gap:6px; flex-wrap:wrap; }
@@ -463,163 +527,45 @@ const donuts = [
     font-weight:700; line-height:1;
   }
   .calendar .month .nav-btn:hover{ background:#e5e7eb; }
+  .nav-btn:disabled{ opacity:.5; cursor:not-allowed; }
 
-  /* weekdays/days grid */
   .weekdays{ display:grid; grid-template-columns:repeat(7,1fr); gap:4px; font-size:12px; color:#6b7280; margin-bottom:4px; }
   .days{ display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
   .days button{
     border:1px solid var(--ring); border-radius:8px; background:#fff; cursor:pointer;
   }
   .days button.today {
-    border: 2px solid #49bdb3;
-    font-weight: 700;
-    color: #111827;
-    background: #ffff;
+    border: 2px solid #49bdb3; font-weight: 700; color: #111827; background: #ffff;
   }
   .days button.muted{ opacity:.5; }
   .days button:disabled{ background:#f3f4f6; color:#9ca3af; cursor:not-allowed; }
 
-  /* recent card */
+  /* Public holiday highlight (soft yellow) */
+  .days button.holiday { background: #f6e6ff; border-color: #f3f4f6; }
+  .days button.today.holiday { background: #FFF7CC; }
+
+  /* Out-of-window dates */
+  .days button.out {
+    background: #f9fafb; color: #9ca3af; border-color: #e5e7eb;
+    cursor: not-allowed; opacity: .75;
+  }
+
   .recent-wrap{ display:grid; gap:12px; }
   .recent-item{ border:1px solid var(--ring); border-radius:12px; padding:12px; display:grid; gap:6px; background:#f9fafb; }
   .recent-item .when{ font-weight:700; color:#111827; }
   .recent-item .cols{ display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; font-size:12px; }
   .recent-item .muted{ color:#6b7280; }
 
-  .download {
-    color: #fff;
-    text-decoration: underline;
-    font-size: 14px;
-  }
+  .download { color: #fff; text-decoration: underline; font-size: 14px; }
   .download:hover { opacity: 0.85; }
 
-  /* row layout */
-  .topbar{
-    display:flex;
-    align-items:flex-start;
-    justify-content:space-between;
-    gap: 16px;
-    margin-bottom: 8px;
-  }
-
-  /* left side */
+  .topbar{ display:flex; align-items:flex-start; justify-content:space-between; gap: 16px; margin-bottom: 8px; }
   .title-wrap{ color:#fff; }
-  .hello{
-    font-size:18px;
-    font-weight:400;
-    margin: 4px 0 6px;
-    opacity:.95;
-  }
-  .page-title{
-    margin:0;
-    font-size:58px;
-    line-height:0.80;
-    color:#fff;
-    letter-spacing:.3px;
-  }
+  .hello{ font-size:18px; font-weight:400; margin: 4px 0 6px; opacity:.95; }
+  .page-title{ margin:0; font-size:58px; line-height:0.80; color:#fff; letter-spacing:.3px; }
 
-  /* right side cluster */
-  .profile{ position:relative; display:flex; align-items:center; gap:10px; }
-  .icon-btn{ border:none; background:transparent; cursor:pointer; font-size:18px; line-height:1; padding:6px; border-radius:8px; color:#fff; }
-  .icon-btn:hover{ background:rgba(255,255,255,.12); }
-  .profile-info{ display:flex; align-items:center; gap:10px; color:#fff; }
-  .avatar-img{ box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25); }
-  .who .name{ font-weight:700; color:#fff; }
-  .who .sub{ font-size:12px; opacity:.95; color:#fff; }
-  .caret{ font-size:16px; color:#fff; }
-
-  .profile .menu{
-    position:absolute; right:0; top:calc(100% + 8px);
-    background:#fff; border:1px solid var(--ring); border-radius:10px; box-shadow:var(--shadow);
-    min-width:200px; padding:6px; z-index:30;
-  }
-  .profile .menu a{ display:block; padding:10px 12px; border-radius:8px; color:#111827; font-weight:600; text-decoration:none; }
-  .profile .menu a:hover{ background:#f3f4f6; }
-
-  /* responsive tweak: reduce title on small screens */
-  @media (max-width: 740px){
-    .page-title{ font-size:40px; }
-  }
-
-  /* --- Keep radios inline/left without changing their markup position --- */
-  .leave-form .duration {
-    display: flex;
-    flex-direction: column;
-    gap: .5rem;
-    align-items: flex-start;
-  }
-  .leave-form .duration label {
-    display: inline-flex;
-    flex-direction: row;
-    align-items: center;
-    gap: .5rem;
-    cursor: pointer;
-    text-align: left;
-  }
-  .leave-form .duration input[type="radio"] {
-    accent-color: #3FADA4; /* slightly darker than #49bdb3 */
-    width: 16px;
-    height: 16px;
-    margin: 0;
-  }
-
-  /* Greyed-out look for locked fields */
-  .leave-form input[readonly],
-  .leave-form input:disabled {
-    background:#f3f4f6;
-    color:#6b7280;
-    cursor:not-allowed;
-  }
-
-  .cf-line{
-  margin-top:6px;
-  text-align:center;
-  font-size:12px;
-  color:#6b7280;
-  position:relative;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  gap:6px;
-}
-.info-btn{
-  border:none;
-  background:#eef2ff;
-  border-radius:999px;
-  width:18px; height:18px;
-  line-height:18px;
-  font-size:12px;
-  font-weight:700;
-  cursor:pointer;
-  padding:0;
-  display:inline-grid;
-  place-items:center;
-  color:#374151;
-}
-.info-btn:hover{ background:#e5e7eb; }
-.tooltip{
-  position:absolute;
-  bottom:130%;
-  left:50%;
-  transform:translateX(-50%);
-  background:#111827;
-  color:#fff;
-  padding:6px 8px;
-  border-radius:6px;
-  font-size:12px;
-  white-space:nowrap;
-  box-shadow:0 4px 18px rgba(0,0,0,.18);
-  opacity:0; visibility:hidden;
-  transition:opacity .15s ease, visibility .15s ease;
-  pointer-events:none;
-}
-.tooltip::after{
-  content:"";
-  position:absolute; top:100%; left:50%;
-  transform:translateX(-50%);
-  border:6px solid transparent; border-top-color:#111827;
-}
-.info-btn:hover + .tooltip,
-.info-btn:focus + .tooltip{ opacity:1; visibility:visible; }
-
+  .leave-form .duration { display:flex; flex-direction:column; gap:.5rem; align-items:flex-start; }
+  .leave-form .duration label{ display:inline-flex; flex-direction:row; align-items:center; gap:.5rem; cursor:pointer; text-align:left; }
+  .leave-form .duration input[type="radio"]{ accent-color:#3FADA4; width:16px; height:16px; margin:0; }
+  .leave-form input[readonly], .leave-form input:disabled{ background:#f3f4f6; color:#6b7280; cursor:not-allowed; }
 </style>

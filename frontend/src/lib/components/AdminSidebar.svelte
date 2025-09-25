@@ -28,11 +28,11 @@
           </a>
         </div>
 
-        <a href="/dashboard/history" class:active={$page.url.pathname.startsWith('/dashboard/history')}>
+        <a href="/dashboard/admin/history" class:active={$page.url.pathname.startsWith('/dashboard/history')}>
           <span class="ico">🗂️</span><span class="text">Leave History</span>
         </a>
 
-        <a href="/dashboard/employees" class:active={$page.url.pathname.startsWith('/dashboard/employees')}>
+        <a href="/dashboard/admin/employees" class:active={$page.url.pathname.startsWith('/dashboard/admin/employees')}>
           <span class="ico">👥</span><span class="text">Employees</span>
         </a>
       </nav>
