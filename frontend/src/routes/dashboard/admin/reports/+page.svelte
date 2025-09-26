@@ -243,7 +243,8 @@
 
       {#if profileMenuOpen}
         <div class="menu" role="menu">
-          <a role="menuitem" href="/dashboard/admin/profile">Update Profile</a>
+          <a role="menuitem" href="/dashboard/admin/profile">Update Profile Picture</a>
+           <a role="menuitem" href="/dashboard/admin/profile">Update Password</a>
         </div>
       {/if}
     </div>
@@ -439,7 +440,7 @@
   .profile-info{ display:flex; align-items:center; gap:10px; color:#fff; position:relative; }
   .avatar-img{ height:70px; width:70px; border-radius:9999px; display:block; box-shadow:0 0 0 2px rgba(255,255,255,.25); }
   .who .name{  font-size: 20px; font-weight:700; }
-  .who .sub{ font-size:16px; opacity:.95; }
+  .who .sub{ font-size:12px; opacity:.95; }
 
   .caret{ font-size:16px; }
   .profile .menu{
