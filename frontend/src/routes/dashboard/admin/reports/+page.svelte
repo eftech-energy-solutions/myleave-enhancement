@@ -136,6 +136,9 @@
   let leaveType = 'Annual';
   let endLocked = false;
 
+  // 👇 ref to the file input (for validation)
+  let attachmentEl;
+
   const fixedDurations = {
     Maternity: 98,
     Paternity: 7,
@@ -199,7 +202,19 @@
   }
 
   function submitLeave(e) {
-    const fd = new FormData(e.currentTarget);
+    const form = e.currentTarget;
+
+    // Ensure native HTML5 validation runs since we prevent default
+    if (!form.reportValidity()) return;
+
+    // Extra guard: Medical leave requires an attachment
+    if (leaveType === 'Medical' && (!attachmentEl || !attachmentEl.files || attachmentEl.files.length === 0)) {
+      alert('Attachment is required for Medical leave.');
+      attachmentEl?.focus();
+      return;
+    }
+
+    const fd = new FormData(form);
     // TODO: post to backend
     modal?.close();
   }
@@ -243,7 +258,8 @@
 
       {#if profileMenuOpen}
         <div class="menu" role="menu">
-          <a role="menuitem" href="/dashboard/admin/profile">Update Profile</a>
+          <a role="menuitem" href="/dashboard/admin/profile">Update Profile Picture</a>
+          <a role="menuitem" href="/dashboard/admin/profile">Update Password</a>
         </div>
       {/if}
     </div>
@@ -416,8 +432,26 @@
       />
     </label>
 
-    <label><span>Reason</span><textarea name="reason" rows="3" required></textarea></label>
-    <label><span>Attachment</span><input type="file" name="attachment" /></label>
+    <label>
+      <span>Reason</span>
+      <textarea name="reason" rows="3" required></textarea>
+    </label>
+
+    <!-- ATTACHMENT: required for Medical -->
+    <label>
+      <span>Attachment</span>
+      <input
+        type="file"
+        name="attachment"
+        bind:this={attachmentEl}
+        accept=".pdf,.jpg,.jpeg,.png"
+        required={leaveType === 'Medical'}
+        aria-required={leaveType === 'Medical'}
+      />
+      {#if leaveType === 'Medical'}
+        <small class="muted">Attachment is required for Medical leave (PDF/JPG/PNG).</small>
+      {/if}
+    </label>
 
     <button type="submit" class="submit-btn">SUBMIT</button>
   </form>
@@ -439,7 +473,7 @@
   .profile-info{ display:flex; align-items:center; gap:10px; color:#fff; position:relative; }
   .avatar-img{ height:70px; width:70px; border-radius:9999px; display:block; box-shadow:0 0 0 2px rgba(255,255,255,.25); }
   .who .name{  font-size: 20px; font-weight:700; }
-  .who .sub{ font-size:16px; opacity:.95; }
+  .who .sub{ font-size:12px; opacity:.95; }
 
   .caret{ font-size:16px; }
   .profile .menu{
@@ -541,7 +575,7 @@
   .days button:disabled{ background:#f3f4f6; color:#9ca3af; cursor:not-allowed; }
 
   /* Public holiday highlight (soft yellow) */
-  .days button.holiday { background: #f6e6ff; border-color: #f3f4f6; }
+  .days button.holiday { background: #e0f2fe; border-color: #f3f4f6; }
   .days button.today.holiday { background: #FFF7CC; }
 
   /* Out-of-window dates */
