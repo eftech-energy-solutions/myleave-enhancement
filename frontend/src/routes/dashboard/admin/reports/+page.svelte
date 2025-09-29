@@ -136,6 +136,12 @@
   let leaveType = 'Annual';
   let endLocked = false;
 
+  // Track attachment + file input ref for native validation bubble
+  let attachmentFiles; // FileList
+  let fileInputEl;     // <input type="file">
+  $: showAttachmentReminder =
+    (leaveType === 'Medical') && (!attachmentFiles || attachmentFiles.length === 0);
+
   const fixedDurations = {
     Maternity: 98,
     Paternity: 7,
@@ -180,6 +186,20 @@
     }
   }
 
+  // Keep native "required" bubble in sync and show it immediately on switching to Medical
+  $: {
+    const needs = (leaveType === 'Medical');
+    if (fileInputEl) {
+      fileInputEl.required = needs;
+      if (needs && (!attachmentFiles || attachmentFiles.length === 0)) {
+        fileInputEl.setCustomValidity('Please attach your medical certificate.');
+        setTimeout(() => fileInputEl.reportValidity(), 0); // show native bubble
+      } else {
+        fileInputEl.setCustomValidity('');
+      }
+    }
+  }
+
   function onFromChange() {
     if (!dateFrom) return;
     if (duration === 'Half') dateUntil = dateFrom;
@@ -193,13 +213,17 @@
     dateFrom  = iso;
     dateUntil = iso;
     totalDays = 1;
+    attachmentFiles = undefined; // reset
 
     if (!modal?.open) modal.showModal();
     await tick();
   }
 
+  // Use native validation so bubbles appear on submit too
   function submitLeave(e) {
-    const fd = new FormData(e.currentTarget);
+    const form = e.currentTarget;
+    if (!form.reportValidity()) return; // shows native bubbles if invalid
+    const fd = new FormData(form);
     // TODO: post to backend
     modal?.close();
   }
@@ -244,7 +268,7 @@
       {#if profileMenuOpen}
         <div class="menu" role="menu">
           <a role="menuitem" href="/dashboard/admin/profile">Update Profile Picture</a>
-           <a role="menuitem" href="/dashboard/admin/profile">Update Password</a>
+          <a role="menuitem" href="/dashboard/admin/profile">Update Password</a>
         </div>
       {/if}
     </div>
@@ -418,7 +442,21 @@
     </label>
 
     <label><span>Reason</span><textarea name="reason" rows="3" required></textarea></label>
-    <label><span>Attachment</span><input type="file" name="attachment" /></label>
+
+    <label>
+      <span>Attachment</span>
+      <input
+        type="file"
+        name="attachment"
+        bind:this={fileInputEl}
+        bind:files={attachmentFiles}
+        required={leaveType === 'Medical'}
+        on:change={() => fileInputEl?.setCustomValidity('')}
+      />
+      {#if showAttachmentReminder}
+        <small class="help warn">Reminder: please attach your medical certificate.</small>
+      {/if}
+    </label>
 
     <button type="submit" class="submit-btn">SUBMIT</button>
   </form>
@@ -542,7 +580,7 @@
   .days button:disabled{ background:#f3f4f6; color:#9ca3af; cursor:not-allowed; }
 
   /* Public holiday highlight (soft yellow) */
-  .days button.holiday { background: #f6e6ff; border-color: #f3f4f6; }
+  .days button.holiday { background: #e0f2fe; border-color: #f3f4f6; }
   .days button.today.holiday { background: #FFF7CC; }
 
   /* Out-of-window dates */
@@ -569,4 +607,8 @@
   .leave-form .duration label{ display:inline-flex; flex-direction:row; align-items:center; gap:.5rem; cursor:pointer; text-align:left; }
   .leave-form .duration input[type="radio"]{ accent-color:#3FADA4; width:16px; height:16px; margin:0; }
   .leave-form input[readonly], .leave-form input:disabled{ background:#f3f4f6; color:#6b7280; cursor:not-allowed; }
+
+  /* helper text */
+  .help { color:#6b7280; font-size:12px; display:block; margin-top:4px; }
+  .help.warn { color:#b45309; }
 </style>
