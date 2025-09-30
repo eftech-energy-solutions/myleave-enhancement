@@ -40,6 +40,14 @@
     department: DEPTS[i % DEPTS.length]
   }));
 
+  // --- Department filter ---
+let deptFilter = 'All';
+const deptOptions = ['All', ...Array.from(new Set(DEPTS))];
+
+$: filteredEmployees = deptFilter === 'All'
+  ? employees
+  : employees.filter(e => e.department === deptFilter);
+
   // Full details map
   /** @type {Record<string, any>} */
   let detailsById = {};
@@ -380,13 +388,68 @@
     height: 28px;
     display: block;
   }
+ /* Filter section */
+.filter-wrap {
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+
+.filter-label {
+  margin: 0 6px;
+  font-weight: 600;
+  font-size: 14px;
+  color: #fff; /* white text */
+}
+.filter-icon {
+  width: 16px;
+  height: 16px;
+  color: #fff; /* make the icon white too */
+  opacity: 0.9;
+}
+
+
+/* Slimmer select box */
+.filter-select {
+  padding:4px 8px;  /* thinner */
+  min-width:180px;  /* a bit smaller */
+}
+
+.filter-select select {
+  font-size:13px;
+  padding:4px 6px;
+  height:28px;      /* slim height */
+}
+
+
 </style>
 
 <!-- Employees grid -->
 <div class="main">
   <div class="topbar">
+
+<div class="toprow" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+  <div><!-- left empty for now --></div>
+
+  <!-- Right: Filter -->
+  <div class="rightcol filter-wrap">
+    <!-- SVG funnel icon -->
+    <svg class="filter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" 
+         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M3 4h18l-7 8v6l-4 2v-8l-7-8z"/>
+    </svg>
+
+    <label class="filter-label" for="dept-filter">Department</label>
+    <div class="ctl pill filter-select">
+      <select id="dept-filter" bind:value={deptFilter} aria-label="Filter by department">
+        {#each deptOptions as d}<option value={d}>{d}</option>{/each}
+      </select>
+    </div>
+  </div>
+</div>
+
     <div class="employees-grid">
-      {#each employees as emp (emp.id)}
+      {#each filteredEmployees as emp (emp.id)}
         <div class="emp-box">
           <div class="emp-top" aria-label="Employee summary">
             <div class="avatar-wrap">
