@@ -41,12 +41,12 @@
   }));
 
   // --- Department filter ---
-let deptFilter = 'All';
-const deptOptions = ['All', ...Array.from(new Set(DEPTS))];
+  let deptFilter = 'All';
+  const deptOptions = ['All', ...Array.from(new Set(DEPTS))];
 
-$: filteredEmployees = deptFilter === 'All'
-  ? employees
-  : employees.filter(e => e.department === deptFilter);
+  $: filteredEmployees = deptFilter === 'All'
+    ? employees
+    : employees.filter(e => e.department === deptFilter);
 
   // Full details map
   /** @type {Record<string, any>} */
@@ -201,7 +201,7 @@ $: filteredEmployees = deptFilter === 'All'
     alert(`Employee "${newEmp.name}" added (dummy).`);
   }
 
-  // ------- Details Modal (same style as Add form) -------
+  // ------- Details Modal (Update Profile) -------
   let detailsOpen = false;
   let selectedEmp = null;
   let editMode = false;       // Edit text fields only
@@ -225,7 +225,7 @@ $: filteredEmployees = deptFilter === 'All'
         alert("Name and Position are required.");
         return;
       }
-      // keep original photoUrl (no editing)
+      // keep original photoUrl (no editing here)
       detailsForm.photoUrl = selectedEmp.photoUrl;
 
       detailsById[selectedEmp.empId] = structuredClone(detailsForm);
@@ -254,7 +254,7 @@ $: filteredEmployees = deptFilter === 'All'
 
 <style>
   :global(html, body){ height:100%; margin:0; }
-  :root { --primary:#49bdb3; --ink:#0f172a; --muted:#64748b; --line:#e5e7eb; --soft:#f8fafc; }
+  :root { --primary:#49bdb3; --ink:#0c4a6e ; --muted:#64748b; --line:#e5e7eb; --soft:#f8fafc; }
 
   :global(body){
     font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans";
@@ -263,8 +263,8 @@ $: filteredEmployees = deptFilter === 'All'
     overflow-y:auto;
   }
 
-  .add-employee-link { color:#fff; text-decoration: underline; font-size:16px; font-weight:600; cursor:pointer; white-space:nowrap; margin-top: 10px; }
-  .add-employee-link:hover { opacity:.85;  }
+  .add-employee-link { color:#fff; text-decoration: underline; font-size:16px; font-weight:600; cursor:pointer; white-space:nowrap; margin-top:10px; }
+  .add-employee-link:hover { opacity:.85; }
 
   /* Grid & Card */
   .main{ padding:1.5rem; }
@@ -289,7 +289,7 @@ $: filteredEmployees = deptFilter === 'All'
   .emp-spacer{ flex:1 1 auto; }
   .emp-actions{ margin-top:auto; display:flex; justify-content:center; }
   .btn{ border:none; border-radius:8px; padding:.42rem .75rem; font-size:12px; cursor:pointer; font-weight:700; }
-  .btn.details{ background:#e0f2fe; color:#0c4a6e; }
+  .btn.details{ background:#e0f2fe; color:#000; }
 
   /* Sidebar */
   .overlay{ position:fixed; inset:0; background:rgba(0,0,0,.25); opacity:0; pointer-events:none; transition:opacity .2s; z-index:40; }
@@ -302,36 +302,45 @@ $: filteredEmployees = deptFilter === 'All'
   }
   .sidebar.open{ transform:translateX(0); }
   .sidebar-header{ display:flex; justify-content:space-between; align-items:center; padding:14px 16px; border-bottom:1px solid var(--line); }
-  .sidebar-title{ font-size:18px; font-weight:700; color:#0c4a6e; }
+  .sidebar-title{ font-size:18px; font-weight:700; color:#000; }
   .close-btn{ border:none; background:transparent; font-size:22px; cursor:pointer; color:#475569; }
   .sidebar-body{ padding:14px 16px; overflow:auto; flex:1; }
   .sidebar-footer{ padding:12px 16px; border-top:1px solid var(--line); display:flex; justify-content:flex-end; }
-  .cancel-btn{ border:1px solid var(--line); background:#fff; color:#0c4a6e; border-radius:8px; padding:.45rem .8rem; font-weight:700; cursor:pointer; }
+  .cancel-btn{ border:1px solid var(--line); background:#fff; color:#000; border-radius:8px; padding:.45rem .8rem; font-weight:700; cursor:pointer; }
 
   .pending-card{ background:#fff; border:1px solid var(--line); border-radius:12px; padding:12px; margin-bottom:12px; text-align:center; }
-  .pending-card h3{ margin:0; font-size:15px; color:#0c4a6e; }
+  .pending-card h3{ margin:0; font-size:15px; color:#000; }
   .pending-card p{ margin:2px 0; font-size:12px; color:#334155; }
   .approve-btn{ border:none; border-radius:8px; padding:.38rem .7rem; font-size:12px; cursor:pointer; font-weight:700; background:#22c55e; color:#064e3b; }
   .reject-btn{ border:none; border-radius:8px; padding:.38rem .7rem; font-size:12px; cursor:pointer; font-weight:700; background:#e30707; color:#7f1d1d; margin-left:.5rem; }
 
   .sidebar-tab{
     position:fixed; right:0; top:40%; transform:translateY(-50%);
-    display:flex; align-items:center; gap:8px; background:#111827; color:#fff; padding:.6rem .95rem .6rem 1rem;
+    display:flex; align-items:center; gap:8px; background:#0c4a6e; color:#fff; padding:.6rem .95rem .6rem 1rem;
     border-top-left-radius:9999px; border-bottom-left-radius:9999px; cursor:pointer; user-select:none; z-index:50; box-shadow:0 8px 20px rgba(0,0,0,.25);
   }
-  .sidebar-tab .label{ font-weight:800; font-size:14px; }
+  .sidebar-tab .label{ font-weight:700; font-size:14px; }
   .badge{ min-width:22px; height:22px; display:inline-grid; place-items:center; background:#ef4444; color:#fff; font-weight:800; border-radius:9999px; font-size:12px; padding:0 6px; }
 
-  /* Modal base Form add employee */
+  /* Modal base */
   .modal-wrap{ position:fixed; inset:0; display:grid; place-items:center; background:rgba(0,0,0,.35); z-index:80; animation:fadeIn .15s ease; }
   @keyframes fadeIn { from{opacity:0} to{opacity:1} }
   .modal{ width:min(900px, 96vw); background:#fff; border-radius:18px; box-shadow:0 14px 40px rgba(0,0,0,.25); overflow:hidden; }
   .modal-hd{ padding:14px 18px; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; }
-  .modal-ttl{ font-weight:700; font-size:22px; color:var(--primary); }
+  .modal-ttl{ font-weight:700; font-size:22px; color:#49bdb3; }
   .modal-x{ border:none; background:transparent; font-size:22px; cursor:pointer; color:#475569; }
   .modal-bd{ padding:0; max-height:72vh; overflow:auto; }
 
-  /* Add form styling (also reused by Details) */
+  .sub-ttl{
+  margin: 0 0 10px;
+  font-weight: 800;
+  font-size: 14px;
+  letter-spacing:.2px;
+  color: var(--ink); /* 0c4a6e */
+}
+
+
+  /* Forms */
   .add-layout, .details-layout{ padding:22px; }
   .section-ttl{ font-weight:700; color:#0c4a6e; margin:0 0 14px; font-size:18px; }
   .add-grid, .details-grid-form{ display:grid; grid-template-columns: 1fr 220px; gap:20px; }
@@ -358,7 +367,7 @@ $: filteredEmployees = deptFilter === 'All'
   .ctl input, .ctl select, .ctl textarea{ border:none; outline:none; width:100%; font-size:14px; color:#111827; background:transparent; }
   .ctl textarea{ min-height:90px; resize:vertical; }
   .pill{ border-radius:9999px; }
-  .muted{ color:var(--muted); font-size:12px; }
+  .muted{ color:#64748b; font-size:12px; }
 
   .ctl.disabled{ background:#f8fafc; }
   .ctl :disabled{ color:#6b7280; }
@@ -369,6 +378,23 @@ $: filteredEmployees = deptFilter === 'All'
     background:var(--primary); color:#fff; border:none; border-radius:10px; padding:.8rem 1.4rem; font-weight:700; cursor:pointer;
   }
   .btn-primary:hover{ filter:brightness(.96); }
+
+  /* --- DETAILS (Update Profile) polish --- */
+  .ctl{ box-shadow: inset 0 1px 0 rgba(0,0,0,.02); }
+  .ctl:focus-within{ border-color:#49bdb3; box-shadow:0 0 0 3px rgba(73,189,179,.15); }
+
+  /* Date inputs with calendar icon on the right */
+  .ctl.date { position:relative; }
+  .ctl.date::after{
+    content:"";
+    position:absolute; right:12px; top:50%; transform:translateY(-50%);
+    width:18px; height:18px; opacity:.7;
+    background:
+      url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" stroke="%2364748b" fill="none" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2" ry="2" stroke-width="2"/><line x1="16" y1="3" x2="16" y2="7" stroke-width="2"/><line x1="8" y1="3" x2="8" y2="7" stroke-width="2"/><line x1="3" y1="11" x2="21" y2="11" stroke-width="2"/></svg>')
+      no-repeat center / contain;
+    pointer-events:none;
+  }
+  input[type="date"]{ padding-right:34px; }
 
   /* Details modal buttons */
   .details-actions{ display:flex; gap:10px; justify-content:flex-end; padding:10px 18px 16px; }
@@ -383,70 +409,40 @@ $: filteredEmployees = deptFilter === 'All'
     .employees-grid{ grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
   }
 
-  .photo-card .cam svg{
-    width: 28px;
-    height: 28px;
-    display: block;
-  }
- /* Filter section */
-.filter-wrap {
-  display:flex;
-  align-items:center;
-  gap:6px;
-}
+  .photo-card .cam svg{ width: 28px; height: 28px; display: block; }
 
-.filter-label {
-  margin: 0 6px;
-  font-weight: 600;
-  font-size: 14px;
-  color: #fff; /* white text */
-}
-.filter-icon {
-  width: 16px;
-  height: 16px;
-  color: #fff; /* make the icon white too */
-  opacity: 0.9;
-}
+  /* Filter section */
+  .filter-wrap { display:flex; align-items:center; gap:6px; }
+  .filter-label { margin: 0 6px; font-weight: 600; font-size: 14px; color: #fff; }
+  .filter-icon { width: 16px; height: 16px; color: #fff; opacity: 0.9; }
 
-
-/* Slimmer select box */
-.filter-select {
-  padding:4px 8px;  /* thinner */
-  min-width:180px;  /* a bit smaller */
-}
-
-.filter-select select {
-  font-size:13px;
-  padding:4px 6px;
-  height:28px;      /* slim height */
-}
-
-
+  /* Slimmer select box */
+  .filter-select { padding:4px 8px; min-width:180px; }
+  .filter-select select { font-size:13px; padding:4px 6px; height:28px; }
 </style>
 
 <!-- Employees grid -->
 <div class="main">
   <div class="topbar">
+    <div class="toprow" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <!-- Left: Add New Employee as underlined link -->
+      <a href="#" class="add-employee-link" on:click|preventDefault={openAddModal}>
+        Add New Employee
+      </a>
 
-<div class="toprow" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-  <div><!-- left empty for now --></div>
-
-  <!-- Right: Filter -->
-  <div class="rightcol filter-wrap">
-    <!-- SVG funnel icon -->
-    <svg class="filter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" 
-         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <path d="M3 4h18l-7 8v6l-4 2v-8l-7-8z"/>
-    </svg>
-
-    <label class="filter-label" for="dept-filter">Department</label>
-    <div class="ctl pill filter-select">
-      <select id="dept-filter" bind:value={deptFilter} aria-label="Filter by department">
-        {#each deptOptions as d}<option value={d}>{d}</option>{/each}
-      </select>
+      <!-- Right: Filter -->
+      <div class="rightcol filter-wrap">
+        <svg class="filter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 4h18l-7 8v6l-4 2v-8l-7-8z"/>
+        </svg>
+        <label class="filter-label" for="dept-filter">Department</label>
+        <div class="ctl pill filter-select">
+          <select id="dept-filter" bind:value={deptFilter} aria-label="Filter by department">
+            {#each deptOptions as d}<option value={d}>{d}</option>{/each}
+          </select>
+        </div>
+      </div>
     </div>
-  </div>
-</div>
 
     <div class="employees-grid">
       {#each filteredEmployees as emp (emp.id)}
@@ -521,7 +517,7 @@ $: filteredEmployees = deptFilter === 'All'
   {/if}
 </div>
 
-<!-- Add New Employee (reference-style) -->
+<!-- Add New Employee -->
 {#if addModalOpen}
   <div class="modal-wrap" role="dialog" aria-modal="true" aria-labelledby="add-emp-title">
     <div class="modal">
@@ -568,7 +564,7 @@ $: filteredEmployees = deptFilter === 'All'
                 </div>
                 <div>
                   <label>Employment Date</label>
-                  <div class="ctl pill">
+                  <div class="ctl pill date">
                     <input type="date" bind:value={newEmp.employmentDate} required bind:this={employmentDateEl} />
                   </div>
                 </div>
@@ -577,11 +573,11 @@ $: filteredEmployees = deptFilter === 'All'
               <div class="row">
                 <div>
                   <label>Confirmation Date</label>
-                  <div class="ctl pill"><input type="date" bind:value={newEmp.confirmationDate} /></div>
+                  <div class="ctl pill date"><input type="date" bind:value={newEmp.confirmationDate} /></div>
                 </div>
                 <div>
                   <label>Termination Date</label>
-                  <div class="ctl pill"><input type="date" bind:value={newEmp.terminationDate} /></div>
+                  <div class="ctl pill date"><input type="date" bind:value={newEmp.terminationDate} /></div>
                 </div>
               </div>
 
@@ -641,7 +637,7 @@ $: filteredEmployees = deptFilter === 'All'
   </div>
 {/if}
 
-<!-- Employee Details (same style as Add, read-only until Edit) -->
+<!-- Employee Details (Update Profile) -->
 {#if detailsOpen && selectedEmp}
   <div class="modal-wrap" role="dialog" aria-modal="true" aria-labelledby="emp-details-title">
     <div class="modal">
@@ -653,7 +649,7 @@ $: filteredEmployees = deptFilter === 'All'
       <div class="modal-bd">
         <div class="details-layout">
           <div class="details-grid-form">
-            <!-- Left form (same component style as Add) -->
+            <!-- Left form -->
             <div class="form">
               <div class="row">
                 <div>
@@ -708,13 +704,13 @@ $: filteredEmployees = deptFilter === 'All'
               <div class="row">
                 <div>
                   <label>Employment Date</label>
-                  <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
+                  <div class={"ctl pill date " + (!editMode ? 'disabled' : '')}>
                     <input type="date" bind:value={detailsForm.employmentDate} disabled={!editMode} />
                   </div>
                 </div>
                 <div>
                   <label>Confirmation Date</label>
-                  <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
+                  <div class={"ctl pill date " + (!editMode ? 'disabled' : '')}>
                     <input type="date" bind:value={detailsForm.confirmationDate} disabled={!editMode} />
                   </div>
                 </div>
@@ -723,7 +719,7 @@ $: filteredEmployees = deptFilter === 'All'
               <div class="row">
                 <div>
                   <label>Termination Date</label>
-                  <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
+                  <div class={"ctl pill date " + (!editMode ? 'disabled' : '')}>
                     <input type="date" bind:value={detailsForm.terminationDate} disabled={!editMode} />
                   </div>
                 </div>
@@ -750,14 +746,18 @@ $: filteredEmployees = deptFilter === 'All'
               </div>
 
               <div class="form-ft">
-                <button class={editMode ? 'btn-primary' : 'btn-primary'} on:click={toggleEditSave}>
-                  {editMode ? 'Save' : 'Edit'}
-                </button>
-                <button class="btn-ghost" on:click={() => { detailsOpen = false; editMode = false; }}>Close</button>
+                {#if editMode}
+                  <button class="btn-ghost" on:click={() => { editMode = false; detailsForm = structuredClone(selectedEmp); }}>
+                    Cancel
+                  </button>
+                  <button class="btn-primary" on:click={toggleEditSave}>Save Changes</button>
+                {:else}
+                  <button class="btn-primary" on:click={toggleEditSave}>Edit Profile</button>
+                {/if}
               </div>
             </div>
 
-            <!-- Right: Photo (preview only, same card style) -->
+            <!-- Right: Photo (preview only) -->
             <div class="photo-card" title="Profile Photo">
               {#if selectedEmp.photoUrl}
                 <div class="photo-preview"><img src={selectedEmp.photoUrl} alt="Profile" /></div>
