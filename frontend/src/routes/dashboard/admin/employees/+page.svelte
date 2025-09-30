@@ -255,28 +255,6 @@
     overflow-y:auto;
   }
 
-  /* Header */
-  .toprow{ display:flex; justify-content:space-between; align-items:flex-start; gap:16px; padding:12px 20px; position:relative; z-index:10; }
-  .employees-title{ font-size:58px; font-weight:700; margin:6px 0 0; color:#fff; flex:0 0 auto; }
-  .rightcol{ display:flex; flex-direction:column; align-items:flex-end; gap:10px; min-width:280px; }
-
-  .profile{ display:flex; align-items:center; gap:12px; color:#fff; position:relative; }
-  .icon-btn{ border:none; background:transparent; cursor:pointer; font-size:18px; line-height:1; padding:6px; border-radius:8px; color:#fff; }
-  .icon-btn:hover{ background:rgba(255,255,255,.12); }
-  .profile-info{ display:flex; align-items:center; gap:10px; }
-  .avatar-img{ height:70px; width:70px; border-radius:9999px; display:block; box-shadow:0 0 0 2px rgba(255,255,255,.25); }
-  .who .name{ font-size:16px; font-weight:700; color:#fff; }
-  .who .sub{ font-size:12px; opacity:.95; color:#fff; }
-  .caret{ font-size:16px; color:#fff; cursor:pointer; background:none; border:none; }
-
-  .profile .menu{
-    position:absolute; right:0; top:calc(100% + 8px);
-    background:#fff; border:1px solid var(--line); border-radius:10px; box-shadow:0 10px 26px rgba(0,0,0,.18);
-    min-width:180px; padding:6px; z-index:50;
-  }
-  .profile .menu a{ display:block; padding:8px 10px; border-radius:8px; color:#111827; font-weight:600; text-decoration:none; }
-  .profile .menu a:hover{ background:#f3f4f6; }
-
   .add-employee-link { color:#fff; text-decoration: underline; font-size:16px; font-weight:600; cursor:pointer; white-space:nowrap; margin-top: 10px; }
   .add-employee-link:hover { opacity:.85;  }
 
@@ -403,32 +381,6 @@
     display: block;
   }
 </style>
-
-<!-- Header -->
-<div class="toprow">
-  <h2 class="employees-title">Employees</h2>
-  <div class="rightcol">
-    <div class="profile" use:clickOutside>
-      <button class="icon-btn bell" aria-label="Notifications">🔔</button>
-      <div class="profile-info">
-        <img src="/images/icontest1.png" alt="" class="avatar-img" on:error={(e)=> e.currentTarget.style.display='none'} />
-        <div class="who">
-          <div class="name">{user?.name || 'Admin'}</div>
-          <div class="sub">{user?.role || 'admin'}</div>
-          <div class="sub">#{user?.staffId || 'E8505'}</div>
-        </div>
-      </div>
-      <button class="caret" on:click={() => (profileMenuOpen = !profileMenuOpen)}>▾</button>
-      {#if profileMenuOpen}
-        <div class="menu" role="menu">
-          <a role="menuitem" href="/dashboard/admin/profile">Update Profile Picture</a>
-          <a role="menuitem" href="/dashboard/admin/profile">Update Password</a>
-        </div>
-      {/if}
-    </div>
-    <a class="add-employee-link" on:click={openAddModal}>Add New Employee</a>
-  </div>
-</div>
 
 <!-- Employees grid -->
 <div class="main">

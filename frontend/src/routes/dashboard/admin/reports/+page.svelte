@@ -237,42 +237,6 @@
 </script>
 
 <main class="main">
-  <!-- HEADER -->
-  <div class="topbar">
-    <div class="title-wrap">
-      <div class="hello">Welcome back, {user?.name || 'admin'}!</div>
-      <h1 class="page-title">My Dashboard</h1>
-    </div>
-
-    <div class="profile" use:clickOutside>
-      <button class="icon-btn bell" aria-label="Notifications">🔔</button>
-
-      <div class="profile-info">
-        <img src="/images/icontest1.png" alt="" class="avatar-img"
-             on:error={(e)=> e.currentTarget.style.display='none'} />
-        <div class="who">
-          <div class="name">{user?.name || 'Afiq Mikail'}</div>
-          <div class="sub">{user?.role || 'Human Resources'}</div>
-          <div class="sub">#{user?.staffId || 'E8505'}</div>
-        </div>
-      </div>
-
-      <button
-        class="icon-btn caret"
-        aria-haspopup="menu"
-        aria-expanded={profileMenuOpen}
-        on:click={() => (profileMenuOpen = !profileMenuOpen)}
-        aria-label="Open profile menu"
-      >▾</button>
-
-      {#if profileMenuOpen}
-        <div class="menu" role="menu">
-          <a role="menuitem" href="/dashboard/admin/profile">Update Profile Picture</a>
-          <a role="menuitem" href="/dashboard/admin/profile">Update Password</a>
-        </div>
-      {/if}
-    </div>
-  </div>
 
   <!-- ===== DONUT ROW HEADER: Download on top-right ===== -->
   <div class="donut-row-header">
@@ -467,29 +431,10 @@
 
   .donut-row-header{
     display:flex; justify-content:flex-end; align-items:center;
-    margin: 12px 0 6px;
+    margin: 8px 0 6px;
   }
 
   .grid{ margin-top:6px; display:grid; gap:10px; grid-template-columns:repeat(12, minmax(0,1fr)); }
-
-  .profile{ position:relative; display:flex; align-items:center; gap:10px; }
-  .icon-btn{ border:none; background:transparent; cursor:pointer; font-size:18px; line-height:1; padding:6px; border-radius:8px; color:#fff; }
-  .icon-btn:hover{ background:rgba(255,255,255,.12); }
-  .profile-info{ display:flex; align-items:center; gap:10px; color:#fff; position:relative; }
-  .avatar-img{ height:70px; width:70px; border-radius:9999px; display:block; box-shadow:0 0 0 2px rgba(255,255,255,.25); }
-  .who .name{  font-size: 20px; font-weight:700; }
-  .who .sub{ font-size:12px; opacity:.95; }
-
-  .caret{ font-size:16px; }
-  .profile .menu{
-    position:absolute; right:0; top:calc(100% + 8px);
-    background:#fff; border:1px solid var(--ring); border-radius:10px; box-shadow:var(--shadow);
-    min-width:200px; padding:6px; z-index:30;
-  }
-  .profile .menu a{ display:block; padding:10px 12px; border-radius:8px; color:#111827; font-weight:600; text-decoration:none; }
-  .profile .menu a:hover{ background:#f3f4f6; }
-
-  @media (max-width:640px){ .who .sub{ display:none; } }
 
   :global(:root){ --spentRed:#ef4444; --restBlue:#3b82f6; }
   .donut.fancy{
@@ -597,11 +542,6 @@
 
   .download { color: #fff; text-decoration: underline; font-size: 14px; }
   .download:hover { opacity: 0.85; }
-
-  .topbar{ display:flex; align-items:flex-start; justify-content:space-between; gap: 16px; margin-bottom: 8px; }
-  .title-wrap{ color:#fff; }
-  .hello{ font-size:18px; font-weight:400; margin: 4px 0 6px; opacity:.95; }
-  .page-title{ margin:0; font-size:58px; line-height:0.80; color:#fff; letter-spacing:.3px; }
 
   .leave-form .duration { display:flex; flex-direction:column; gap:.5rem; align-items:flex-start; }
   .leave-form .duration label{ display:inline-flex; flex-direction:row; align-items:center; gap:.5rem; cursor:pointer; text-align:left; }
