@@ -1,5 +1,5 @@
 <script>
-  // Profile
+  // ------- Profile -------
   let profileMenuOpen = false;
   const user = { name: "Afiq Mikail", role: "Human Resources", staffId: "E8505" };
 
@@ -9,16 +9,17 @@
     return { destroy: () => document.removeEventListener('click', onClick) };
   }
 
-  // Keyboard ESC closes things
+  // ESC closes things
   function handleKey(e) {
     if (e.key === 'Escape') {
       if (sidebarOpen) sidebarOpen = false;
       if (profileMenuOpen) profileMenuOpen = false;
       if (addModalOpen) addModalOpen = false;
+      if (detailsOpen) { detailsOpen = false; editMode = false; }
     }
   }
 
-  // Dummy employees
+  // ------- Dummy data -------
   const NAMES = [
     "Afiq Mikail","Nur Aisyah","Daniel Tan","Sophia Lim","Muhammad Shamsul","Ariana Wong","John Lee","Farah Zahra",
     "Hafiz Rahman","Amirul Hakim","Nabila Rahman","Jason Ong","Puteri Balqis","Christopher Yap","Mira Izzati","Iqbal Zain",
@@ -27,10 +28,11 @@
     "Hakim Roslan","Zul Hilmi","Nurul Auni","Faris Zulkifli","Melissa Chong","Zaid Hakimi"
   ];
   const ROLES = ["Human Resources","Manager","Engineer","Executive","Analyst","Technician","Team Lead","Coordinator"];
-  const DEPTS = ["Administrator","Operations Support","Technical Data","Opeerations - RTOC","Sales & Technical Excellence","Director"];
+  const DEPTS = ["Administrator","Operations Support","Technical Data","Operations - RTOC","Sales & Technical Excellence","Director"];
   const IDS   = ["HR","MN","EN","EX","AN","TC","TL","CO"];
   const makeId = (prefix, i) => `${prefix}${String(i+1).padStart(3,"0")}`;
 
+  // Employees (cards)
   let employees = NAMES.map((name, i) => ({
     id: makeId(IDS[i % IDS.length], i),
     name,
@@ -38,12 +40,32 @@
     department: DEPTS[i % DEPTS.length]
   }));
 
-  // Pending example
+  // Full details map
+  /** @type {Record<string, any>} */
+  let detailsById = {};
+  for (const e of employees) {
+    detailsById[e.id] = {
+      photoUrl: "",
+      empId: e.id,
+      name: e.name,
+      email: "",
+      position: e.role,
+      department: e.department,
+      employmentDate: "",
+      terminationDate: "",
+      confirmationDate: "",
+      gender: "",
+      annualLeave: "14.0",
+      medicalLeave: "14.0",
+      notes: ""
+    };
+  }
+
+  // Pending demo
   let pending = [{ id:"MN002", name:"Nur Aisyah", role:"Manager", department:"Operations" }];
   employees = employees.filter(e => e.id !== "MN002");
 
-  // Move to pending (simulate backend)
-  export function requestCameIn(empId) {
+  function requestCameIn(empId) {
     const idx = employees.findIndex(e => e.id === empId);
     if (idx === -1) return;
     pending = [employees[idx], ...pending];
@@ -51,25 +73,32 @@
     sidebarOpen = true;
   }
 
-  // Approve / reject
   function approveLeave(emp) {
     const idx = pending.findIndex(e => e.id === emp.id);
     if (idx === -1) return;
     employees = [pending[idx], ...employees];
     pending = [...pending.slice(0, idx), ...pending.slice(idx + 1)];
+    if (!detailsById[emp.id]) {
+      detailsById[emp.id] = {
+        photoUrl: "",
+        empId: emp.id, name: emp.name, email: "", position: emp.role,
+        department: emp.department, employmentDate: "", terminationDate: "",
+        confirmationDate: "", gender: "", annualLeave: "14.0", medicalLeave: "14.0", notes: ""
+      };
+    }
   }
   const rejectLeave = approveLeave;
 
-  // Sidebar state
+  // ------- Sidebar -------
   let sidebarOpen = false;
   const toggleSidebar = () => (sidebarOpen = !sidebarOpen);
   const pendingCount = () => pending.length;
 
-  // ---------- Add New Employee Modal (dummy wire-up) ----------
+  // ------- Add New Employee (modal) -------
   let addModalOpen = false;
 
-  // Form model
   let newEmp = {
+    photoUrl: "",
     empId: "",
     name: "",
     email: "",
@@ -80,13 +109,14 @@
     gender: "Male",
     annualLeave: "14.0",
     medicalLeave: "14.0",
-    department: "Technical Data"
+    department: "Technical Data",
+    notes: ""
   };
 
   function openAddModal() {
     addModalOpen = true;
-    // optional defaults
     newEmp = {
+      photoUrl: "",
       empId: "",
       name: "",
       email: "",
@@ -97,39 +127,118 @@
       gender: "Male",
       annualLeave: "14.0",
       medicalLeave: "14.0",
-      department: "Technical Data"
+      department: "Technical Data",
+      notes: ""
     };
   }
+
+  // Photo upload for ADD (PNG/JPG only)
+  function handleNewPhotoFile(e) {
+    const file = e.currentTarget.files?.[0];
+    if (!file) return;
+    if (!/^image\/(png|jpeg)$/i.test(file.type)) {
+      alert("Please choose a PNG or JPG image.");
+      e.currentTarget.value = "";
+      return;
+    }
+    newEmp.photoUrl = URL.createObjectURL(file); // preview
+  }
+
+  let employmentDateEl; // ref to focus when missing
 
   function submitNewEmployee(e) {
     e.preventDefault();
 
-    // simple required checks
     if (!newEmp.name || !newEmp.email || !newEmp.position) {
       alert("Please fill Name, Email, and Position.");
       return;
     }
 
-    // create an ID if user didn't set one
+    if (!newEmp.employmentDate) {
+      alert("Please select the Employment Date.");
+      employmentDateEl?.focus();
+      return;
+    }
+
     const randPrefix = IDS[Math.floor(Math.random()*IDS.length)];
     const newId = newEmp.empId?.trim() || `${randPrefix}${String(employees.length + 101).padStart(3,'0')}`;
 
-    // push to list (DUMMY; replace with API later)
-    employees = [
-      {
-        id: newId,
-        name: newEmp.name,
-        role: newEmp.position || "Employee",
-        department: newEmp.department || "General"
-      },
-      ...employees
-    ];
+    // Add card
+    const card = {
+      id: newId,
+      name: newEmp.name,
+      role: newEmp.position || "Employee",
+      department: newEmp.department || "General"
+    };
+    employees = [card, ...employees];
 
-    // TODO: integrate with backend
-    // await fetch('/api/employees', { method: 'POST', body: JSON.stringify(newEmp) })
+    // Save details
+    detailsById[newId] = {
+      photoUrl: newEmp.photoUrl || "",
+      empId: newId,
+      name: newEmp.name,
+      email: newEmp.email,
+      position: newEmp.position,
+      department: newEmp.department,
+      employmentDate: newEmp.employmentDate,
+      terminationDate: newEmp.terminationDate,
+      confirmationDate: newEmp.confirmationDate,
+      gender: newEmp.gender,
+      annualLeave: String(newEmp.annualLeave ?? "14.0"),
+      medicalLeave: String(newEmp.medicalLeave ?? "14.0"),
+      notes: newEmp.notes
+    };
 
     addModalOpen = false;
     alert(`Employee "${newEmp.name}" added (dummy).`);
+  }
+
+  // ------- Details Modal (same style as Add form) -------
+  let detailsOpen = false;
+  let selectedEmp = null;
+  let editMode = false;       // Edit text fields only
+  let detailsForm = null;     // always a working copy
+
+  function openDetails(empId) {
+    const base = detailsById[empId] ?? null;
+    selectedEmp = base ? structuredClone(base) : null;
+    detailsForm = base ? structuredClone(base) : null;  // keep a buffer always
+    editMode = false;
+    detailsOpen = !!selectedEmp;
+  }
+
+  const safe = (v) => (v && String(v).trim().length ? v : "-");
+
+  function toggleEditSave() {
+    if (!selectedEmp) return;
+
+    if (editMode) {
+      if (!detailsForm.name || !detailsForm.position) {
+        alert("Name and Position are required.");
+        return;
+      }
+      // keep original photoUrl (no editing)
+      detailsForm.photoUrl = selectedEmp.photoUrl;
+
+      detailsById[selectedEmp.empId] = structuredClone(detailsForm);
+      selectedEmp = structuredClone(detailsForm);
+
+      const idx = employees.findIndex(e => e.id === selectedEmp.empId);
+      if (idx !== -1) {
+        employees[idx] = {
+          ...employees[idx],
+          name: detailsForm.name,
+          role: detailsForm.position,
+          department: detailsForm.department
+        };
+        employees = [...employees];
+      }
+
+      editMode = false;
+      return;
+    }
+
+    editMode = true;
   }
 </script>
 
@@ -137,6 +246,8 @@
 
 <style>
   :global(html, body){ height:100%; margin:0; }
+  :root { --primary:#49bdb3; --ink:#0f172a; --muted:#64748b; --line:#e5e7eb; --soft:#f8fafc; }
+
   :global(body){
     font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans";
     background:url('/images/bg.png') no-repeat center center fixed;
@@ -144,63 +255,59 @@
     overflow-y:auto;
   }
 
-  /* Profile (normal inline style, not floating) */
+  /* Header */
+  .toprow{ display:flex; justify-content:space-between; align-items:flex-start; gap:16px; padding:12px 20px; position:relative; z-index:10; }
+  .employees-title{ font-size:58px; font-weight:700; margin:6px 0 0; color:#fff; flex:0 0 auto; }
+  .rightcol{ display:flex; flex-direction:column; align-items:flex-end; gap:10px; min-width:280px; }
+
   .profile{ display:flex; align-items:center; gap:12px; color:#fff; position:relative; }
   .icon-btn{ border:none; background:transparent; cursor:pointer; font-size:18px; line-height:1; padding:6px; border-radius:8px; color:#fff; }
   .icon-btn:hover{ background:rgba(255,255,255,.12); }
   .profile-info{ display:flex; align-items:center; gap:10px; }
   .avatar-img{ height:70px; width:70px; border-radius:9999px; display:block; box-shadow:0 0 0 2px rgba(255,255,255,.25); }
-  .who .name{ font-size:16px; font-weight:700; }
+  .who .name{ font-size:16px; font-weight:700; color:#fff; }
   .who .sub{ font-size:12px; opacity:.95; color:#fff; }
   .caret{ font-size:16px; color:#fff; cursor:pointer; background:none; border:none; }
 
   .profile .menu{
     position:absolute; right:0; top:calc(100% + 8px);
-    background:#fff; border:1px solid #e5e7eb; border-radius:10px; box-shadow:0 10px 26px rgba(0,0,0,.18);
+    background:#fff; border:1px solid var(--line); border-radius:10px; box-shadow:0 10px 26px rgba(0,0,0,.18);
     min-width:180px; padding:6px; z-index:50;
   }
   .profile .menu a{ display:block; padding:8px 10px; border-radius:8px; color:#111827; font-weight:600; text-decoration:none; }
   .profile .menu a:hover{ background:#f3f4f6; }
 
-  /* Employees grid */
-  .main{ padding:1rem; }
-  .employees-header {
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    margin-bottom:1rem;
-    color:#fff;
+  .add-employee-link { color:#fff; text-decoration: underline; font-size:16px; font-weight:600; cursor:pointer; white-space:nowrap; margin-top: 10px; }
+  .add-employee-link:hover { opacity:.85;  }
+
+  /* Grid & Card */
+  .main{ padding:1.5rem; }
+  .employees-grid{ display:grid; gap:1rem; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+
+  .emp-box{ background:#fff; border-radius:12px; padding:1rem; color:#111; box-shadow:0 1px 3px rgba(0,0,0,.08);
+    display:flex; flex-direction:column; min-height:240px; }
+  .emp-top{ text-align:center; }
+
+  /* Avatar fallback */
+  .avatar-wrap, .details-avatar-wrap{
+    position:relative; width:64px; height:64px; margin:0 auto .5rem; border-radius:9999px; overflow:hidden;
+    background:#e5e7eb; border:1px solid #e5e7eb;
   }
-  /* Bigger Employees title */
-  .employees-title { font-size:32px; font-weight:800; margin:0; }
+  .details-avatar-wrap{ width:72px; height:72px; margin:0; }
+  .avatar-wrap img, .details-avatar-wrap img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; border-radius:9999px; }
+  .avatar-fallback, .details-avatar-fallback{ position:absolute; inset:0; display:grid; place-items:center; }
+  .avatar-fallback svg, .details-avatar-fallback svg{ width:60%; height:60%; }
 
-  /* Add New Employee link with underline */
-  .add-employee-link {
-    color:#fff;
-    text-decoration: underline;
-    font-size:16px;
-    font-weight:600;
-    cursor:pointer;
-  }
-  .add-employee-link:hover { opacity:.85; }
-
-  .employees-grid{ display:grid; gap:1rem; grid-template-columns: repeat(auto-fill, minmax(170px, 0.5fr)); }
-
-  .emp-box{ background:#fff; border-radius:12px; padding:1rem; text-align:center; color:#111; box-shadow:0 1px 3px rgba(0,0,0,.08); }
-  .emp-box img{ width:64px; height:64px; border-radius:9999px; margin-bottom:.5rem; }
   .emp-box h3{ margin:0; font-size:15px; color:#217859; }
-  .emp-box p{ margin:2px 0; font-size:12px; }
-  .emp-actions{ margin-top:.6rem; }
-  .btn{ border:none; border-radius:8px; padding:.38rem .7rem; font-size:12px; cursor:pointer; font-weight:700; }
+  .emp-box p{ margin:2px 0; font-size:12px; color:#334155; }
+  .emp-spacer{ flex:1 1 auto; }
+  .emp-actions{ margin-top:auto; display:flex; justify-content:center; }
+  .btn{ border:none; border-radius:8px; padding:.42rem .75rem; font-size:12px; cursor:pointer; font-weight:700; }
   .btn.details{ background:#e0f2fe; color:#0c4a6e; }
 
-  /* Overlay + Sidebar */
-  .overlay{
-    position:fixed; inset:0; background:rgba(0,0,0,.25);
-    opacity:0; pointer-events:none; transition:opacity .2s ease; z-index:40;
-  }
+  /* Sidebar */
+  .overlay{ position:fixed; inset:0; background:rgba(0,0,0,.25); opacity:0; pointer-events:none; transition:opacity .2s; z-index:40; }
   .overlay.show{ opacity:1; pointer-events:auto; }
-
   .sidebar{
     position:fixed; right:0; top:0; height:100vh; width:380px; max-width:92vw;
     background:#fff; box-shadow:-14px 0 32px rgba(0,0,0,.18);
@@ -208,124 +315,150 @@
     z-index:60; display:flex; flex-direction:column;
   }
   .sidebar.open{ transform:translateX(0); }
-
-  .sidebar-header{ display:flex; justify-content:space-between; align-items:center; padding:14px 16px; border-bottom:1px solid #e5e7eb; }
-  .sidebar-title{ font-size:18px; font-weight:800; color:#0f172a; }
+  .sidebar-header{ display:flex; justify-content:space-between; align-items:center; padding:14px 16px; border-bottom:1px solid var(--line); }
+  .sidebar-title{ font-size:18px; font-weight:700; color:#0c4a6e; }
   .close-btn{ border:none; background:transparent; font-size:22px; cursor:pointer; color:#475569; }
-
   .sidebar-body{ padding:14px 16px; overflow:auto; flex:1; }
-  .sidebar-footer{ padding:12px 16px; border-top:1px solid #e5e7eb; display:flex; justify-content:flex-end; }
-  .cancel-btn{ border:1px solid #e5e7eb; background:#fff; color:#111827; border-radius:8px; padding:.45rem .8rem; font-weight:700; cursor:pointer; }
+  .sidebar-footer{ padding:12px 16px; border-top:1px solid var(--line); display:flex; justify-content:flex-end; }
+  .cancel-btn{ border:1px solid var(--line); background:#fff; color:#0c4a6e; border-radius:8px; padding:.45rem .8rem; font-weight:700; cursor:pointer; }
 
-  .toprow{ display:flex; padding:12px 20px; }
-  .toprow .profile{ margin-left:auto; }
-
-  .pending-card{ background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:12px; margin-bottom:12px; text-align:center; }
-  .pending-card h3{ margin:0; font-size:15px; color:#7c3aed; }
+  .pending-card{ background:#fff; border:1px solid var(--line); border-radius:12px; padding:12px; margin-bottom:12px; text-align:center; }
+  .pending-card h3{ margin:0; font-size:15px; color:#0c4a6e; }
   .pending-card p{ margin:2px 0; font-size:12px; color:#334155; }
-  .approve-btn{ border:none; border-radius:8px; padding:.38rem .7rem; font-size:12px; cursor:pointer; font-weight:800; background:#22c55e; color:#064e3b; }
-  .reject-btn{ border:none; border-radius:8px; padding:.38rem .7rem; font-size:12px; cursor:pointer; font-weight:800; background:#fca5a5; color:#7f1d1d; margin-left:.5rem; }
+  .approve-btn{ border:none; border-radius:8px; padding:.38rem .7rem; font-size:12px; cursor:pointer; font-weight:700; background:#22c55e; color:#064e3b; }
+  .reject-btn{ border:none; border-radius:8px; padding:.38rem .7rem; font-size:12px; cursor:pointer; font-weight:700; background:#e30707; color:#7f1d1d; margin-left:.5rem; }
 
-  /* Sidebar tab */
   .sidebar-tab{
     position:fixed; right:0; top:40%; transform:translateY(-50%);
-    display:flex; align-items:center; gap:8px;
-    background:#111827; color:#fff; padding:.6rem .95rem .6rem 1rem;
-    border-top-left-radius:9999px; border-bottom-left-radius:9999px;
-    cursor:pointer; user-select:none; z-index:50; box-shadow:0 8px 20px rgba(0,0,0,.25);
+    display:flex; align-items:center; gap:8px; background:#111827; color:#fff; padding:.6rem .95rem .6rem 1rem;
+    border-top-left-radius:9999px; border-bottom-left-radius:9999px; cursor:pointer; user-select:none; z-index:50; box-shadow:0 8px 20px rgba(0,0,0,.25);
   }
   .sidebar-tab .label{ font-weight:800; font-size:14px; }
   .badge{ min-width:22px; height:22px; display:inline-grid; place-items:center; background:#ef4444; color:#fff; font-weight:800; border-radius:9999px; font-size:12px; padding:0 6px; }
 
-  @media (max-width:640px){
-    .main{ padding:1rem; }
-    .employees-grid{ grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
-  }
-
-  /* ---------- Add Modal Styles ---------- */
-  .modal-wrap{
-    position:fixed; inset:0; display:grid; place-items:center;
-    background:rgba(0,0,0,.35);
-    z-index:80; /* above sidebar */
-    animation:fadeIn .15s ease;
-  }
+  /* Modal base Form add employee */
+  .modal-wrap{ position:fixed; inset:0; display:grid; place-items:center; background:rgba(0,0,0,.35); z-index:80; animation:fadeIn .15s ease; }
   @keyframes fadeIn { from{opacity:0} to{opacity:1} }
-
-  .modal{
-    width:min(720px, 94vw);
-    background:#fff; border-radius:14px; box-shadow:0 14px 40px rgba(0,0,0,.25);
-    overflow:hidden;
-  }
-  .modal-hd{
-    padding:14px 18px; border-bottom:1px solid #e5e7eb; display:flex; align-items:center; justify-content:space-between;
-  }
-  .modal-ttl{ font-weight:700; font-size:22px; color:#49bdb3; }
+  .modal{ width:min(900px, 96vw); background:#fff; border-radius:18px; box-shadow:0 14px 40px rgba(0,0,0,.25); overflow:hidden; }
+  .modal-hd{ padding:14px 18px; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; }
+  .modal-ttl{ font-weight:700; font-size:22px; color:var(--primary); }
   .modal-x{ border:none; background:transparent; font-size:22px; cursor:pointer; color:#475569; }
+  .modal-bd{ padding:0; max-height:72vh; overflow:auto; }
 
-  .modal-bd{ padding:16px 18px; max-height:70vh; overflow:auto; }
-  .form-grid{ display:grid; grid-template-columns:1fr 1fr; gap:12px 16px; }
-  .form-row.full{ grid-column:1 / -1; }
-  label{ display:block; font-size:12px; color:#374151; margin-bottom:6px; font-weight:600; }
-  input, select{
-    width:100%; padding:10px 12px; border:1px solid #e5e7eb; border-radius:10px; font-size:14px;
-    outline:none;
+  /* Add form styling (also reused by Details) */
+  .add-layout, .details-layout{ padding:22px; }
+  .section-ttl{ font-weight:700; color:#0c4a6e; margin:0 0 14px; font-size:18px; }
+  .add-grid, .details-grid-form{ display:grid; grid-template-columns: 1fr 220px; gap:20px; }
+  .photo-card{
+    align-self:flex-start; justify-self:end;
+    width:180px; height:180px; border-radius:20px; background:linear-gradient(180deg,#fff,#f3f4f6);
+    border:1px dashed #d1d5db; display:grid; place-items:center; position:relative;
+    box-shadow:0 8px 20px rgba(0,0,0,.06);
   }
-  input:focus, select:focus{ border-color:#cbd5e1; box-shadow:0 0 0 3px rgba(72,189,179,.15); }
+  .photo-card input{ position:absolute; inset:0; opacity:0; cursor:pointer; }
+  .photo-card .cam{
+    width:56px; height:56px; border-radius:9999px; background:var(--primary);
+    display:grid; place-items:center; color:#fff; font-size:22px; box-shadow:0 8px 16px rgba(73,189,179,.35);
+  }
+  .photo-preview{ position:absolute; inset:0; overflow:hidden; border-radius:20px; }
+  .photo-preview img{ width:100%; height:100%; object-fit:cover; display:block; }
 
-  .modal-ft{
-    padding:14px 18px; border-top:1px solid #e5e7eb;
-    display:flex; gap:10px; justify-content:flex-end;
-  }
+  .form{ background:#fff; border:1px solid var(--line); border-radius:16px; padding:18px; box-shadow:0 6px 18px rgba(0,0,0,.05); }
+  .row{ display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:12px; }
+  .row.three{ grid-template-columns: 1fr 1fr 1fr; }
+  .row.single{ grid-template-columns:1fr; }
+  label{ font-size:12px; color:#374151; font-weight:700; margin:0 0 6px; display:block; }
+  .ctl{ display:flex; align-items:center; background:#fff; border:1px solid var(--line); border-radius:12px; padding:10px 12px; }
+  .ctl input, .ctl select, .ctl textarea{ border:none; outline:none; width:100%; font-size:14px; color:#111827; background:transparent; }
+  .ctl textarea{ min-height:90px; resize:vertical; }
+  .pill{ border-radius:9999px; }
+  .muted{ color:var(--muted); font-size:12px; }
+
+  .ctl.disabled{ background:#f8fafc; }
+  .ctl :disabled{ color:#6b7280; }
+
+  .form-ft{ display:flex; justify-content:flex-end; gap:10px; padding-top:10px; margin-top:8px; }
+  .btn-ghost{ background:#fff; color:#0c4a6e; border:1px solid var(--line); border-radius:12px; padding:.7rem 1rem; font-weight:700; cursor:pointer; }
   .btn-primary{
-    background:#49bdb3; color:#fff; border:none; border-radius:10px; padding:.6rem 1rem; font-weight:800; cursor:pointer;
+    background:var(--primary); color:#fff; border:none; border-radius:10px; padding:.8rem 1.4rem; font-weight:700; cursor:pointer;
   }
-  .btn-primary:hover{ background:#40b1a7; }
-  .btn-ghost{
-    background:#fff; color:#111827; border:1px solid #e5e7eb; border-radius:10px; padding:.6rem 1rem; font-weight:700; cursor:pointer;
+  .btn-primary:hover{ filter:brightness(.96); }
+
+  /* Details modal buttons */
+  .details-actions{ display:flex; gap:10px; justify-content:flex-end; padding:10px 18px 16px; }
+
+  @media (max-width:740px){
+    .add-grid, .details-grid-form{ grid-template-columns:1fr; }
+    .photo-card{ justify-self:stretch; width:100%; height:180px; }
+  }
+  @media (max-width:640px){
+    .toprow{ align-items:stretch; }
+    .rightcol{ align-items:flex-start; min-width:unset; }
+    .employees-grid{ grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+  }
+
+  .photo-card .cam svg{
+    width: 28px;
+    height: 28px;
+    display: block;
   }
 </style>
 
-<!-- Normal Profile -->
+<!-- Header -->
 <div class="toprow">
-  <div class="profile" use:clickOutside>
-    <button class="icon-btn bell" aria-label="Notifications">🔔</button>
-    <div class="profile-info">
-      <img src="/images/icontest1.png" alt="" class="avatar-img"
-           on:error={(e)=> e.currentTarget.style.display='none'} />
-      <div class="who">
-        <div class="name">{user?.name || 'Admin'}</div>
-        <div class="sub">{user?.role || 'admin'}</div>
-        <div class="sub">#{user?.staffId || 'E8505'}</div>
+  <h2 class="employees-title">Employees</h2>
+  <div class="rightcol">
+    <div class="profile" use:clickOutside>
+      <button class="icon-btn bell" aria-label="Notifications">🔔</button>
+      <div class="profile-info">
+        <img src="/images/icontest1.png" alt="" class="avatar-img" on:error={(e)=> e.currentTarget.style.display='none'} />
+        <div class="who">
+          <div class="name">{user?.name || 'Admin'}</div>
+          <div class="sub">{user?.role || 'admin'}</div>
+          <div class="sub">#{user?.staffId || 'E8505'}</div>
+        </div>
       </div>
+      <button class="caret" on:click={() => (profileMenuOpen = !profileMenuOpen)}>▾</button>
+      {#if profileMenuOpen}
+        <div class="menu" role="menu">
+          <a role="menuitem" href="/dashboard/admin/profile">Update Profile Picture</a>
+          <a role="menuitem" href="/dashboard/admin/profile">Update Password</a>
+        </div>
+      {/if}
     </div>
-    <button class="caret" on:click={() => (profileMenuOpen = !profileMenuOpen)}>▾</button>
-    {#if profileMenuOpen}
-      <div class="menu" role="menu">
-        <a role="menuitem" href="/dashboard/admin/profile">Update Profile Picture</a>
-        <a role="menuitem" href="/dashboard/admin/profile">Update Password</a>
-      </div>
-    {/if}
+    <a class="add-employee-link" on:click={openAddModal}>Add New Employee</a>
   </div>
 </div>
 
-<!-- Employees -->
+<!-- Employees grid -->
 <div class="main">
   <div class="topbar">
-    <div class="employees-header">
-      <h2 class="employees-title">Employees</h2>
-      <a class="add-employee-link" on:click={openAddModal}>Add New Employee</a>
-    </div>
-
     <div class="employees-grid">
       {#each employees as emp (emp.id)}
         <div class="emp-box">
-          <img src="https://via.placeholder.com/64" alt="profile" />
-          <h3>{emp.name}</h3>
-          <p>{emp.role}</p>
-          <p>ID: {emp.id}</p>
-          <p>Department: {emp.department}</p>
+          <div class="emp-top" aria-label="Employee summary">
+            <div class="avatar-wrap">
+              <div class="avatar-fallback">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="12" cy="8" r="4" fill="#9ca3af"/>
+                  <path d="M4 20c0-4.2 4.2-6.5 8-6.5s8 2.3 8 6.5" fill="#9ca3af"/>
+                </svg>
+              </div>
+              {#if (detailsById[emp.id]?.photoUrl)}
+                <img src={detailsById[emp.id].photoUrl} alt="profile" on:error={(e)=> (e.currentTarget.style.display='none')} />
+              {/if}
+            </div>
+
+            <h3>{emp.name}</h3>
+            <p>{emp.role}</p>
+            <p>ID: {emp.id}</p>
+            <p>Department: {emp.department}</p>
+          </div>
+
+          <div class="emp-spacer"></div>
+
           <div class="emp-actions">
-            <button class="btn details" on:click={() => alert(`Details for ${emp.name}`)}>Details</button>
+            <button class="btn details" on:click={() => openDetails(emp.id)}>Details</button>
           </div>
         </div>
       {/each}
@@ -373,7 +506,7 @@
   {/if}
 </div>
 
-<!-- -------------- Add New Employee Modal -------------- -->
+<!-- Add New Employee (reference-style) -->
 {#if addModalOpen}
   <div class="modal-wrap" role="dialog" aria-modal="true" aria-labelledby="add-emp-title">
     <div class="modal">
@@ -382,78 +515,252 @@
         <button class="modal-x" on:click={() => (addModalOpen = false)}>✕</button>
       </div>
 
-      <form class="modal-bd" on:submit={submitNewEmployee}>
-        <div class="form-grid">
-          <div class="form-row">
-            <label>Employee ID</label>
-            <input placeholder="EDS041" bind:value={newEmp.empId} />
-          </div>
+      <div class="modal-bd">
+        <div class="add-layout">
+          <div class="add-grid">
+            <!-- Left form -->
+            <form class="form" on:submit={submitNewEmployee}>
+              <div class="row">
+                <div>
+                  <label>Full Name</label>
+                  <div class="ctl pill"><input placeholder="Enter full name" bind:value={newEmp.name} required /></div>
+                </div>
+                <div>
+                  <label>Employee ID</label>
+                  <div class="ctl pill"><input placeholder="e.g., HR123" bind:value={newEmp.empId} /></div>
+                </div>
+              </div>
 
-          <div class="form-row">
-            <label>Name</label>
-            <input placeholder="Full name" bind:value={newEmp.name} required />
-          </div>
+              <div class="row">
+                <div>
+                  <label>Position</label>
+                  <div class="ctl pill"><input placeholder="e.g., Data Engineer" bind:value={newEmp.position} required /></div>
+                </div>
+                <div>
+                  <label>Department</label>
+                  <div class="ctl pill">
+                    <select bind:value={newEmp.department}>
+                      {#each DEPTS as d}<option value={d}>{d}</option>{/each}
+                    </select>
+                  </div>
+                </div>
+              </div>
 
-          <div class="form-row full">
-            <label>Email</label>
-            <input type="email" placeholder="name@company.com" bind:value={newEmp.email} required />
-          </div>
+              <div class="row">
+                <div>
+                  <label>Email</label>
+                  <div class="ctl pill"><input type="email" placeholder="name@company.com" bind:value={newEmp.email} required /></div>
+                </div>
+                <div>
+                  <label>Employment Date</label>
+                  <div class="ctl pill">
+                    <input type="date" bind:value={newEmp.employmentDate} required bind:this={employmentDateEl} />
+                  </div>
+                </div>
+              </div>
 
-          <div class="form-row">
-            <label>Position</label>
-            <input placeholder="e.g., Drilling Data QC Engineer" bind:value={newEmp.position} required />
-          </div>
+              <div class="row">
+                <div>
+                  <label>Confirmation Date</label>
+                  <div class="ctl pill"><input type="date" bind:value={newEmp.confirmationDate} /></div>
+                </div>
+                <div>
+                  <label>Termination Date</label>
+                  <div class="ctl pill"><input type="date" bind:value={newEmp.terminationDate} /></div>
+                </div>
+              </div>
 
-          <div class="form-row">
-            <label>Department</label>
-            <select bind:value={newEmp.department}>
-              {#each DEPTS as d}<option value={d}>{d}</option>{/each}
-            </select>
-          </div>
+              <div class="row">
+                <div>
+                  <label>Gender</label>
+                  <div class="ctl pill">
+                    <select bind:value={newEmp.gender}>
+                      <option>Male</option>
+                      <option>Female</option>
+                      <option>Other</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label class="muted">Leave Entitlements (per year)</label>
+                  <div class="row" style="gap:10px; margin:0;">
+                    <div class="ctl pill"><input type="number" step="0.5" min="0" bind:value={newEmp.annualLeave} placeholder="Annual Leave" /></div>
+                    <div class="ctl pill"><input type="number" step="0.5" min="0" bind:value={newEmp.medicalLeave} placeholder="Medical Leave" /></div>
+                  </div>
+                </div>
+              </div>
 
-          <div class="form-row">
-            <label>Employment Date</label>
-            <input type="date" bind:value={newEmp.employmentDate} />
-          </div>
+              <div class="row single">
+                <div>
+                  <label>Notes</label>
+                  <div class="ctl"><textarea placeholder="Optional notes…" bind:value={newEmp.notes} /></div>
+                </div>
+              </div>
 
-          <div class="form-row">
-            <label>Termination Date</label>
-            <input type="date" bind:value={newEmp.terminationDate} />
-          </div>
+              <div class="form-ft">
+                <button type="button" class="btn-ghost" on:click={() => (addModalOpen = false)}>Cancel</button>
+                <button type="submit" class="btn-primary">Save &amp; Continue</button>
+              </div>
+            </form>
 
-          <div class="form-row">
-            <label>Confirmation Date</label>
-            <input type="date" bind:value={newEmp.confirmationDate} />
+            <!-- Right: Photo uploader -->
+            <div class="photo-card" title="Add Photo">
+              {#if newEmp.photoUrl}
+                <div class="photo-preview"><img src={newEmp.photoUrl} alt="Preview" /></div>
+              {:else}
+                <div class="cam" aria-label="Add photo (PNG/JPG)">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M4 7h3l2-2h6l2 2h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z"
+                          fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <circle cx="12" cy="13" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/>
+                  </svg>
+                </div>
+                <div class="muted" style="position:absolute; bottom:10px;">Add Photo</div>
+              {/if}
+              <input type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg" on:change={handleNewPhotoFile} />
+            </div>
           </div>
-
-          <div class="form-row">
-            <label>Gender</label>
-            <select bind:value={newEmp.gender}>
-              <option>Male</option>
-              <option>Female</option>
-              <option>Other</option>
-            </select>
-          </div>
-
-          <div class="form-row">
-            <label>Total Annual Leave (Per Year)</label>
-            <input type="number" step="0.5" min="0" bind:value={newEmp.annualLeave} />
-          </div>
-
-          <div class="form-row">
-            <label>Total Medical Leave (Per Year)</label>
-            <input type="number" step="0.5" min="0" bind:value={newEmp.medicalLeave} />
-          </div>
-
-          <!-- stretch area to mimic screenshot spacing -->
-          <div class="form-row full"></div>
         </div>
+      </div>
+    </div>
+  </div>
+{/if}
 
-        <div class="modal-ft">
-          <button type="button" class="btn-ghost" on:click={() => (addModalOpen = false)}>Cancel</button>
-          <button type="submit" class="btn-primary">Submit</button>
+<!-- Employee Details (same style as Add, read-only until Edit) -->
+{#if detailsOpen && selectedEmp}
+  <div class="modal-wrap" role="dialog" aria-modal="true" aria-labelledby="emp-details-title">
+    <div class="modal">
+      <div class="modal-hd">
+        <div id="emp-details-title" class="modal-ttl">Employee Details</div>
+        <button class="modal-x" on:click={() => { detailsOpen = false; editMode = false; }}>✕</button>
+      </div>
+
+      <div class="modal-bd">
+        <div class="details-layout">
+          <div class="details-grid-form">
+            <!-- Left form (same component style as Add) -->
+            <div class="form">
+              <div class="row">
+                <div>
+                  <label>Full Name</label>
+                  <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
+                    <input bind:value={detailsForm.name} disabled={!editMode} />
+                  </div>
+                </div>
+                <div>
+                  <label>Employee ID</label>
+                  <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
+                    <input bind:value={detailsForm.empId} disabled={!editMode} />
+                  </div>
+                </div>
+              </div>
+
+              <div class="row">
+                <div>
+                  <label>Position</label>
+                  <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
+                    <input bind:value={detailsForm.position} disabled={!editMode} />
+                  </div>
+                </div>
+                <div>
+                  <label>Department</label>
+                  <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
+                    <input bind:value={detailsForm.department} disabled={!editMode} />
+                  </div>
+                </div>
+              </div>
+
+              <div class="row">
+                <div>
+                  <label>Email</label>
+                  <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
+                    <input type="email" bind:value={detailsForm.email} disabled={!editMode} />
+                  </div>
+                </div>
+                <div>
+                  <label>Gender</label>
+                  <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
+                    <select bind:value={detailsForm.gender} disabled={!editMode}>
+                      <option value="">Select</option>
+                      <option>Male</option>
+                      <option>Female</option>
+                      <option>Other</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div class="row">
+                <div>
+                  <label>Employment Date</label>
+                  <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
+                    <input type="date" bind:value={detailsForm.employmentDate} disabled={!editMode} />
+                  </div>
+                </div>
+                <div>
+                  <label>Confirmation Date</label>
+                  <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
+                    <input type="date" bind:value={detailsForm.confirmationDate} disabled={!editMode} />
+                  </div>
+                </div>
+              </div>
+
+              <div class="row">
+                <div>
+                  <label>Termination Date</label>
+                  <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
+                    <input type="date" bind:value={detailsForm.terminationDate} disabled={!editMode} />
+                  </div>
+                </div>
+                <div>
+                  <label class="muted">Leave Entitlements (per year)</label>
+                  <div class="row" style="gap:10px; margin:0;">
+                    <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
+                      <input type="number" step="0.5" min="0" bind:value={detailsForm.annualLeave} disabled={!editMode} placeholder="Annual Leave" />
+                    </div>
+                    <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
+                      <input type="number" step="0.5" min="0" bind:value={detailsForm.medicalLeave} disabled={!editMode} placeholder="Medical Leave" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="row single">
+                <div>
+                  <label>Notes</label>
+                  <div class={"ctl " + (!editMode ? 'disabled' : '')}>
+                    <textarea bind:value={detailsForm.notes} disabled={!editMode} placeholder="Optional notes…" />
+                  </div>
+                </div>
+              </div>
+
+              <div class="form-ft">
+                <button class={editMode ? 'btn-primary' : 'btn-primary'} on:click={toggleEditSave}>
+                  {editMode ? 'Save' : 'Edit'}
+                </button>
+                <button class="btn-ghost" on:click={() => { detailsOpen = false; editMode = false; }}>Close</button>
+              </div>
+            </div>
+
+            <!-- Right: Photo (preview only, same card style) -->
+            <div class="photo-card" title="Profile Photo">
+              {#if selectedEmp.photoUrl}
+                <div class="photo-preview"><img src={selectedEmp.photoUrl} alt="Profile" /></div>
+              {:else}
+                <div class="cam" aria-label="Profile photo">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M4 7h3l2-2h6l2 2h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z"
+                          fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <circle cx="12" cy="13" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/>
+                  </svg>
+                </div>
+                <div class="muted" style="position:absolute; bottom:10px;">No Photo</div>
+              {/if}
+              <!-- No input here (no photo editing in details) -->
+            </div>
+          </div>
         </div>
-      </form>
+      </div>
     </div>
   </div>
 {/if}

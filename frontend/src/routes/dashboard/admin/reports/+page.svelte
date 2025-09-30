@@ -136,8 +136,11 @@
   let leaveType = 'Annual';
   let endLocked = false;
 
-  // 👇 ref to the file input (for validation)
-  let attachmentEl;
+  // Track attachment + file input ref for native validation bubble
+  let attachmentFiles; // FileList
+  let fileInputEl;     // <input type="file">
+  $: showAttachmentReminder =
+    (leaveType === 'Medical') && (!attachmentFiles || attachmentFiles.length === 0);
 
   const fixedDurations = {
     Maternity: 98,
@@ -183,6 +186,20 @@
     }
   }
 
+  // Keep native "required" bubble in sync and show it immediately on switching to Medical
+  $: {
+    const needs = (leaveType === 'Medical');
+    if (fileInputEl) {
+      fileInputEl.required = needs;
+      if (needs && (!attachmentFiles || attachmentFiles.length === 0)) {
+        fileInputEl.setCustomValidity('Please attach your medical certificate.');
+        setTimeout(() => fileInputEl.reportValidity(), 0); // show native bubble
+      } else {
+        fileInputEl.setCustomValidity('');
+      }
+    }
+  }
+
   function onFromChange() {
     if (!dateFrom) return;
     if (duration === 'Half') dateUntil = dateFrom;
@@ -196,24 +213,16 @@
     dateFrom  = iso;
     dateUntil = iso;
     totalDays = 1;
+    attachmentFiles = undefined; // reset
 
     if (!modal?.open) modal.showModal();
     await tick();
   }
 
+  // Use native validation so bubbles appear on submit too
   function submitLeave(e) {
     const form = e.currentTarget;
-
-    // Ensure native HTML5 validation runs since we prevent default
-    if (!form.reportValidity()) return;
-
-    // Extra guard: Medical leave requires an attachment
-    if (leaveType === 'Medical' && (!attachmentEl || !attachmentEl.files || attachmentEl.files.length === 0)) {
-      alert('Attachment is required for Medical leave.');
-      attachmentEl?.focus();
-      return;
-    }
-
+    if (!form.reportValidity()) return; // shows native bubbles if invalid
     const fd = new FormData(form);
     // TODO: post to backend
     modal?.close();
@@ -432,24 +441,20 @@
       />
     </label>
 
-    <label>
-      <span>Reason</span>
-      <textarea name="reason" rows="3" required></textarea>
-    </label>
+    <label><span>Reason</span><textarea name="reason" rows="3" required></textarea></label>
 
-    <!-- ATTACHMENT: required for Medical -->
     <label>
       <span>Attachment</span>
       <input
         type="file"
         name="attachment"
-        bind:this={attachmentEl}
-        accept=".pdf,.jpg,.jpeg,.png"
+        bind:this={fileInputEl}
+        bind:files={attachmentFiles}
         required={leaveType === 'Medical'}
-        aria-required={leaveType === 'Medical'}
+        on:change={() => fileInputEl?.setCustomValidity('')}
       />
-      {#if leaveType === 'Medical'}
-        <small class="muted">Attachment is required for Medical leave (PDF/JPG/PNG).</small>
+      {#if showAttachmentReminder}
+        <small class="help warn">Reminder: please attach your medical certificate.</small>
       {/if}
     </label>
 
@@ -602,4 +607,8 @@
   .leave-form .duration label{ display:inline-flex; flex-direction:row; align-items:center; gap:.5rem; cursor:pointer; text-align:left; }
   .leave-form .duration input[type="radio"]{ accent-color:#3FADA4; width:16px; height:16px; margin:0; }
   .leave-form input[readonly], .leave-form input:disabled{ background:#f3f4f6; color:#6b7280; cursor:not-allowed; }
+
+  /* helper text */
+  .help { color:#6b7280; font-size:12px; display:block; margin-top:4px; }
+  .help.warn { color:#b45309; }
 </style>

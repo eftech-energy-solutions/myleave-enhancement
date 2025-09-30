@@ -91,7 +91,8 @@
 
       {#if profileMenuOpen}
         <div class="menu" role="menu">
-          <a role="menuitem" href="/dashboard/admin/profile">Update Profile</a>
+          <a role="menuitem" href="/dashboard/admin/profile">Update Profile Picture</a>
+           <a role="menuitem" href="/dashboard/admin/profile">Update Password</a>
         </div>
       {/if}
     </div>
