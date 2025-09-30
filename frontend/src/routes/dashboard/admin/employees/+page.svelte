@@ -312,7 +312,7 @@
   .pending-card h3{ margin:0; font-size:15px; color:#000; }
   .pending-card p{ margin:2px 0; font-size:12px; color:#334155; }
   .approve-btn{ border:none; border-radius:8px; padding:.38rem .7rem; font-size:12px; cursor:pointer; font-weight:700; background:#22c55e; color:#064e3b; }
-  .reject-btn{ border:none; border-radius:8px; padding:.38rem .7rem; font-size:12px; cursor:pointer; font-weight:700; background:#e30707; color:#7f1d1d; margin-left:.5rem; }
+  .reject-btn{ border:none; border-radius:8px; padding:.50rem .7rem; font-size:12px; cursor:pointer; font-weight:700; background:#e30707; color:#7f1d1d; margin-left:.5rem; }
 
   .sidebar-tab{
     position:fixed; right:0; top:40%; transform:translateY(-50%);
@@ -320,7 +320,7 @@
     border-top-left-radius:9999px; border-bottom-left-radius:9999px; cursor:pointer; user-select:none; z-index:50; box-shadow:0 8px 20px rgba(0,0,0,.25);
   }
   .sidebar-tab .label{ font-weight:700; font-size:14px; }
-  .badge{ min-width:22px; height:22px; display:inline-grid; place-items:center; background:#ef4444; color:#fff; font-weight:800; border-radius:9999px; font-size:12px; padding:0 6px; }
+  .badge{ min-width:22px; height:22px; display:inline-grid; place-items:center; background:#e30707; color:#fff; font-weight:800; border-radius:9999px; font-size:12px; padding:0 6px; }
 
   /* Modal base */
   .modal-wrap{ position:fixed; inset:0; display:grid; place-items:center; background:rgba(0,0,0,.35); z-index:80; animation:fadeIn .15s ease; }
