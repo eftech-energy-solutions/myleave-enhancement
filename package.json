@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@iconify/svelte": "^5.0.2",
-    "chart.js": "^4.5.0"
+    "chart.js": "^4.5.0",
+    "node-ical": "^0.21.0"
   }
 }

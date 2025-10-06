@@ -7,8 +7,8 @@ export const load = async ({ locals, url }) => {
   // redirect only if on /dashboard (root)
   if (url.pathname === '/dashboard') {
     switch (role) {
-      case 'admin':   throw redirect(302, '/dashboard/admin/main');
-      case 'manager': throw redirect(302, '/dashboard/manager');
+      case 'admin':   throw redirect(302, '/dashboard/admin');
+      case 'manager': throw redirect(302, '/dashboard/manager/main');
       case 'staff':   throw redirect(302, '/dashboard/staff');
       default:        throw redirect(302, '/login');
     }
