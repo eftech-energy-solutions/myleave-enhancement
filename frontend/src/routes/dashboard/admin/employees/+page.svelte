@@ -69,38 +69,91 @@
     };
   }
 
-  // Pending demo
-  let pending = [{ id:"MN002", name:"Nur Aisyah", role:"Manager", department:"Operations" }];
+  // ---------- LEAVE REQUESTS (PENDING) ----------
+  // util
+  const todayISO = () => new Date().toISOString().slice(0,10);
+  const fmt = (iso) => iso ? new Date(iso).toLocaleDateString() : '-';
+
+  // Example dummy pending list WITH leave info
+  // (duplicates allowed — same person can appear twice)
+  /** Each item: { id, name, role, department, leaveType, dateFrom, dateTo, requestedAt } */
+  let pending = [
+    { id:"MN002", name:"Nur Aisyah", role:"Manager", department:"Operations", leaveType:"Annual Leave", dateFrom: todayISO(), dateTo: todayISO(), requestedAt: todayISO() },
+  ];
+
+  // keep your original “remove MN002 from employees” for the demo
   employees = employees.filter(e => e.id !== "MN002");
 
-  function requestCameIn(empId) {
+  // compute count
+  const pendingCount = () => pending.length;
+
+  // 👉 This creates/pushes a new pending item (duplicates allowed)
+  function requestCameIn(empId, req = { leaveType:"Annual Leave", dateFrom: todayISO(), dateTo: todayISO() }) {
+    // try to find in current employees (may not exist if already removed earlier)
+    let base = employees.find(e => e.id === empId);
+
+    // if not in employees list, fall back to details map (still allow a request)
+    if (!base && detailsById[empId]) {
+      const d = detailsById[empId];
+      base = { id: d.empId, name: d.name, role: d.position || "Employee", department: d.department || "General" };
+    }
+
+    // if still nothing, bail silently
+    if (!base) return;
+
+    // ORIGINAL BEHAVIOUR: open sidebar & (on FIRST time) remove card from employees
     const idx = employees.findIndex(e => e.id === empId);
-    if (idx === -1) return;
-    pending = [employees[idx], ...pending];
-    employees = [...employees.slice(0, idx), ...employees.slice(idx + 1)];
+    if (idx !== -1) {
+      employees = [...employees.slice(0, idx), ...employees.slice(idx + 1)];
+    }
     sidebarOpen = true;
+
+    // Push a **new** pending entry even if same person already exists in the list
+    pending = [
+      { ...base, ...req, requestedAt: todayISO() },
+      ...pending
+    ];
+
+    // DB: create a new leave request record
+    // --------------------------------------
+    // await api.post('/leave-requests', { employeeId: base.id, ...req })
+    // .then(res => { /* sync pending with server response id/status */ });
   }
 
-  function approveLeave(emp) {
-    const idx = pending.findIndex(e => e.id === emp.id);
+  // Approve = mark handled and (for demo) put person back into employees list (unchanged)
+  function approveLeave(item) {
+    const idx = pending.findIndex(p => p === item);
     if (idx === -1) return;
-    employees = [pending[idx], ...employees];
-    pending = [...pending.slice(0, idx), ...pending.slice(idx + 1)];
-    if (!detailsById[emp.id]) {
-      detailsById[emp.id] = {
-        photoUrl: "",
-        empId: emp.id, name: emp.name, email: "", position: emp.role,
-        department: emp.department, employmentDate: "", terminationDate: "",
-        confirmationDate: "", gender: "", annualLeave: "14.0", medicalLeave: "14.0", notes: ""
-      };
+
+    // ensure employee appears in grid (if missing)
+    if (!employees.some(e => e.id === item.id)) {
+      employees = [{ id:item.id, name:item.name, role:item.role, department:item.department }, ...employees];
     }
+    pending = [...pending.slice(0, idx), ...pending.slice(idx + 1)];
+
+    // DB: update request status to APPROVED
+    // -------------------------------------
+    // await api.patch(`/leave-requests/${item.requestId}`, { status:'APPROVED' })
+    // Optionally: also deduct balances, create leave ledger, etc.
   }
-  const rejectLeave = approveLeave;
+
+  // Reject = just remove from pending (demo)
+  const rejectLeave = (item) => {
+    const idx = pending.findIndex(p => p === item);
+    if (idx === -1) return;
+    pending = [...pending.slice(0, idx), ...pending.slice(idx + 1)];
+
+    // DB: update request status to REJECTED
+    // -------------------------------------
+    // await api.patch(`/leave-requests/${item.requestId}`, { status:'REJECTED' })
+  };
+
+  // Example trigger (you can call this from anywhere)
+  // requestCameIn('HR001', { leaveType:'Medical Leave', dateFrom:'2025-10-14', dateTo:'2025-10-16' });
 
   // ------- Sidebar -------
   let sidebarOpen = false;
   const toggleSidebar = () => (sidebarOpen = !sidebarOpen);
-  const pendingCount = () => pending.length;
 
   // ------- Add New Employee (modal) -------
   let addModalOpen = false;
@@ -199,6 +252,10 @@
 
     addModalOpen = false;
     alert(`Employee "${newEmp.name}" added (dummy).`);
+
+    // DB: create employee
+    // -------------------
+    // await api.post('/employees', { ...detailsById[newId] });
   }
 
   // ------- Details Modal (Update Profile) -------
@@ -243,6 +300,10 @@
       }
 
       editMode = false;
+
+      // DB: update employee profile
+      // ---------------------------
+      // await api.patch(`/employees/${selectedEmp.empId}`, detailsForm);
       return;
     }
 
@@ -289,28 +350,81 @@
   .emp-spacer{ flex:1 1 auto; }
   .emp-actions{ margin-top:auto; display:flex; justify-content:center; }
   .btn{ border:none; border-radius:8px; padding:.42rem .75rem; font-size:12px; cursor:pointer; font-weight:700; }
-  .btn.details{ background:#e0f2fe; color:#000; }
+  .btn.details {
+  background: #e0f2fe;
+  color: #000;
+  border: none;
+  border-radius: 8px;
+  padding: .50rem .7rem;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn.details:hover {
+  background-color: #bae6fd; /* ✅ hover effect now works properly */
+}
+
 
   /* Sidebar */
   .overlay{ position:fixed; inset:0; background:rgba(0,0,0,.25); opacity:0; pointer-events:none; transition:opacity .2s; z-index:40; }
   .overlay.show{ opacity:1; pointer-events:auto; }
   .sidebar{
-    position:fixed; right:0; top:0; height:100vh; width:380px; max-width:92vw;
+    position:fixed; right:0; top:0; height:100vh; width:420px; max-width:92vw;
     background:#fff; box-shadow:-14px 0 32px rgba(0,0,0,.18);
     transform:translateX(100%); transition:transform .25s ease;
     z-index:60; display:flex; flex-direction:column;
   }
   .sidebar.open{ transform:translateX(0); }
   .sidebar-header{ display:flex; justify-content:space-between; align-items:center; padding:14px 16px; border-bottom:1px solid var(--line); }
-  .sidebar-title{ font-size:18px; font-weight:700; color:#000; }
+  .sidebar-title{ font-size:18px; font-weight:700; color:#000; display:flex; gap:8px; align-items:center; }
   .close-btn{ border:none; background:transparent; font-size:22px; cursor:pointer; color:#475569; }
   .sidebar-body{ padding:14px 16px; overflow:auto; flex:1; }
   .sidebar-footer{ padding:12px 16px; border-top:1px solid var(--line); display:flex; justify-content:flex-end; }
   .cancel-btn{ border:1px solid var(--line); background:#fff; color:#000; border-radius:8px; padding:.45rem .8rem; font-weight:700; cursor:pointer; }
 
-  .pending-card{ background:#fff; border:1px solid var(--line); border-radius:12px; padding:12px; margin-bottom:12px; text-align:center; }
-  .pending-card h3{ margin:0; font-size:15px; color:#000; }
-  .pending-card p{ margin:2px 0; font-size:12px; color:#334155; }
+  .pending-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.left-btns {
+  display: flex;
+  gap: 8px;
+}
+
+.details-btn {
+  background: #e0f2fe;
+  color: #0c4a6e;
+  border: none;
+  border-radius: 8px;
+  padding: .50rem .7rem;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  height: 32px;             /* 🔹 same height as reject-btn */
+  min-width: 70px;          /* 🔹 match reject button width */
+  box-sizing: border-box;
+}
+
+.details-btn:hover {
+  background: #bae6fd;
+}
+  .pending-card{
+    background:#fff; border:1px solid var(--line); border-radius:12px; padding:12px; margin-bottom:12px;
+    box-shadow:0 4px 14px rgba(0,0,0,.06);
+  }
+  .pending-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+  .pending-name{ margin:0; font-size:15px; font-weight:800; color:#0c4a6e; }
+  .pending-role{ margin:0; font-size:12px; color:#64748b; }
+  .pending-meta{ display:grid; grid-template-columns: 1fr 1fr; gap:6px 10px; margin:8px 0; font-size:12px; color:#334155; }
+  .pending-meta div{ display:flex; gap:6px; align-items:center; }
+  .chip{
+    display:inline-flex; align-items:center; gap:6px; padding:4px 8px; font-size:11px; font-weight:700;
+    border-radius:9999px; background:#f1f5f9; color:#0f172a; border:1px solid #e5e7eb;
+  }
   .approve-btn{ border:none; border-radius:8px; padding:.38rem .7rem; font-size:12px; cursor:pointer; font-weight:700; background:#22c55e; color:#064e3b; }
   .reject-btn{ border:none; border-radius:8px; padding:.50rem .7rem; font-size:12px; cursor:pointer; font-weight:700; background:#e30707; color:#7f1d1d; margin-left:.5rem; }
 
@@ -332,13 +446,12 @@
   .modal-bd{ padding:0; max-height:72vh; overflow:auto; }
 
   .sub-ttl{
-  margin: 0 0 10px;
-  font-weight: 800;
-  font-size: 14px;
-  letter-spacing:.2px;
-  color: var(--ink); /* 0c4a6e */
-}
-
+    margin: 0 0 10px;
+    font-weight: 800;
+    font-size: 14px;
+    letter-spacing:.2px;
+    color: var(--ink);
+  }
 
   /* Forms */
   .add-layout, .details-layout{ padding:22px; }
@@ -408,6 +521,11 @@
     .rightcol{ align-items:flex-start; min-width:unset; }
     .employees-grid{ grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
   }
+
+  .black-name {
+  color: #000 !important;
+}
+
 
   .photo-card .cam svg{ width: 28px; height: 28px; display: block; }
 
@@ -483,27 +601,46 @@
 <!-- Sidebar -->
 <div class:open={sidebarOpen} class="sidebar" aria-hidden={!sidebarOpen}>
   <div class="sidebar-header">
-    <div class="sidebar-title">Pending Approval{pendingCount() ? ` (${pendingCount()})` : ''}</div>
+    <div class="sidebar-title">
+      Pending Approval{pendingCount() ? ` (${pendingCount()})` : ''}
+    </div>
     <button class="close-btn" on:click={toggleSidebar}>✕</button>
   </div>
+
   <div class="sidebar-body">
     {#if pending.length === 0}
       <p style="color:#64748b; text-align:center;">No pending requests.</p>
     {:else}
-      {#each pending as emp (emp.id)}
-        <div class="pending-card">
-          <h3>{emp.name}</h3>
-          <p>{emp.role}</p>
-          <p>ID: {emp.id}</p>
-          <p>Department: {emp.department}</p>
-          <div>
-            <button class="approve-btn" on:click={() => approveLeave(emp)}>Approve</button>
-            <button class="reject-btn" on:click={() => rejectLeave(emp)}>Reject</button>
-          </div>
-        </div>
-      {/each}
+      {#each pending as item (item + Math.random())}
+  <div class="pending-card">
+    <div class="pending-head">
+      <div>
+        <p class="pending-name black-name">{item.name}</p>
+        <p class="pending-role">{item.role} • {item.id} • {item.department}</p>
+      </div>
+      <span class="chip">{item.leaveType}</span>
+    </div>
+
+    <div class="pending-meta">
+      <div><strong>From:</strong> {fmt(item.dateFrom)}</div>
+      <div><strong>To:</strong> {fmt(item.dateTo)}</div>
+      <div><strong>Requested:</strong> {fmt(item.requestedAt)}</div>
+    </div>
+
+    <div class="pending-actions">
+  <div class="left-btns">
+    <button class="approve-btn" on:click={() => approveLeave(item)}>Approve</button>
+    <button class="reject-btn" on:click={() => rejectLeave(item)}>Reject</button>
+  </div>
+  <button class="details-btn" on:click={() => openDetails(item.id)}>Details</button>
+</div>
+
+  </div>
+{/each}
+
     {/if}
   </div>
+
   <div class="sidebar-footer">
     <button class="cancel-btn" on:click={() => (sidebarOpen = false)}>Cancel</button>
   </div>

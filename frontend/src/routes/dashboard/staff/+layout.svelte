@@ -1,15 +1,10 @@
+<!-- src/routes/dashboard/staff/+layout.svelte -->
 <script>
-  import Sidebar from '$lib/components/Sidebar.svelte'; // the “normal” sidebar
+  import StaffSidebar from '$lib/components/StaffSidebar.svelte';
   import { page } from '$app/stores';
-  export let data;
-  $: pathname = $page.url.pathname;
+  export let data; // expects at least { user }
 </script>
 
-<div class="container">
-  <aside class="aside">
-    <Sidebar user={data.user} pathname={pathname} />
-  </aside>
-  <main class="main dash-main">
-    <div class="container-inner"><slot /></div>
-  </main>
-</div>
+<StaffSidebar user={data?.user} pathname={$page.url.pathname}>
+  <slot />
+</StaffSidebar>

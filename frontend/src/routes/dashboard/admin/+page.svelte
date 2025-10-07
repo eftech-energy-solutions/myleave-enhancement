@@ -1,16 +1,20 @@
 <script>
   import { onMount, tick } from 'svelte';
   export let data; // expects: { user, holidaysByYear, employeesOverview? }
-
+ 
   // ----- user/profile -----
   const user = data?.user ?? { name: 'admin', role: 'Human Resources', staffId: 'E8505' };
   const initials = (name) => (name || 'A B').split(' ').map(x => x[0]).slice(0,2).join('').toUpperCase();
   let profileMenuOpen = false;
+  
+  const holidaysByYear = data.holidaysByYear;
+
   function clickOutside(node) {
-    const onClick = (e) => { if (!node.contains(e.target)) profileMenuOpen = false; };
-    document.addEventListener('click', onClick);
-    return { destroy: () => document.removeEventListener('click', onClick) };
-  }
+  const onClick = (e) => { if (!node.contains(e.target)) profileMenuOpen = false; };
+  document.addEventListener('click', onClick);
+  return { destroy: () => document.removeEventListener('click', onClick) };
+}
+
 
   // ===== Department data for Overview + Chart =====
   // (Replace with your real data source as needed)
@@ -65,12 +69,15 @@
   const todayISO = isoLocal(today);
 
   // Wider nav window so prev/next works nicely
-  const windowStartYear = new Date().getFullYear();
-  const minDate = new Date(windowStartYear, 0, 1);
-  const maxDate = new Date(windowStartYear + 5, 11, 31);
-  const monthStart = (d) => new Date(d.getFullYear(), d.getMonth(), 1);
-  const minMonthStart = monthStart(minDate);
-  const maxMonthStart = monthStart(maxDate);
+ // Dynamic window based on holidaysByYear from layout
+const years = data?.holidaysByYear ? Object.keys(data.holidaysByYear).map(Number) : [new Date().getFullYear()];
+const minYear = Math.min(...years);
+const maxYear = Math.max(...years);
+const minDate = new Date(minYear, 0, 1);
+const maxDate = new Date(maxYear, 11, 31);
+const monthStart = (d) => new Date(d.getFullYear(), d.getMonth(), 1);
+const minMonthStart = monthStart(minDate);
+const maxMonthStart = monthStart(maxDate);
 
   let viewBase = atStartOfDay(new Date());
   const canGoPrev = () => monthStart(viewBase) > minMonthStart;
@@ -87,7 +94,6 @@
   let days = [];
 
   // ===== WP Public Holidays — rolling 3-year window (current..+2) =====
- // ===== WP Public Holidays — rolling 3-year window (current..+2) =====
 let holidayWindowStart = new Date().getFullYear();
 const HOLIDAY_WINDOW = 3; // years
 
@@ -157,26 +163,30 @@ const isHoliday = (d) => {
     start.setDate(first.getDate() - ((first.getDay() + 6) % 7)); // Monday-start
 
     const arr = [];
-    for (let i = 0; i < 42; i++) {
-      const d = new Date(start);
-      d.setDate(start.getDate() + i);
+ for (let i = 0; i < 42; i++) {
+  const d = new Date(start);
+  d.setDate(start.getDate() + i);
   const iso = isoLocal(d);
-const y2 = d.getFullYear();
-const isHol = isHoliday(d);
-const addName = additionalMeta.get(iso)?.name || null;
-const phName  = holidayNamesByYear[y2]?.get(iso) || null;
+  const y2 = d.getFullYear();
 
-arr.push({
-  key: iso,
-  label: d.getDate(),
-  date: d,
-  muted: d.getMonth() !== m,
-  today: iso === todayISO,
-  holiday: isHol || isAdditional(d),              // blue for public + additional
-  outOfWindow: d < minDate || d > maxDate,
-  title: addName || phName                         // ← hover shows name
-});
+  const isHol = isHoliday(d);                          // ✅ detect public holiday
+  const addName = additionalMeta.get(iso)?.name || null;
+  const phName  = holidayNamesByYear[y2]?.get(iso) || null;
 
+  // ✅ Prevent adding Additional Leave on public holiday
+  const isBlocked = isHol; // use this to disable button
+
+  arr.push({
+    key: iso,
+    label: d.getDate(),
+    date: d,
+    muted: d.getMonth() !== m,
+    today: iso === todayISO,
+    holiday: isHol || isAdditional(d),
+    outOfWindow: d < minDate || d > maxDate,
+    blocked: isBlocked,                              // 🔹 NEW: mark non-clickable
+    title: phName || addName || null                 // 🔹 prioritize public holiday name for tooltip
+  });
     }
     monthLabel = new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(first);
     days = arr;
@@ -310,17 +320,18 @@ arr.push({
         <div class="days">
           {#each days as d (d.key)}
             <button
-              class:muted={d.muted}
-              class:today={d.today}
-              class:holiday={d.holiday}
-              class:out={d.outOfWindow}
-              disabled={d.outOfWindow || (d.date < today && !d.today)}
-              on:click={() => openAdditionalForm(d.date)}
-              aria-label={`Select ${d.date.toDateString()}`}
-              title={d.title || (d.holiday ? 'Public/Additional Holiday' : '')}
-            >
+  class:muted={d.muted}
+  class:today={d.today}
+  class:holiday={d.holiday}
+  class:out={d.outOfWindow}
+  disabled={d.outOfWindow || d.blocked || (d.date < today && !d.today)}  
+  on:click={() => !d.blocked && openAdditionalForm(d.date)}               
+  aria-label={`Select ${d.date.toDateString()}`}
+  title={d.title || (d.holiday ? 'Public/Additional Holiday' : '')}
+>
               {d.label}
             </button>
+
           {/each}
         </div>
 
@@ -476,8 +487,7 @@ arr.push({
     display:flex; justify-content:center; gap:14px; margin-top:8px; font-size:11.5px; color:#6b7280;
   }
   .swatch{ display:inline-block; width:14px; height:9px; border-radius:3px; margin-right:6px; vertical-align:middle; }
-  .sw-blue{ background:#e0f2fe; border:1px solid #e5e7eb; }
-  .sw-today{ background:#fff; border:2px solid #49bdb3; }
+  .sw-today{ background:#fff; border:1px solid #49bdb3; }
 
   /* ===== Chart tweaks ===== */
 .chart-box {

@@ -1,45 +1,77 @@
 <script>
   import { onMount, tick } from 'svelte';
-  export let data; // { user, donuts, holidaysByYear }
+  export let data; // { user, donuts?, holidaysByYear }
 
   // ----- user/profile -----
-  const user = data?.user ?? { name: 'admin', role: 'Human Resources', staffId: 'E8505' };
+  const user = data?.user ?? { name: 'manager', role: 'Manager', staffId: 'E1234' };
   const initials = (name) => (name || 'A B').split(' ').map(x => x[0]).slice(0,2).join('').toUpperCase();
   let profileMenuOpen = false;
-
   function clickOutside(node) {
     const onClick = (e) => { if (!node.contains(e.target)) profileMenuOpen = false; };
     document.addEventListener('click', onClick);
     return { destroy: () => document.removeEventListener('click', onClick) };
   }
 
-  // ----- donuts (from server, includes carryForward for Annual) -----
+  // ----- donuts (demo or from server) -----
   const donuts = data?.donuts ?? [
-    { title: 'Annual Leave Summary', spent: 3, total: 14, carryForward: 5 },
-    { title: 'Medical Leave Summary', spent: 0, total: 14 },
-    { title: 'Hospitalization Leave Summary', spent: 0, total: 60 }
+    { title: 'Team Annual Leave',          spent: 12, total: 60 },
+    { title: 'Team Medical Leave',         spent:  4, total: 60 },
+    { title: 'Team Hospitalization Leave', spent:  0, total: 300 }
   ];
   const pct = (s, t) => Math.min(100, Math.max(0, Math.round((s / t) * 100)));
 
-  // ----- calendar helpers -----
+  // ======= Single source of truth: shared Public Holidays from +layout.server.js
+  const holidaysByYear = data?.holidaysByYear ?? {};
+
+  // Build quick lookups (per-year Set for fast flag, and Map for names)
+  const holidayDatesByYear = {};
+  const holidayNamesByYear = {};
+  for (const yStr of Object.keys(holidaysByYear)) {
+    const y = Number(yStr);
+    const list = holidaysByYear[y] ?? [];
+    holidayDatesByYear[y] = new Set(list.map(h => h.date));                       // 'YYYY-MM-DD'
+    holidayNamesByYear[y] = new Map(list.map(h => [h.date, h.name || 'Public Holiday']));
+  }
+
+  // Helpers: date math & local ISO (prevents UTC off-by-one)
   const atStartOfDay = (d) => { const x = new Date(d); x.setHours(0,0,0,0); return x; };
   const sameDay = (a, b) => atStartOfDay(a).getTime() === atStartOfDay(b).getTime();
 
-  let today = atStartOfDay(new Date());
-  const todayISO = today.toISOString().slice(0,10);
+  // Local ISO (YYYY-MM-DD) without timezone conversion
+  const localISO = (d) => {
+    const x = atStartOfDay(d);
+    const y = x.getFullYear();
+    const m = String(x.getMonth() + 1).padStart(2, '0');
+    const dd = String(x.getDate()).padStart(2, '0');
+    return `${y}-${m}-${dd}`;
+  };
 
-  // ----- rolling 5-year window -----
-  const windowStartYear = new Date().getFullYear();
-  const minDate = new Date(windowStartYear, 0, 1);        // Jan 1, current year
-  const maxDate = new Date(windowStartYear + 5, 11, 31);  // Dec 31, +5 years
+  function isHoliday(d) {
+    const y = d.getFullYear();
+    const iso = localISO(d);
+    return holidayDatesByYear[y]?.has(iso) ?? false;
+  }
+  function holidayTitle(d) {
+    const y = d.getFullYear();
+    const iso = localISO(d);
+    return holidayNamesByYear[y]?.get(iso) || null;
+  }
 
+  // ======= Calendar window follows the years provided by the shared holidays
+  const yearsFromData = Object.keys(holidaysByYear).map(Number);
+  const fallbackYear = new Date().getFullYear();
+  const minYear = yearsFromData.length ? Math.min(...yearsFromData) : fallbackYear;
+  const maxYear = yearsFromData.length ? Math.max(...yearsFromData) : fallbackYear;
+  const minDate = new Date(minYear, 0, 1);
+  const maxDate = new Date(maxYear, 11, 31);
   const monthStart = (d) => new Date(d.getFullYear(), d.getMonth(), 1);
   const minMonthStart = monthStart(minDate);
   const maxMonthStart = monthStart(maxDate);
 
+  let today = atStartOfDay(new Date());
+  const todayISO = localISO(today);
+
   let viewBase = atStartOfDay(new Date());
-  const canGoPrev = () => monthStart(viewBase) > minMonthStart;
-  const canGoNext = () => monthStart(viewBase) < maxMonthStart;
   function clampToWindowMonth(d) {
     const ms = monthStart(d).getTime();
     if (ms < minMonthStart.getTime()) return new Date(minMonthStart);
@@ -48,43 +80,39 @@
   }
   viewBase = clampToWindowMonth(viewBase);
 
+  const canGoPrev = () => monthStart(viewBase) > minMonthStart;
+  const canGoNext = () => monthStart(viewBase) < maxMonthStart;
+
   let monthLabel = '';
   let days = [];
   let modal;
 
-  // ----- holidays lookup (server-fed; fast Set per year) -----
-  const holidaysByYear = {};
-  if (data?.holidaysByYear) {
-    for (const y in data.holidaysByYear) {
-      holidaysByYear[y] = new Set(data.holidaysByYear[y].map(h => h.date));
-    }
-  }
-  const isHoliday = (d) => {
-    const y = d.getFullYear();
-    const iso = d.toISOString().slice(0,10);
-    return holidaysByYear[y]?.has(iso) ?? false;
-  };
-
-  // ----- build month (with holiday + window flags) -----
+  // Build month grid (6 weeks)
   function buildMonth(base = new Date()) {
     const y = base.getFullYear(), m = base.getMonth();
     const first = new Date(y, m, 1);
     const start = new Date(first);
-    // Monday-start
+    // Start on Monday
     start.setDate(first.getDate() - ((first.getDay() + 6) % 7));
 
     const arr = [];
     for (let i = 0; i < 42; i++) {
       const d = new Date(start);
       d.setDate(start.getDate() + i);
+
+      // out-of-window flag (keep consistency with Admin styles)
+      const outOfWindow = d < minDate || d > maxDate;
+
+      const hol = isHoliday(d);
       arr.push({
-        key: d.toISOString().slice(0,10),
+        key: localISO(d),
         label: d.getDate(),
         date: d,
         muted: d.getMonth() !== m,
         today: sameDay(d, today),
-        holiday: isHoliday(d),
-        outOfWindow: d < minDate || d > maxDate
+        holiday: hol,
+        holidayName: hol ? holidayTitle(d) : null,
+        outOfWindow
       });
     }
     monthLabel = new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(first);
@@ -93,7 +121,7 @@
 
   onMount(() => buildMonth(viewBase));
 
-  // ===== navigation (prev/next + jump to today) =====
+  // Nav
   function prevMonth() {
     if (!canGoPrev()) return;
     const d = new Date(viewBase);
@@ -127,7 +155,7 @@
     buildMonth(viewBase);
   }
 
-  // ===== Leave form state =====
+  // ===== Leave form (demo)
   let duration = 'Full';     // 'Full' | 'Half'
   let dateFrom = '';
   let dateUntil = '';
@@ -136,7 +164,6 @@
   let leaveType = 'Annual';
   let endLocked = false;
 
-  // Track attachment + file input ref for native validation bubble
   let attachmentFiles; // FileList
   let fileInputEl;     // <input type="file">
   $: showAttachmentReminder =
@@ -160,13 +187,12 @@
   const addDaysISO = (iso, days) => {
     const d = new Date(iso);
     d.setDate(d.getDate() + days);
-    return d.toISOString().slice(0, 10);
+    return localISO(d);
   };
 
   $: if (dateFrom && dateUntil && atStartOfDay(dateUntil) < atStartOfDay(dateFrom)) {
     dateUntil = dateFrom;
   }
-
   $: {
     const n = fixedDurations[leaveType];
     endLocked = Boolean(n);
@@ -174,7 +200,6 @@
       dateUntil = addDaysISO(dateFrom, n);
     }
   }
-
   $: {
     if (duration === 'Half') {
       totalDays = 0.5;
@@ -186,20 +211,6 @@
     }
   }
 
-  // Keep native "required" bubble in sync and show it immediately on switching to Medical
-  $: {
-    const needs = (leaveType === 'Medical');
-    if (fileInputEl) {
-      fileInputEl.required = needs;
-      if (needs && (!attachmentFiles || attachmentFiles.length === 0)) {
-        fileInputEl.setCustomValidity('Please attach your medical certificate.');
-        setTimeout(() => fileInputEl.reportValidity(), 0); // show native bubble
-      } else {
-        fileInputEl.setCustomValidity('');
-      }
-    }
-  }
-
   function onFromChange() {
     if (!dateFrom) return;
     if (duration === 'Half') dateUntil = dateFrom;
@@ -207,45 +218,38 @@
   }
 
   async function openLeaveForm(date) {
-    const iso = atStartOfDay(date).toISOString().slice(0,10);
+    const iso = localISO(date);
     leaveType = 'Annual';
     duration  = 'Full';
     dateFrom  = iso;
     dateUntil = iso;
     totalDays = 1;
-    attachmentFiles = undefined; // reset
-
+    attachmentFiles = undefined;
     if (!modal?.open) modal.showModal();
     await tick();
   }
 
-  // Use native validation so bubbles appear on submit too
   function submitLeave(e) {
     const form = e.currentTarget;
-    if (!form.reportValidity()) return; // shows native bubbles if invalid
-    const fd = new FormData(form);
+    if (!form.reportValidity()) return;
     // TODO: post to backend
     modal?.close();
   }
 
-  // ----- recent -----
+  // Recent (demo)
   const recent = [
-    { id: 1, from: '2024-01-02', to: '2024-01-03', totalDays: 1,   type: 'Annual', status: 'Approved' },
-    { id: 2, from: '2024-01-02', to: '2024-01-03', totalDays: 1.0, type: 'Annual', status: 'Approved' }
+    { id: 101, from: '2025-09-10', to: '2025-09-11', totalDays: 2,   type: 'Annual', status: 'Approved' },
+    { id: 102, from: '2025-09-18', to: '2025-09-18', totalDays: 1.0, type: 'Medical', status: 'Pending' }
   ];
   const fmt = (iso) => new Date(iso).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
 </script>
 
 <main class="main">
-
-  <!-- ===== DONUT ROW HEADER: Download on top-right ===== -->
   <div class="donut-row-header">
     <a class="download" href="#">Download</a>
   </div>
 
-  <!-- ===== GRID ===== -->
   <div class="grid">
-    <!-- Top: 3 donuts -->
     {#each donuts as d, i}
       <div class="card" style="grid-column: span 4;">
         <h3 class="donut-title">{d.title}</h3>
@@ -257,22 +261,11 @@
           <div class="legend-item"><span class="chip spent"></span><span>Spent Leave</span></div>
           <div class="legend-item"><span class="chip unspent"></span><span>Unspent Leave</span></div>
         </div>
-
         <div class="total-line">Total spent: {d.spent}/{d.total}</div>
-
-        {#if d.title === 'Annual Leave Summary'}
-          <div class="cf-line">
-            Carry forward: {d.carryForward}/7
-            <button type="button" class="info-btn" aria-describedby={"cf-tip-" + i} tabindex="0">ⓘ</button>
-            <span class="tooltip" id={"cf-tip-" + i} role="tooltip">
-              Carry-forward from previous year is capped at 7 days.
-            </span>
-          </div>
-        {/if}
       </div>
     {/each}
 
-    <!-- Bottom: Calendar (4) + Recent (8) -->
+    <!-- Calendar -->
     <div class="card" style="grid-column: span 4;">
       <h3>Calendar of Application</h3>
       <div class="calendar calendar-small">
@@ -306,14 +299,21 @@
               disabled={d.outOfWindow || (!d.today && atStartOfDay(d.date) < today)}
               on:click={() => openLeaveForm(d.date)}
               aria-label={`Select ${d.date.toDateString()}`}
+              title={d.holiday ? d.holidayName : undefined}
             >
               {d.label}
             </button>
           {/each}
         </div>
+           <div class="legend small">
+          <span><i class="swatch sw-blue"></i> Public / Additional leave</span>
+          <span><i class="swatch sw-today"></i> Today</span>
+        </div>
+        
       </div>
     </div>
 
+    <!-- Recent -->
     <div class="card" style="grid-column: span 8;">
       <h3>Recent Application</h3>
       <div class="recent-wrap">
@@ -325,7 +325,7 @@
               <div><div class="muted">Leave Type:</div><div>{r.type}</div></div>
               <div><div class="muted">Status:</div><div>{r.status}</div></div>
             </div>
-            <a class="link" href={`/dashboard/admin/reports/${r.id}`}>Details</a>
+            <a class="link" href={`/dashboard/manager/reports/${r.id}`}>Details</a>
           </div>
         {/each}
       </div>
@@ -333,7 +333,7 @@
   </div>
 </main>
 
-<!-- ===== MODAL ===== -->
+<!-- Modal -->
 <dialog bind:this={modal} class="leave-modal" aria-labelledby="leave-title">
   <form method="dialog" class="leave-form" on:submit|preventDefault={submitLeave}>
     <button type="button" class="close-btn" on:click={() => modal.close()} aria-label="Close">✕</button>
@@ -362,14 +362,7 @@
     <div class="dates">
       <label>
         <span>Date from</span>
-        <input
-          type="date"
-          name="dateFrom"
-          bind:value={dateFrom}
-          required
-          min={todayISO}
-          on:change={onFromChange}
-        />
+        <input type="date" name="dateFrom" bind:value={dateFrom} required min={todayISO} on:change={onFromChange} />
       </label>
 
       <label>
@@ -394,15 +387,7 @@
 
     <label>
       <span>Total day</span>
-      <input
-        type="number"
-        name="totalDays"
-        bind:value={totalDays}
-        min="0.5"
-        step="0.5"
-        required
-        readonly
-      />
+      <input type="number" name="totalDays" bind:value={totalDays} min="0.5" step="0.5" required readonly />
     </label>
 
     <label><span>Reason</span><textarea name="reason" rows="3" required></textarea></label>
@@ -433,10 +418,21 @@
     display:flex; justify-content:flex-end; align-items:center;
     margin: 8px 0 6px;
   }
+  .download { color: #fff; text-decoration: underline; font-size: 14px; }
+  .download:hover { opacity: 0.85; }
+
+  .sw-blue{ background:#71c0f5; border:1px solid #71c0f5; }
+  .sw-today{ background:#fff; border:1px solid #49bdb3; }
+    .legend.small{
+    display:flex; justify-content:center; gap:14px; margin-top:8px; font-size:11.5px; color:#6b7280;}
+    
+  .swatch{ display:inline-block; width:14px; height:9px; border-radius:3px; margin-right:6px; vertical-align:middle; }
 
   .grid{ margin-top:6px; display:grid; gap:10px; grid-template-columns:repeat(12, minmax(0,1fr)); }
 
-  :global(:root){ --spentRed:#ef4444; --restBlue:#3b82f6; }
+  :global(:root){ --spentRed:#ef4444; --restBlue:#3b82f6; --ring:#e5e7eb; --shadow:0 2px 12px rgba(0,0,0,.06); }
+  .card{ border:1px solid var(--ring); border-radius:12px; padding:12px; background:#fff; box-shadow:var(--shadow); }
+
   .donut.fancy{
     height: var(--size, 110px); width: var(--size, 110px);
     border-radius:9999px; margin:6px auto 8px;
@@ -454,52 +450,7 @@
   .chip.unspent{ background: var(--restBlue); }
   .total-line{ text-align:center; font-size:12px; color:#6b7280; margin-top:4px; }
 
-  .cf-line{
-    margin-top:6px;
-    text-align:center;
-    font-size:12px;
-    color:#6b7280;
-    position:relative;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    gap:6px;
-  }
-  .info-btn{
-    border:none;
-    background:#eef2ff;
-    border-radius:999px;
-    width:18px; height:18px;
-    line-height:18px;
-    font-size:12px;
-    font-weight:700;
-    cursor:pointer;
-    padding:0;
-    display:inline-grid;
-    place-items:center;
-    color:#374151;
-  }
-  .info-btn:hover{ background:#e5e7eb; }
-  .tooltip{
-    position:absolute;
-    bottom:130%;
-    left:50%;
-    transform:translateX(-50%);
-    background:#111827; color:#fff;
-    padding:6px 8px; border-radius:6px; font-size:12px; white-space:nowrap;
-    box-shadow:0 4px 18px rgba(0,0,0,.18);
-    opacity:0; visibility:hidden; transition:opacity .15s ease, visibility .15s ease;
-    pointer-events:none;
-  }
-  .tooltip::after{
-    content:""; position:absolute; top:100%; left:50%; transform:translateX(-50%);
-    border:6px solid transparent; border-top-color:#111827;
-  }
-  .info-btn:hover + .tooltip, .info-btn:focus + .tooltip{ opacity:1; visibility:visible; }
-
   .calendar-small{ max-width:360px; margin:0 auto; }
-  .calendar-small .days button{ padding:6px; }
-
   .calendar .month{
     display:flex; align-items:center; justify-content:space-between;
     font-weight:700; margin-bottom:6px; gap:8px;
@@ -516,7 +467,7 @@
   .weekdays{ display:grid; grid-template-columns:repeat(7,1fr); gap:4px; font-size:12px; color:#6b7280; margin-bottom:4px; }
   .days{ display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
   .days button{
-    border:1px solid var(--ring); border-radius:8px; background:#fff; cursor:pointer;
+    border:1px solid var(--ring); border-radius:8px; background:#fff; cursor:pointer; padding:6px;
   }
   .days button.today {
     border: 2px solid #49bdb3; font-weight: 700; color: #111827; background: #ffff;
@@ -524,8 +475,8 @@
   .days button.muted{ opacity:.5; }
   .days button:disabled{ background:#f3f4f6; color:#9ca3af; cursor:not-allowed; }
 
-  /* Public holiday highlight (soft yellow) */
-  .days button.holiday { background: #e0f2fe; border-color: #f3f4f6; }
+  /* Public holiday highlight — SAME as Admin */
+  .days button.holiday { background: #71c0f5; border-color: #71c0f5; }
   .days button.today.holiday { background: #FFF7CC; }
 
   /* Out-of-window dates */
@@ -539,9 +490,6 @@
   .recent-item .when{ font-weight:700; color:#111827; }
   .recent-item .cols{ display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; font-size:12px; }
   .recent-item .muted{ color:#6b7280; }
-
-  .download { color: #fff; text-decoration: underline; font-size: 14px; }
-  .download:hover { opacity: 0.85; }
 
   .leave-form .duration { display:flex; flex-direction:column; gap:.5rem; align-items:flex-start; }
   .leave-form .duration label{ display:inline-flex; flex-direction:row; align-items:center; gap:.5rem; cursor:pointer; text-align:left; }
