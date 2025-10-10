@@ -290,7 +290,7 @@
   /* Global Layout */
   .container {
     display: grid;
-    grid-template-columns: 240px 1fr;
+    grid-template-columns: 220px 1fr;
     min-height: 100vh;
   }
   .aside {
