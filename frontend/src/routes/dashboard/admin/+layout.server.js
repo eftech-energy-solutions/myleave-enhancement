@@ -1,13 +1,18 @@
-// src/routes/dashboard/admin/+layout.server.js
 import { redirect } from '@sveltejs/kit';
 
-export const load = ({ url, locals }) => {
-  // if you don’t have auth yet, comment these two lines temporarily
-  // if (!locals.user) throw redirect(302, '/login');
-  // if (locals.user.role !== 'admin') throw redirect(302, '/dashboard');
+export const load = async ({ locals }) => {
+  const user = locals.user;
 
-  if (url.pathname === '/dashboard/admin') {
-    throw redirect(302, '/dashboard/admin/main');
+  if (!user) {
+    console.log('❌ No user found in locals, redirecting to /login');
+    throw redirect(302, '/login');
   }
-  return { user: locals.user ?? null };
+
+  if (user.role.toLowerCase() !== 'admin') {
+    console.log(`⚠️ User role "${user.role}" not authorized for admin, redirecting`);
+    throw redirect(302, '/dashboard');
+  }
+
+  console.log('✅ Admin layout loaded for user:', user);
+  return { user };
 };

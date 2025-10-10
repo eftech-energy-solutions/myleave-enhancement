@@ -251,9 +251,9 @@
         <img src="/images/icontest1.png" alt="" class="avatar-img"
              on:error={(e)=> e.currentTarget.style.display='none'} />
         <div class="who">
-          <div class="name">{user?.name || 'Afiq Mikail'}</div>
-          <div class="sub">{user?.role || 'Human Resources'}</div>
-          <div class="sub">#{user?.staffId || 'E8505'}</div>
+          <div class="name">{user?.name}</div>
+          <div class="sub">Department: {user?.role}</div>
+          <div class="sub">Staff ID: {user?.staffId}</div>
         </div>
       </div>
 

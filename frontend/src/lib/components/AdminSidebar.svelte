@@ -1,6 +1,6 @@
 <script>
   import { page } from '$app/stores';
-  export let data; // contains { user }
+  // export let data; // contains { user }
 </script>
 
 <div class="container">

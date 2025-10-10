@@ -1,9 +1,9 @@
 <script>
+  export let data;
+  const user = data?.user;
   import { onMount } from 'svelte';
-  export let data; // from +layout.server.js -> { user }
 
   // header expects these
-  const user = data?.user ?? { name: 'Admin', role: 'admin', staffId: 'E8505' };
   let profileMenuOpen = false;
 
   function clickOutside(node) {
@@ -64,7 +64,7 @@
   <!-- HEADER -->
   <div class="topbar">
     <div class="title-wrap">
-      <div class="hello">Welcome back, {user?.name || 'admin'}!</div>
+      <div class="hello">Welcome back, {user?.name}!</div>
       <h1 class="page-title">Dashboard</h1>
     </div>
 
@@ -75,9 +75,9 @@
         <img src="/images/icontest1.png" alt="" class="avatar-img"
              on:error={(e)=> e.currentTarget.style.display='none'} />
         <div class="who">
-          <div class="name">{user?.name || 'Admin'}</div>
-          <div class="sub">{user?.role || 'admin'}</div>
-          <div class="sub">#{user?.staffId || 'E8505'}</div>
+          <div class="name">{user?.name}</div>
+          <div class="sub">Department: {user?.department}</div>
+          <div class="sub">Staff ID: {user?.staffId}</div>
         </div>
       </div>
 
@@ -98,7 +98,8 @@
     </div>
 
     <!-- ✅ Download anchored bottom-right inside header -->
-    <a class="download header-download" href="#">Download</a>
+    <!-- svelte-ignore a11y_invalid_attribute -->
+    <a class="download header-download" href="javascript:void(0)">Download</a>
   </div>
 
   <!-- GRID -->

@@ -153,7 +153,7 @@
   <!-- HEADER (simple row, no boxed container) -->
   <div class="topbar">
     <div class="title-wrap">
-      <div class="hello">Welcome back, {user?.name || 'admin'}!</div>
+      <div class="hello">Welcome back, {user?.name}!</div>
       <h1 class="page-title">My Dashboard</h1>
     </div>
 

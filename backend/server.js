@@ -1,30 +1,97 @@
-import express from "express";
-import cors from "cors";
+import express from 'express';
+import bodyParser from 'body-parser';
+import cookieParser from 'cookie-parser';
+import pool from './src/db.js';
+import cors from 'cors';
 
 const app = express();
-const PORT = 5000;
 
-// Middleware
-app.use(cors());
-app.use(express.json());
+app.use(cors({
+  origin: 'http://localhost:5173',
+  credentials: true
+}));
 
-// Example route
-app.get("/", (req, res) => {
-  res.send("Backend is running 🚀");
+app.use(bodyParser.json());
+app.use(cookieParser());
+
+// ✅ Test route
+app.get('/', (req, res) => {
+  res.send('✅ Backend is running');
 });
 
-// Example login API
-app.post("/login", (req, res) => {
+// ✅ LOGIN API
+app.post('/api/login', async (req, res) => {
   const { email, password } = req.body;
+  console.log('DEBUG LOGIN:', email, password);
 
-  // Demo only: check static credentials
-  if (email === "admin@eftech" && password === "1234") {
-    res.json({ success: true, message: "Login successful!" });
-  } else {
-    res.status(401).json({ success: false, message: "Invalid credentials" });
+  try {
+    const result = await pool.query(
+      'SELECT staff_id, full_name, email, password, role FROM profiles WHERE email = $1',
+      [email]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(400).json({ error: 'Invalid email or password' });
+    }
+
+    const user = result.rows[0];
+
+    if (user.password !== password) {
+      return res.status(400).json({ error: 'Invalid email or password' });
+    }
+
+    let redirectTo = '/dashboard/staff';
+    if (user.role === 'admin') redirectTo = '/dashboard/admin/main';
+    else if (user.role === 'manager') redirectTo = '/dashboard/manager';
+
+      res.cookie(
+      'auth_token',
+      JSON.stringify({
+        email: user.email,
+        name: user.full_name,
+        staffId: user.staff_id,
+        role: user.role
+      }),
+      {
+        httpOnly: false, // true kalau production
+        secure: false,   // true kalau HTTPS
+        sameSite: 'lax',
+        maxAge: 24 * 60 * 60 * 1000, // 1 hari
+        path: '/'
+      }
+    );
+
+    res.json({
+      success: true,
+      redirectTo,
+      email: user.email,
+      name: user.full_name,
+      staffId: user.staff_id,
+      role: user.role
+    });
+  } catch (err) {
+    console.error('DB error:', err);
+    res.status(500).json({ error: 'Database error' });
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`✅ Backend running on http://localhost:${PORT}`);
+// ✅ NEW: Get user from cookie
+app.get('/api/me', (req, res) => {console.log('🍪 Cookies received at /api/me:', req.cookies);
+  const token = req.cookies['auth_token'];
+
+  if (!token) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+
+  try {
+    const user = JSON.parse(token);
+    res.json(user);
+  } catch (err) {
+    console.error('Invalid cookie:', err);
+    res.status(400).json({ error: 'Invalid cookie' });
+  }
+});
+
+app.listen(5000, () => {
+  console.log('✅ Backend running on http://localhost:5000');
 });
