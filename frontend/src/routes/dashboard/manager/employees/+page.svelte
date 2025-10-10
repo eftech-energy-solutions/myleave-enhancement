@@ -14,7 +14,6 @@
     if (e.key === 'Escape') {
       if (sidebarOpen) sidebarOpen = false;
       if (profileMenuOpen) profileMenuOpen = false;
-      if (addModalOpen) addModalOpen = false;
       if (detailsOpen) { detailsOpen = false; editMode = false; }
     }
   }
@@ -69,137 +68,90 @@
     };
   }
 
-  // Pending demo
-  let pending = [{ id:"MN002", name:"Nur Aisyah", role:"Manager", department:"Operations" }];
-  employees = employees.filter(e => e.id !== "MN002");
+  // ---------- Pending (with leave fields to match the card) ----------
+  const todayISO = () => new Date().toISOString().slice(0,10);
+  const fmt = (iso) => iso ? new Date(iso).toLocaleDateString() : '-';
 
+  let pending = [
+    {
+      id: "MN002",
+      name: "Nur Aisyah",
+      role: "Manager",
+      department: "Operations",
+      leaveType: "Annual Leave",
+      dateFrom: todayISO(),
+      dateTo: todayISO(),
+      requestedAt: todayISO(),
+      type: 'new' // Type for new leave request
+    },
+    {
+      id: "EN003",
+      name: "Daniel Tan",
+      role: "Engineer",
+      department: "Technical Data",
+      leaveType: "Medical Leave",
+      dateFrom: '2025-10-20',
+      dateTo: '2025-10-21',
+      requestedAt: todayISO(),
+      type: 'cancel' // Type for cancellation request
+    }
+  ];
+  
+  // Separate pending items into two lists
+  $: pendingLeave = pending.filter(p => p.type !== 'cancel');
+  $: pendingCancel = pending.filter(p => p.type === 'cancel');
+
+
+  // remove from grid so it “moves” into Pending
+  employees = employees.filter(e => e.id !== "MN002" && e.id !== "EN003");
+
+  // Simulate new request coming in (optional)
   function requestCameIn(empId) {
     const idx = employees.findIndex(e => e.id === empId);
     if (idx === -1) return;
-    pending = [employees[idx], ...pending];
+    const base = employees[idx];
+    pending = [
+      { ...base, leaveType: "Annual Leave", dateFrom: todayISO(), dateTo: todayISO(), requestedAt: todayISO(), type: 'new' },
+      ...pending
+    ];
     employees = [...employees.slice(0, idx), ...employees.slice(idx + 1)];
     sidebarOpen = true;
   }
 
-  function approveLeave(emp) {
-    const idx = pending.findIndex(e => e.id === emp.id);
+  function approveRequest(item) {
+    const idx = pending.findIndex(e => e.id === item.id);
     if (idx === -1) return;
-    employees = [pending[idx], ...employees];
+    // return card to grid (works for both approving leave and approving cancellation)
+    if (!employees.some(e => e.id === item.id)) {
+      employees = [{ id:item.id, name:item.name, role:item.role, department:item.department }, ...employees];
+    }
     pending = [...pending.slice(0, idx), ...pending.slice(idx + 1)];
-    if (!detailsById[emp.id]) {
-      detailsById[emp.id] = {
+    if (!detailsById[item.id]) {
+      detailsById[item.id] = {
         photoUrl: "",
-        empId: emp.id, name: emp.name, email: "", position: emp.role,
-        department: emp.department, employmentDate: "", terminationDate: "",
+        empId: item.id, name: item.name, email: "", position: item.role,
+        department: item.department, employmentDate: "", terminationDate: "",
         confirmationDate: "", gender: "", annualLeave: "14.0", medicalLeave: "14.0", notes: ""
       };
     }
   }
-  const rejectLeave = approveLeave;
+  const rejectRequest = (item) => {
+    const idx = pending.findIndex(e => e.id === item.id);
+    if (idx === -1) return;
+    
+    // Return card to grid when request is rejected
+    if (!employees.some(e => e.id === item.id)) {
+      employees = [{ id:item.id, name:item.name, role:item.role, department:item.department }, ...employees];
+    }
+    
+    // Remove from pending list
+    pending = [...pending.slice(0, idx), ...pending.slice(idx + 1)];
+  };
 
   // ------- Sidebar -------
   let sidebarOpen = false;
   const toggleSidebar = () => (sidebarOpen = !sidebarOpen);
-  const pendingCount = () => pending.length;
-
-  // ------- Add New Employee (modal) -------
-  let addModalOpen = false;
-
-  let newEmp = {
-    photoUrl: "",
-    empId: "",
-    name: "",
-    email: "",
-    position: "",
-    employmentDate: "",
-    terminationDate: "",
-    confirmationDate: "",
-    gender: "Male",
-    annualLeave: "14.0",
-    medicalLeave: "14.0",
-    department: "Technical Data",
-    notes: ""
-  };
-
-  function openAddModal() {
-    addModalOpen = true;
-    newEmp = {
-      photoUrl: "",
-      empId: "",
-      name: "",
-      email: "",
-      position: "",
-      employmentDate: "",
-      terminationDate: "",
-      confirmationDate: "",
-      gender: "Male",
-      annualLeave: "14.0",
-      medicalLeave: "14.0",
-      department: "Technical Data",
-      notes: ""
-    };
-  }
-
-  // Photo upload for ADD (PNG/JPG only)
-  function handleNewPhotoFile(e) {
-    const file = e.currentTarget.files?.[0];
-    if (!file) return;
-    if (!/^image\/(png|jpeg)$/i.test(file.type)) {
-      alert("Please choose a PNG or JPG image.");
-      e.currentTarget.value = "";
-      return;
-    }
-    newEmp.photoUrl = URL.createObjectURL(file); // preview
-  }
-
-  let employmentDateEl; // ref to focus when missing
-
-  function submitNewEmployee(e) {
-    e.preventDefault();
-
-    if (!newEmp.name || !newEmp.email || !newEmp.position) {
-      alert("Please fill Name, Email, and Position.");
-      return;
-    }
-
-    if (!newEmp.employmentDate) {
-      alert("Please select the Employment Date.");
-      employmentDateEl?.focus();
-      return;
-    }
-
-    const randPrefix = IDS[Math.floor(Math.random()*IDS.length)];
-    const newId = newEmp.empId?.trim() || `${randPrefix}${String(employees.length + 101).padStart(3,'0')}`;
-
-    // Add card
-    const card = {
-      id: newId,
-      name: newEmp.name,
-      role: newEmp.position || "Employee",
-      department: newEmp.department || "General"
-    };
-    employees = [card, ...employees];
-
-    // Save details
-    detailsById[newId] = {
-      photoUrl: newEmp.photoUrl || "",
-      empId: newId,
-      name: newEmp.name,
-      email: newEmp.email,
-      position: newEmp.position,
-      department: newEmp.department,
-      employmentDate: newEmp.employmentDate,
-      terminationDate: newEmp.terminationDate,
-      confirmationDate: newEmp.confirmationDate,
-      gender: newEmp.gender,
-      annualLeave: String(newEmp.annualLeave ?? "14.0"),
-      medicalLeave: String(newEmp.medicalLeave ?? "14.0"),
-      notes: newEmp.notes
-    };
-
-    addModalOpen = false;
-    alert(`Employee "${newEmp.name}" added (dummy).`);
-  }
+  $: pendingCount = pending.length;
 
   // ------- Details Modal (Update Profile) -------
   let detailsOpen = false;
@@ -295,7 +247,7 @@
   .overlay{ position:fixed; inset:0; background:rgba(0,0,0,.25); opacity:0; pointer-events:none; transition:opacity .2s; z-index:40; }
   .overlay.show{ opacity:1; pointer-events:auto; }
   .sidebar{
-    position:fixed; right:0; top:0; height:100vh; width:380px; max-width:92vw;
+    position:fixed; right:0; top:0; height:100vh; width:420px; max-width:92vw;
     background:#fff; box-shadow:-14px 0 32px rgba(0,0,0,.18);
     transform:translateX(100%); transition:transform .25s ease;
     z-index:60; display:flex; flex-direction:column;
@@ -308,11 +260,44 @@
   .sidebar-footer{ padding:12px 16px; border-top:1px solid var(--line); display:flex; justify-content:flex-end; }
   .cancel-btn{ border:1px solid var(--line); background:#fff; color:#000; border-radius:8px; padding:.45rem .8rem; font-weight:700; cursor:pointer; }
 
-  .pending-card{ background:#fff; border:1px solid var(--line); border-radius:12px; padding:12px; margin-bottom:12px; text-align:center; }
-  .pending-card h3{ margin:0; font-size:15px; color:#000; }
-  .pending-card p{ margin:2px 0; font-size:12px; color:#334155; }
-  .approve-btn{ border:none; border-radius:8px; padding:.38rem .7rem; font-size:12px; cursor:pointer; font-weight:700; background:#22c55e; color:#064e3b; }
-  .reject-btn{ border:none; border-radius:8px; padding:.50rem .7rem; font-size:12px; cursor:pointer; font-weight:700; background:#e30707; color:#7f1d1d; margin-left:.5rem; }
+  /* ---------- Pending card (match screenshot) ---------- */
+  .pending-card{
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:12px 14px;
+    margin-bottom:12px;
+    box-shadow:0 8px 20px rgba(0,0,0,.06);
+  }
+  .pending-card .row1{
+    display:flex; justify-content:space-between; align-items:flex-start; gap:8px;
+  }
+  .pending-card .name{ font-weight:800; color:#000; font-size:16px; }
+  .pending-card .sub{ font-size:12px; color:#64748b; }
+
+  .pill.type{
+    background:#eef2ff; color:#0f172a; border:1px solid #e5e7eb;
+    padding:4px 10px; border-radius:9999px; font-size:12px; font-weight:700; white-space:nowrap;
+  }
+
+  .kv{
+    display:grid; grid-template-columns:repeat(2,1fr);
+    gap:6px 14px; margin:8px 0 6px; font-size:12px;
+  }
+  .kv .k{ font-weight:700; color:#334155;}
+  .kv .v{ color:#0f172a;   margin-left: 6px;   }
+
+  .actions{ display:flex; justify-content:space-between; align-items:center; margin-top:10px; }
+  .actions .left{ display:flex; gap:8px; align-items:center; }
+
+  .btn-approve, .btn-reject, .btn-details{
+    border:none; border-radius:8px; padding:.55rem .9rem;
+    font-weight:700; cursor:pointer; min-width:50px; line-height:1; font-size: 12px;
+  }
+  .btn-approve{ background:#16a34a; color:#fff; }
+  .btn-reject { background:#dc2626; color:#fff; }
+  .btn-details{ background:#e0f2fe; color:#0c4a6e; }
+  .btn-approve:hover, .btn-reject:hover, .btn-details:hover{ filter:brightness(.97); }
 
   .sidebar-tab{
     position:fixed; right:0; top:40%; transform:translateY(-50%);
@@ -322,7 +307,7 @@
   .sidebar-tab .label{ font-weight:700; font-size:14px; }
   .badge{ min-width:22px; height:22px; display:inline-grid; place-items:center; background:#e30707; color:#fff; font-weight:800; border-radius:9999px; font-size:12px; padding:0 6px; }
 
-  /* Modal base */
+  /* Modal base (kept because Details modal uses it) */
   .modal-wrap{ position:fixed; inset:0; display:grid; place-items:center; background:rgba(0,0,0,.35); z-index:80; animation:fadeIn .15s ease; }
   @keyframes fadeIn { from{opacity:0} to{opacity:1} }
   .modal{ width:min(900px, 96vw); background:#fff; border-radius:18px; box-shadow:0 14px 40px rgba(0,0,0,.25); overflow:hidden; }
@@ -332,15 +317,14 @@
   .modal-bd{ padding:0; max-height:72vh; overflow:auto; }
 
   .sub-ttl{
-  margin: 0 0 10px;
-  font-weight: 800;
-  font-size: 14px;
-  letter-spacing:.2px;
-  color: var(--ink); /* 0c4a6e */
-}
+    margin: 0 0 10px;
+    font-weight: 800;
+    font-size: 14px;
+    letter-spacing:.2px;
+    color: var(--ink);
+  }
 
-
-  /* Forms */
+  /* Forms (kept because Details modal reuses these styles) */
   .add-layout, .details-layout{ padding:22px; }
   .section-ttl{ font-weight:700; color:#0c4a6e; margin:0 0 14px; font-size:18px; }
   .add-grid, .details-grid-form{ display:grid; grid-template-columns: 1fr 220px; gap:20px; }
@@ -404,8 +388,18 @@
     .photo-card{ justify-self:stretch; width:100%; height:180px; }
   }
   @media (max-width:640px){
-    .toprow{ align-items:stretch; }
-    .rightcol{ align-items:flex-start; min-width:unset; }
+   .toprow{
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
+
+.rightcol{           /* the wrapper around your filter */
+  margin-left:auto;  /* <-- pushes it to the right */
+  display:flex;
+  align-items:center;
+}
+
     .employees-grid{ grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
   }
 
@@ -424,13 +418,7 @@
 <!-- Employees grid -->
 <div class="main">
   <div class="topbar">
-    <div class="toprow" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-      <!-- Left: Add New Employee as underlined link -->
-      <a href="#" class="add-employee-link" on:click|preventDefault={openAddModal}>
-        Add New Employee
-      </a>
-
-      <!-- Right: Filter -->
+    <div class="toprow" style="display:flex; justify-content:flex-end; align-items:center; margin-bottom:12px; width:100%;">
       <div class="rightcol filter-wrap">
         <svg class="filter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M3 4h18l-7 8v6l-4 2v-8l-7-8z"/>
@@ -483,27 +471,77 @@
 <!-- Sidebar -->
 <div class:open={sidebarOpen} class="sidebar" aria-hidden={!sidebarOpen}>
   <div class="sidebar-header">
-    <div class="sidebar-title">Pending Approval{pendingCount() ? ` (${pendingCount()})` : ''}</div>
+    <div class="sidebar-title">Pending Approval{pendingCount > 0 ? ` (${pendingCount})` : ''}</div>
     <button class="close-btn" on:click={toggleSidebar}>✕</button>
   </div>
+
   <div class="sidebar-body">
     {#if pending.length === 0}
       <p style="color:#64748b; text-align:center;">No pending requests.</p>
     {:else}
-      {#each pending as emp (emp.id)}
-        <div class="pending-card">
-          <h3>{emp.name}</h3>
-          <p>{emp.role}</p>
-          <p>ID: {emp.id}</p>
-          <p>Department: {emp.department}</p>
-          <div>
-            <button class="approve-btn" on:click={() => approveLeave(emp)}>Approve</button>
-            <button class="reject-btn" on:click={() => rejectLeave(emp)}>Reject</button>
+      <!-- Section for Leave Approval -->
+      {#if pendingLeave.length > 0}
+        <h3 class="sub-ttl">Pending Leave Approval ({pendingLeave.length})</h3>
+        {#each pendingLeave as item (item.id + (item.requestedAt || ''))}
+          <div class="pending-card">
+            <div class="row1">
+              <div class="who">
+                <div class="name">{item.name}</div>
+                <div class="sub">{item.role} • {item.id} • {item.department}</div>
+              </div>
+              <span class="pill type">{item.leaveType || 'Leave'}</span>
+            </div>
+
+            <div class="kv">
+              <div><span class="k">From:</span><span class="v">{fmt(item.dateFrom)}</span></div>
+              <div><span class="k">To:</span><span class="v">{fmt(item.dateTo)}</span></div>
+              <div><span class="k">Requested:</span><span class="v">{fmt(item.requestedAt)}</span></div>
+            </div>
+
+            <div class="actions">
+              <div class="left">
+                <button class="btn-approve" on:click={() => approveRequest(item)}>Approve</button>
+                <button class="btn-reject"  on:click={() => rejectRequest(item)}>Reject</button>
+              </div>
+              <button class="btn-details" on:click={() => openDetails(item.id)}>Details</button>
+            </div>
           </div>
-        </div>
-      {/each}
+        {/each}
+      {/if}
+
+      <!-- Section for Cancellation Approval -->
+      {#if pendingCancel.length > 0}
+        <h3 class="sub-ttl" style="margin-top:20px;">Pending Cancellation Approval ({pendingCancel.length})</h3>
+        {#each pendingCancel as item (item.id + (item.requestedAt || ''))}
+          <div class="pending-card">
+            <div class="row1">
+              <div class="who">
+                <div class="name">{item.name}</div>
+                <div class="sub">{item.role} • {item.id} • {item.department}</div>
+              </div>
+              <span class="pill type" style="background-color: #fee2e2; color: #b91c1c;">Cancellation: {item.leaveType}</span>
+            </div>
+
+            <div class="kv">
+              <div><span class="k">Leave From:</span><span class="v">{fmt(item.dateFrom)}</span></div>
+              <div><span class="k">Leave To:</span><span class="v">{fmt(item.dateTo)}</span></div>
+              <div><span class="k">Cancellation Requested:</span><span class="v">{fmt(item.requestedAt)}</span></div>
+            </div>
+
+            <div class="actions">
+              <div class="left">
+                <button class="btn-approve" on:click={() => approveRequest(item)}>Approve Cancel</button>
+                <button class="btn-reject"  on:click={() => rejectRequest(item)}>Reject Cancel</button>
+              </div>
+              <button class="btn-details" on:click={() => openDetails(item.id)}>Details</button>
+            </div>
+          </div>
+        {/each}
+      {/if}
     {/if}
   </div>
+
+
   <div class="sidebar-footer">
     <button class="cancel-btn" on:click={() => (sidebarOpen = false)}>Cancel</button>
   </div>
@@ -512,130 +550,10 @@
 <!-- Sidebar tab -->
 <div class="sidebar-tab" on:click={toggleSidebar}>
   <span class="label">Pending Approval</span>
-  {#if pendingCount() > 0}
-    <span class="badge">{pendingCount()}</span>
+  {#if pendingCount > 0}
+    <span class="badge">{pendingCount}</span>
   {/if}
 </div>
-
-<!-- Add New Employee -->
-{#if addModalOpen}
-  <div class="modal-wrap" role="dialog" aria-modal="true" aria-labelledby="add-emp-title">
-    <div class="modal">
-      <div class="modal-hd">
-        <div id="add-emp-title" class="modal-ttl">Add New Employee</div>
-        <button class="modal-x" on:click={() => (addModalOpen = false)}>✕</button>
-      </div>
-
-      <div class="modal-bd">
-        <div class="add-layout">
-          <div class="add-grid">
-            <!-- Left form -->
-            <form class="form" on:submit={submitNewEmployee}>
-              <div class="row">
-                <div>
-                  <label>Full Name</label>
-                  <div class="ctl pill"><input placeholder="Enter full name" bind:value={newEmp.name} required /></div>
-                </div>
-                <div>
-                  <label>Staff ID</label>
-                  <div class="ctl pill"><input placeholder="e.g., HR123" bind:value={newEmp.empId} /></div>
-                </div>
-              </div>
-
-              <div class="row">
-                <div>
-                  <label>Position</label>
-                  <div class="ctl pill"><input placeholder="e.g., Data Engineer" bind:value={newEmp.position} required /></div>
-                </div>
-                <div>
-                  <label>Department</label>
-                  <div class="ctl pill">
-                    <select bind:value={newEmp.department}>
-                      {#each DEPTS as d}<option value={d}>{d}</option>{/each}
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              <div class="row">
-                <div>
-                  <label>Email</label>
-                  <div class="ctl pill"><input type="email" placeholder="name@company.com" bind:value={newEmp.email} required /></div>
-                </div>
-                <div>
-                  <label>Employment Date</label>
-                  <div class="ctl pill date">
-                    <input type="date" bind:value={newEmp.employmentDate} required bind:this={employmentDateEl} />
-                  </div>
-                </div>
-              </div>
-
-              <div class="row">
-                <div>
-                  <label>Confirmation Date</label>
-                  <div class="ctl pill date"><input type="date" bind:value={newEmp.confirmationDate} /></div>
-                </div>
-                <div>
-                  <label>Termination Date</label>
-                  <div class="ctl pill date"><input type="date" bind:value={newEmp.terminationDate} /></div>
-                </div>
-              </div>
-
-              <div class="row">
-                <div>
-                  <label>Gender</label>
-                  <div class="ctl pill">
-                    <select bind:value={newEmp.gender}>
-                      <option>Male</option>
-                      <option>Female</option>
-                      <option>Other</option>
-                    </select>
-                  </div>
-                </div>
-                <div>
-                  <label class="muted">Leave Entitlements (per year)</label>
-                  <div class="row" style="gap:10px; margin:0;">
-                    <div class="ctl pill"><input type="number" step="0.5" min="0" bind:value={newEmp.annualLeave} placeholder="Annual Leave" /></div>
-                    <div class="ctl pill"><input type="number" step="0.5" min="0" bind:value={newEmp.medicalLeave} placeholder="Medical Leave" /></div>
-                  </div>
-                </div>
-              </div>
-
-              <div class="row single">
-                <div>
-                  <label>Notes</label>
-                  <div class="ctl"><textarea placeholder="Optional notes…" bind:value={newEmp.notes} /></div>
-                </div>
-              </div>
-
-              <div class="form-ft">
-                <button type="button" class="btn-ghost" on:click={() => (addModalOpen = false)}>Cancel</button>
-                <button type="submit" class="btn-primary">Save &amp; Continue</button>
-              </div>
-            </form>
-
-            <!-- Right: Photo uploader -->
-            <div class="photo-card" title="Add Photo">
-              {#if newEmp.photoUrl}
-                <div class="photo-preview"><img src={newEmp.photoUrl} alt="Preview" /></div>
-              {:else}
-                <div class="cam" aria-label="Add photo (PNG/JPG)">
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M4 7h3l2-2h6l2 2h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z"
-                          fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    <circle cx="12" cy="13" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/>
-                  </svg>
-                </div>
-                <div class="muted" style="position:absolute; bottom:10px;">Add Photo</div>
-              {/if}
-              <input type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg" on:change={handleNewPhotoFile} />
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-{/if}
 
 <!-- Employee Details (Update Profile) -->
 {#if detailsOpen && selectedEmp}
@@ -771,7 +689,6 @@
                 </div>
                 <div class="muted" style="position:absolute; bottom:10px;">No Photo</div>
               {/if}
-              <!-- No input here (no photo editing in details) -->
             </div>
           </div>
         </div>
@@ -779,3 +696,4 @@
     </div>
   </div>
 {/if}
+

@@ -4,7 +4,7 @@
 
   // ----- donuts -----
   const donuts = [
-    { title: 'Annual Leave Summary',          spent: 1,  total: 14 },
+    { title: 'Annual Leave Summary',          spent: 1,  total: 14, carryForward: 0 }, // added carryForward (dummy)
     { title: 'Medical Leave Summary',         spent: 0,  total: 14 },
     { title: 'Hospitalization Leave Summary', spent: 0,  total: 60 }
   ];
@@ -38,7 +38,31 @@
     const iso = localISO(d);
     return holidayDatesByYear[y]?.has(iso) ?? false;
   }
+  // parse 'YYYY-MM-DD' safely in local time (no UTC drift)
+  const parseLocalISO = (iso) => {
+    if (!iso) return null;
+    const [y, m, d] = iso.split('-').map(Number);
+    return new Date(y, (m - 1), d);
+  };
 
+  // Count inclusive days excluding public holidays
+  function countDaysExcludingPH(fromISO, untilISO) {
+    const start = parseLocalISO(fromISO);
+    const end   = parseLocalISO(untilISO || fromISO);
+    if (!start || !end) return 0;
+
+    // ensure start <= end
+    if (atStartOfDay(end) < atStartOfDay(start)) return 0;
+
+    let c = 0;
+    const d = new Date(start);
+    for (;;) {
+      if (!isHoliday(d)) c++;
+      if (sameDay(d, end)) break;
+      d.setDate(d.getDate() + 1);
+    }
+    return c;
+  }
   function holidayTitle(d) {
     const y = d.getFullYear();
     const iso = localISO(d);
@@ -116,10 +140,31 @@
   }
 
   // ===== Leave form state (auto-calc total) =====
-  let duration = 'Full';     // 'Full' | 'Half'
+  let leaveType = 'Annual';     // added for Medical attachment requirement
+  let duration = 'Full';        // 'Full' | 'Half'
   let dateFrom = '';
   let dateUntil = '';
   let totalDays = 1;
+
+  // ---- Medical: attachment required ----
+  let attachmentFiles;  // FileList
+  let fileInputEl;      // <input type="file">
+  $: showAttachmentReminder =
+    (leaveType === 'Medical') && (!attachmentFiles || attachmentFiles.length === 0);
+
+  // Toggle native required + message live (minimal, only for Medical)
+  $: {
+    if (fileInputEl) {
+      const needs = (leaveType === 'Medical');
+      fileInputEl.required = needs;
+      if (needs && (!attachmentFiles || attachmentFiles.length === 0)) {
+        fileInputEl.setCustomValidity('For Medical leave, please attach your medical certificate.');
+        setTimeout(() => fileInputEl.reportValidity(), 0);
+      } else {
+        fileInputEl.setCustomValidity('');
+      }
+    }
+  }
 
   const dayMs = 24 * 60 * 60 * 1000;
   const diffDays = (from, until) => {
@@ -151,10 +196,12 @@
   async function openLeaveForm(date) {
     const iso = localISO(date); // FIX: use local ISO
     // initialize form state for the clicked date
-    duration = 'Full';
-    dateFrom = iso;
+    leaveType = 'Annual';
+    duration  = 'Full';
+    dateFrom  = iso;
     dateUntil = iso;
     totalDays = 1;
+    attachmentFiles = undefined; // reset
 
     if (!modal?.open) modal.showModal();
     await tick();
@@ -162,6 +209,7 @@
 
   function submitLeave(e) {
     const fd = new FormData(e.currentTarget);
+    if (!e.currentTarget.reportValidity()) return; // blocks submit if Medical has no file
     // TODO: post to backend
     modal?.close();
   }
@@ -190,6 +238,17 @@
           <div class="legend-item"><span class="chip unspent"></span><span>Unspent Leave</span></div>
         </div>
         <div class="total-line">Total spent: {d.spent}/{d.total}</div>
+
+        {#if d.title === 'Annual Leave Summary'}
+          <!-- added carry forward line + tooltip, nothing else touched -->
+          <div class="cf-line">
+            Carry forward: {d.carryForward ?? 0}/7
+            <button type="button" class="info-btn" aria-describedby={"cf-tip-" + d.title} tabindex="0">ⓘ</button>
+            <span class="tooltip" id={"cf-tip-" + d.title} role="tooltip">
+              Carry-forward is capped at 7 days and expires before April (start of April).
+            </span>
+          </div>
+        {/if}
       </div>
     {/each}
 
@@ -224,7 +283,7 @@
               class:today={d.today}
               class:holiday={d.holiday}    
               title={d.title}
-              disabled={!d.today && atStartOfDay(d.date) < today}
+              disabled={d.outOfWindow || d.holiday || (!d.today && atStartOfDay(d.date) < today)}
               on:click={() => openLeaveForm(d.date)}
               aria-label={`Select ${d.date.toDateString()}`}
             >
@@ -266,7 +325,8 @@
 
     <label>
       <span>Type</span>
-      <select name="type" required>
+      <!-- bind:value added so we can enforce Medical attachment -->
+      <select name="type" bind:value={leaveType} required>
         <option value="Annual">Annual / Emergency</option>
         <option value="Medical">Medical</option>
         <option value="Maternity">Maternity</option>
@@ -329,7 +389,22 @@
     </label>
 
     <label><span>Reason</span><textarea name="reason" rows="3" required></textarea></label>
-    <label><span>Attachment</span><input type="file" name="attachment" /></label>
+
+    <label>
+      <span>Attachment</span>
+      <!-- only these minimal changes: bind refs, required based on Medical, clear validity on change -->
+      <input
+        type="file"
+        name="attachment"
+        bind:this={fileInputEl}
+        bind:files={attachmentFiles}
+        required={leaveType === 'Medical'}
+        on:change={() => fileInputEl?.setCustomValidity('')}
+      />
+      {#if showAttachmentReminder}
+        <small class="help warn">Reminder: please attach your medical certificate.</small>
+      {/if}
+    </label>
 
     <button type="submit" class="submit-btn">SUBMIT</button>
   </form>
@@ -355,7 +430,7 @@
 
   .sw-blue{ background:#71c0f5; border:1px solid #71c0f5; }
   .sw-today{ background:#fff; border:1px solid #49bdb3; }
-    .legend.small{
+  .legend.small{
     display:flex; justify-content:center; gap:14px; margin-top:8px; font-size:11.5px; color:#6b7280;}
     
   .swatch{ display:inline-block; width:14px; height:9px; border-radius:3px; margin-right:6px; vertical-align:middle; }
@@ -371,9 +446,74 @@
   .chip.unspent{ background: var(--restBlue); }
   .total-line{ text-align:center; font-size:12px; color:#6b7280; margin-top:4px; }
 
+  /* carry-forward line + tooltip (added) */
+  .cf-line{
+    margin-top:6px;
+    text-align:center;
+    font-size:12px;
+    color:#6b7280;
+    position:relative;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:6px;
+  }
+  .info-btn{
+    border:none;
+    background:#eef2ff;
+    border-radius:999px;
+    width:18px; height:18px;
+    line-height:18px;
+    font-size:12px;
+    font-weight:700;
+    cursor:pointer;
+    padding:0;
+    display:inline-grid;
+    place-items:center;
+    color:#374151;
+  }
+  .info-btn {
+  border: none;
+  background: none;       /* remove blue background */
+  border-radius: 999px;
+  width: 18px;
+  height: 18px;
+  line-height: 18px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  color: #374151;          /* dark gray for text/icon */
+  transition: background 0.2s ease;
+  margin-top: 2px; /* cuba 2–4px ikut sedap */
+}
+
+.info-btn:hover {
+  background: #e5e7eb;     /* light gray only when hovered */
+}
+
+  .tooltip{
+    position:absolute;
+    bottom:130%;
+    left:50%;
+    transform:translateX(-50%);
+    background:#111827; color:#fff;
+    padding:6px 8px; border-radius:6px; font-size:12px; white-space:nowrap;
+    box-shadow:0 4px 18px rgba(0,0,0,.18);
+    opacity:0; visibility:hidden; transition:opacity .15s ease, visibility .15s ease;
+    pointer-events:none;
+  }
+  .tooltip::after{
+    content:""; position:absolute; top:100%; left:50%; transform:translateX(-50%);
+    border:6px solid transparent; border-top-color:#111827;
+  }
+  .info-btn:hover + .tooltip, .info-btn:focus + .tooltip{ opacity:1; visibility:visible; }
+
   /* calendar sizing */
-  .calendar-small{ max-width:360px; margin:0 auto; }
-  .calendar-small .days button{ padding:6px; }
+  .calendar-small{ max-width:350px; margin:0 auto; }
+  .calendar-small .days button{ padding:4px; }
 
   /* month header with full nav */
   .calendar .month{
@@ -445,4 +585,8 @@
     color:#6b7280;
     cursor:not-allowed;
   }
+
+  /* helper text */
+  .help { color:#6b7280; font-size:12px; display:block; margin-top:4px; }
+  .help.warn { color:#b45309; }
 </style>

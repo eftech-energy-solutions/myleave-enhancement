@@ -22,12 +22,13 @@
 
   // employees (chart + numbers)
   const dataByDept = [
+  
+    { name: "Director",                     count:  3, color: "#FFD9CC" },
     { name: "Administrator",                count: 12, color: "#FCF9BE" },
+    { name: "Operations",            count: 18, color: "#C6DEF1" },
     { name: "Operations Support",           count: 35, color: "#F2C6DE" },
-    { name: "Technical Data",               count: 22, color: "#DBCDF0" },
-    { name: "Operations – RTOC",            count: 18, color: "#C6DEF1" },
     { name: "Sales & Technical Excellence", count: 27, color: "#C9E4DE" },
-    { name: "Director",                     count:  3, color: "#FFD9CC" }
+    { name: "Technical Data",               count: 22, color: "#DBCDF0" }
   ];
   $: totalEmployees = dataByDept.reduce((a,b)=>a+b.count, 0);
 
@@ -61,10 +62,6 @@
 </script>
 
 <main class="main">
-   <div class="donut-row-header">
-    <a class="download" href="#">Download</a>
-  </div>
-
   <!-- GRID -->
   <div class="grid">
     <!-- donuts -->
@@ -113,16 +110,6 @@
 <style>
   :root{ --ring:#e5e7eb; --shadow:0 4px 12px rgba(0,0,0,.06); }
   .main { padding: 18px; }
-
-  /* download bottom-right of header */
-  .download{ color:#fff; text-decoration: underline; font-size:14px; }
-
-  .download:hover{ opacity:.85; }
-
-    .donut-row-header{
-    display:flex; justify-content:flex-end; align-items:center;
-    margin: 8px 0 6px;
-  }
 
   /* grid + cards */
   .grid{ margin-top:6px; display:grid; gap:10px; grid-template-columns:repeat(12, minmax(0,1fr)); }

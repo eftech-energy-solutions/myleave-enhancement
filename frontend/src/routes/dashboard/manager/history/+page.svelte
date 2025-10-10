@@ -13,7 +13,7 @@
       { id: 'EMP007', name: 'Sophia Lim',    department: 'Marketing',   totalDays: 1, leaveType: 'Sick',      status: 'Pending',  dateFrom: '2025-02-18', dateTo: '2025-02-18' },
     ]},
     { month: 'March', employees: [
-      { id: 'EMP009', name: 'Jason Ong',     department: 'Engineering', totalDays: 1, leaveType: 'Annual',    status: 'Approved', dateFrom: '2025-03-02', dateTo: '2025-03-02' },
+      { id: 'EMP009', name: 'Jason Ong',     department: 'Engineering', totalDays: 1, leaveType: 'Annual',    status: 'Cancelled', dateFrom: '2025-03-02', dateTo: '2025-03-02' }, // Example of a cancelled leave
       { id: 'EMP011', name: 'Puteri',        department: 'Operations',  totalDays: 2, leaveType: 'Annual',    status: 'Approved', dateFrom: '2025-03-10', dateTo: '2025-03-11' },
       { id: 'EMP012', name: 'Farah Zahra',   department: 'HR',          totalDays: 1, leaveType: 'Sick',      status: 'Rejected', dateFrom: '2025-03-15', dateTo: '2025-03-15' },
       { id: 'EMP015', name: 'Amirul Hakim',  department: 'Support',     totalDays: 3, leaveType: 'Annual',    status: 'Approved', dateFrom: '2025-03-25', dateTo: '2025-03-27' },
@@ -53,9 +53,6 @@
     ]},
   ];
 
-  const AVATAR_LIMIT = 10;
-  const initials = (name='') => name.split(' ').map(n=>n[0]).slice(0,2).join('').toUpperCase();
-
   // modal state
   let showModal = false;
   let selected = null;    // {month, employees}
@@ -66,7 +63,8 @@
 
   function handleKey(e){ if(e.key === 'Escape') closeModal(); }
 
-  const count = (row) => row.employees.length;
+  // Count only 'Approved' and 'Pending' leaves for the card display
+  const count = (row) => row.employees.filter(e => e.status === 'Approved' || e.status === 'Pending').length;
 
   // months + ALL tab for the rail
   const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -84,7 +82,7 @@
   const dateRange = (a,b) => a===b ? fmt(a) : `${fmt(a)} – ${fmt(b)}`;
 
   // ======== Top-right filters ========
-  let statusFilter = '';   // '', 'Approved', 'Pending', 'Rejected'
+  let statusFilter = '';   // '', 'Approved', 'Pending', 'Rejected', 'Cancelled'
   let deptFilter = '';     // '', or department name
   let q = '';              // search Name/ID
   let monthFilter = 'All'; // 'All' or one of months (used in ALL view)
@@ -136,35 +134,27 @@
   $: total = filtered.length;
 </script>
 
-<!-- Grid of month cards -->
-<div class="grid">
-  {#each rows as row}
-    <div class="card">
-      <div class="banner"><span class="month">{row.month}</span></div>
+<svelte:window on:keydown={handleKey}/>
 
-      <!-- FIX: proper content wrapper + spacer so the button sticks bottom center -->
-      <div class="content">
-        <div class="count count-pretty" aria-label={`Leaves applied in ${row.month}`}>
-          <span class="label">Number of Leave Applied</span>
-          <span class="badge">{count(row)}</span>
+<div class="page">
+
+    <!-- Grid of month cards -->
+    <div class="card-grid">
+      {#each rows as row}
+        <div class="month-card" on:click={() => onDetails(row)}>
+          <h2>{row.month}</h2>
+          <p>Number of Leave Applied</p>
+          <div class="count">{count(row)}</div>
         </div>
-
-        <!-- kosongkan emps (tiada initials/teks) -->
-        <div class="emps"></div>
-
-        <div class="spacer"></div>
-
-        <button class="btn" on:click={() => onDetails(row)}>Details</button>
-      </div>
+      {/each}
     </div>
-  {/each}
 </div>
 
-<!-- Modal (unchanged) -->
+
+<!-- Modal -->
 {#if showModal}
   <div class="modal">
     <div class="backdrop" on:click={closeModal}></div>
-
     <div class="dialog" role="dialog" aria-modal="true" aria-label="Leave details">
       <div class="dialog-head">
         <h3>{selected?.month} — Leave Details</h3>
@@ -195,6 +185,7 @@
                 <option>Approved</option>
                 <option>Pending</option>
                 <option>Rejected</option>
+                <option>Cancelled</option>
               </select>
             </label>
 
@@ -237,25 +228,27 @@
             <table class="table">
               <thead>
                 <tr>
+                  <th>No.</th>
                   {#if selected.month === 'All'}<th>Month</th>{/if}
                   <th>Staff ID</th>
                   <th>Name</th>
                   <th>Department</th>
                   <th>Dates</th>
-                  <th>Total Days</th>
+                  <th class="center">Total Days</th>
                   <th>Leave Type</th>
                   <th>Status</th>
                 </tr>
               </thead>
               <tbody>
-                {#each (showAll ? filtered : filtered.slice(0, 10)) as emp}
+                {#each (showAll ? filtered : filtered.slice(0, 10)) as emp, i}
                   <tr>
+                    <td>{i + 1}</td>
                     {#if selected.month === 'All'}<td>{emp._month}</td>{/if}
                     <td>{emp.id}</td>
                     <td>{emp.name}</td>
                     <td>{emp.department}</td>
                     <td>{dateRange(emp.dateFrom, emp.dateTo)}</td>
-                    <td class="num">{emp.totalDays}</td>
+                    <td class="center">{emp.totalDays}</td>
                     <td>{emp.leaveType}</td>
                     <td><span class="status {emp.status.toLowerCase()}">{emp.status}</span></td>
                   </tr>
@@ -285,35 +278,79 @@
     --primary:#49bdb3; --ink:#0c4a6e;
     --pop-out:14px; --tab-h:30px; --tab-gap:6px; --chip:18px; --chip-font:11px; --tab-radius:10px;
   }
-
-  .grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:16px; max-width:1200px; margin:24px; }
-
-  /* Make card a flex column so the inner .content can grow and push the button down */
-  .card{
-    background:#fff; border-radius:12px; overflow:hidden; box-shadow:0 4px 10px rgba(0,0,0,.06);
-    height:260px; display:flex; flex-direction:column;
+  :global(html, body) {
+    margin: 0;
+    background: #0c4a6e;
+    font-family: system-ui, sans-serif;
   }
 
-  .banner{ height:90px; background:url('/images/historybg2.png') center/cover no-repeat; border-radius:10px;
-           display:flex; align-items:center; justify-content:center; border-bottom:1px solid #eee; }
-  .month{ font-size:24px; font-family:'Bungee', cursive; font-weight:400; letter-spacing:1.5px; color:#0c4a6e; padding:4px 12px; text-transform:uppercase; }
-
-  .content{ padding:20px 16px; flex:1; display:flex; flex-direction:column; align-items:center; gap:12px; }
-  .spacer{ flex:1 1 auto; }
-
-  /* prettier count */
-  .count-pretty{ margin-top:8px; display:flex; align-items:center; gap:10px; }
-  .count-pretty .label{ font-size:12px; color:#5d7382; font-weight:700; letter-spacing:.02em; }
-  .count-pretty .badge{
-    min-width:34px; height:28px; padding:0 10px; display:inline-grid; place-items:center;
-    border-radius:999px; background:#49bdb3; color:#fff; font-weight:800; font-size:14px;
-    box-shadow:0 2px 6px rgba(73,189,179,.25);
+ .page {
+    padding: 1.5rem;
+    max-width: 1500px;
+    margin: auto;
   }
 
-  /* Button stays bottom center */
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+  }
+
+  .header-logo {
+    font-family: "Bungee", cursive;
+    font-size: 24px;
+    color: #fff;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+  }
+
+  /* ===== New Month Cards ===== */
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 1rem;
+  }
+
+  .month-card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    text-align: center;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+
+  }
+  .month-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+  }
+  .month-card h2 {
+    margin: 0 0 0.5rem;
+    color: #0c4a6e;
+    font-family:'Bungee', cursive;
+    font-weight: 400;
+    background: rgba(73, 189, 179, 0.15);
+    padding: 8px 0;
+    border-radius: 8px;
+
+  }
+  .month-card p {
+    margin: 0 0 1rem;
+    color: #475569;
+    font-size: 0.9rem;
+    font-weight: 500;
+  }
+  .month-card .count {
+    font-size: 2.5rem;
+    font-weight: bold;
+    color: #49bdb3;
+  }
+
+
+  /* Button styles (for modal) */
   .btn{
-    align-self:center;
-    margin-top:auto;
     background:#e0f2fe; border:1px solid #e0f2fe;
     border-radius:8px; padding:6px 14px;
     font-weight:700; cursor:pointer; font-size:13px;
@@ -343,7 +380,7 @@
   .controls .spacer{ flex:1; }
   .control{ display:flex; flex-direction:column; gap:4px; }
   .control span{ font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:#486474; font-weight:800; }
-  .control select, .control input{ padding:6px 10px; border-radius:8px; border:1px solid #e3eef0; background:#fff; color:#0c4a6e; font-size:13px; min-width:150px; }
+  .control select, .control input{ padding:6px 10px; border-radius:6px; border:1px solid #e3eef0; background:#fff; color:#0c4a6e; font-size:13px; min-width:150px; }
   .control input{ min-width:200px; }
 
   .table{ width:100%; border-collapse:separate; border-spacing:0; font-size:14px; }
@@ -352,18 +389,22 @@
   .table tbody tr:hover td{ background:#fcfefe; }
   .table-meta{ font-size:12px; color:#4a6978; margin:6px 0 8px; }
   .linkbtn{ border:none; background:transparent; text-decoration:underline; cursor:pointer; font-weight:700; color:#0c4a6e; }
-  .num{ text-align:right; }
 
-  .status{ display:inline-block; padding:4px 8px; border-radius:999px; font-weight:700; font-size:12px; border:1px solid transparent; }
+  .table th.center,
+  .table td.center {
+    text-align: center;
+  }
+
+  .status{ display:inline-block; padding:4px 8px; border-radius:999px; font-weight:700; font-size:12px; border:1px solid transparent; text-transform: capitalize; }
   .status.approved{ background:#e8f8f3; color:#116a51; border-color:#cbeee3; }
   .status.pending{  background:#fff8e7; color:#8a5b00; border-color:#f5e1b7; }
   .status.rejected{ background:#fdecec; color:#9b1c1c; border-color:#f3c2c2; }
+  .status.cancelled{ background:#f1f5f9; color:#475569; border-color:#e2e8f0; }
 
   .empty{ padding:22px; color:#567; text-align:center; }
   .dialog-foot{ padding:12px 16px; border-top:1px solid #eee; display:flex; justify-content:flex-end; }
 
   @media(max-width:900px){
-    .grid{ grid-template-columns:repeat(2,1fr); }
     .dialog-body{ grid-template-columns:1fr; }
     .rail{ flex-direction:row; gap:8px; padding:8px; border-right:none; border-bottom:1px solid #eef3f4; }
     .tab{ width:56px; height:28px; }
@@ -372,3 +413,4 @@
   }
   @media(max-width:560px){ .grid{ grid-template-columns:1fr; } }
 </style>
+

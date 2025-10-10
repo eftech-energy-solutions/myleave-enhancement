@@ -3,11 +3,18 @@
 
   // Props
   export let user = null;
-  export let pathname = '';
 
   // ---- NAV (staff role) ----
   const roleBase = '/dashboard/staff';
-  const isActive = (href) => pathname === href || pathname.startsWith(href + '/');
+  
+  // Updated logic: Dashboard requires an EXACT match.
+  const isActive = (href) => {
+    const current = $page.url.pathname;
+    if (href === roleBase) {
+      return current === href; // Exact match for Dashboard
+    }
+    return current.startsWith(href);
+  };
 
   // ---- Header state ----
   const safeUser = user ?? { name: 'staff', role: 'Staff', staffId: 'S0001' };
@@ -67,13 +74,12 @@
   }
 
   // ---- Page title (staff paths) ----
-  $: currentPath = pathname || $page.url.pathname;
   $: pageTitle =
-    currentPath === roleBase
+    $page.url.pathname === roleBase
       ? 'My Dashboard'
-      : currentPath.startsWith('/dashboard/staff/history')
+      : $page.url.pathname.startsWith('/dashboard/staff/staffhistory')
         ? 'Leave Timeline'
-        : 'My Leave History';
+        : 'My Dashboard'; // Fallback title
 </script>
 
 <div class="layout">
@@ -86,18 +92,29 @@
 
       <nav class="nav">
         <a href={roleBase} class:active={isActive(roleBase)}>
-          <span class="ico">📊</span><span class="text">My Dashboard</span>
+          <span class="ico">
+            <!-- Filled Grid Icon -->
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 3H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1zm0 11H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-6a1 1 0 0 0-1-1zm11-11h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1zm0 11h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-6a1 1 0 0 0-1-1z"></path></svg>
+          </span>
+          <span class="text">My Dashboard</span>
         </a>
         <a href="/dashboard/staff/staffhistory" class:active={isActive('/dashboard/staff/staffhistory')}>
-          <span class="ico">🗂️</span><span class="text">Leave History</span>
+          <span class="ico">
+            <!-- Filled Calendar Icon -->
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zM9 14H7v-2h2v2zm4 0h-2v-2h2v2zm4 0h-2v-2h2v2zM5 8V6h14v2H5z"></path></svg>
+          </span>
+          <span class="text">Leave History</span>
         </a>
-        <!-- Employees link removed for staff -->
       </nav>
     </div>
 
     <div class="bottom">
       <a href="/logout" class="signout">
-        <span class="ico">🚪</span><span class="text">Sign out</span>
+        <span class="ico">
+          <!-- Filled Logout Icon -->
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17 7-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"></path></svg>
+        </span>
+        <span class="text">Sign out</span>
       </a>
     </div>
   </aside>
@@ -111,8 +128,6 @@
       </div>
 
       <div class="profile" use:clickOutside>
-        <button class="icon-btn bell" aria-label="Notifications">🔔</button>
-
         <div class="profile-info">
           <img
             src={headerAvatarUrl}
@@ -254,7 +269,7 @@
   /* Layout */
   .layout{
     display:grid;
-    grid-template-columns: 260px 1fr;
+    grid-template-columns: 220px 1fr;
     min-height:100dvh;
     background:#fafafa;
   }
@@ -284,20 +299,36 @@
     display:flex; flex-direction:column;
   }
   .top{ display:flex; flex-direction:column; gap:16px; }
-  .logo img{ height:26px; display:block; }
+  .logo img{ height:38px; display:block; margin: auto;}
   .nav{ display:flex; flex-direction:column; gap:12px; }
   .nav a{
     display:flex; align-items:center; gap:12px;
     padding:10px 12px; border-radius:12px;
-    color:#0f172a; font-weight:600; text-decoration:none;
+    color: #217859; /* Your requested color */
+    font-weight:600; text-decoration:none;
   }
   .nav a:hover{ background:#f3f4f6; }
   .nav a.active{
     background:#eaf6f7;
     border-left:4px solid #1fb3b2;
     padding-left:8px;
+    color: #1fb3b2; /* Active color */
   }
-  .ico{ font-size:20px; width:20px; display:inline-grid; place-items:center; }
+  .ico{ display:inline-grid; place-items:center; width: 24px; height: 24px;}
+
+  /* SVG Icon Styles */
+  .ico svg {
+    width: 22px;
+    height: 22px;
+    fill: #217859; /* Your requested color */
+  }
+  .nav a.active .ico svg {
+    fill: #1fb3b2; /* Active color to match border */
+  }
+  .signout .ico svg {
+    fill: #e34040; /* Keep signout icon red */
+  }
+
   .bottom{ margin-top:auto; }
   .signout{ color:#e34040; display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:12px; }
   .signout:hover{ background:#feecec; }
@@ -308,16 +339,16 @@
     gap:10px; padding:20px 24px; background:transparent;
     border-bottom:1px solid rgba(255,255,255,.08); color:#fff;
   }
-  .title-wrap{ display:flex; flex-direction:column; gap:.25rem; color:#fff; }
+  .title-wrap{ display:flex; flex-direction:column; gap:.5px; color:#fff; }
   .hello{ font-size:18px; font-weight:400; opacity:.95; margin:0; color:#fff; }
-  .page-title{ margin:0; font-size:40px; line-height:1.15; font-weight:700; color:#fff; }
+  .page-title{ margin:0; font-size:55px; line-height:1.1; font-weight:700; color:#fff; }
 
   .profile{ position:relative; display:flex; align-items:center; gap:10px; }
   .icon-btn{ border:none; background:transparent; cursor:pointer; font-size:18px; line-height:1; padding:6px; border-radius:8px; color:#fff; }
   .icon-btn:hover{ background:rgba(255,255,255,.12); }
   .caret{ font-size:16px; }
   .profile-info{ display:flex; align-items:center; gap:10px; color:#fff; }
-  .avatar-img{ height:56px; width:56px; border-radius:9999px; object-fit:cover; box-shadow:0 0 0 2px rgba(255,255,255,.25); }
+  .avatar-img{ height:70px; width:70px; border-radius:9999px; object-fit:cover; box-shadow:0 0 0 2px rgba(255,255,255,.25); }
   .who .name{ font-size:14px; font-weight:700; }
   .who .sub{ font-size:12px; opacity:.95; }
 
@@ -373,3 +404,4 @@
   }
   .eye-btn:hover{ background:#f3f4f6; }
 </style>
+

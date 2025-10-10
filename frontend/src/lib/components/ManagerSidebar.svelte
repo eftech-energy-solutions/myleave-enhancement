@@ -81,33 +81,48 @@
 
       <nav class="nav">
         <div class="nav-group">
-          <span class="ico">📊</span>
-          <span class="font-bold">Dashboard</span>
+          <span class="ico">
+            <!-- Filled Grid Icon -->
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 3H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1zm0 11H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-6a1 1 0 0 0-1-1zm11-11h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1zm0 11h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-6a1 1 0 0 0-1-1z"></path></svg>
+          </span>
+          <span class="text">Dashboard</span>
         </div>
-      <div class="sub-links">
-  <a href="/dashboard/manager/main"
-    class:active={$page.url.pathname.startsWith('/dashboard/manager/main')}>
-    <span class="text">• Main</span>
-  </a>
-  <a href="/dashboard/manager/reports"
-    class:active={$page.url.pathname.startsWith('/dashboard/manager/reports')}>
-    <span class="text">• Reports</span>
-  </a>
-</div>
+        <div class="sub-links">
+          <a href="/dashboard/manager/main"
+            class:active={$page.url.pathname.startsWith('/dashboard/manager/main')}>
+            <span class="text">Main</span>
+          </a>
+          <a href="/dashboard/manager/reports"
+            class:active={$page.url.pathname.startsWith('/dashboard/manager/reports')}>
+            <span class="text">Reports</span>
+          </a>
+        </div>
 
-<a href="/dashboard/manager/history" class:active={$page.url.pathname.startsWith('/dashboard/manager/history')}>
-  <span class="ico">🗂️</span><span class="text">Leave History</span>
-</a>
+        <a href="/dashboard/manager/history" class:active={$page.url.pathname.startsWith('/dashboard/manager/history')}>
+          <span class="ico">
+            <!-- Filled Calendar Icon -->
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zM9 14H7v-2h2v2zm4 0h-2v-2h2v2zm4 0h-2v-2h2v2zM5 8V6h14v2H5z"></path></svg>
+          </span>
+          <span class="text">Leave History</span>
+        </a>
 
-<a href="/dashboard/manager/employees" class:active={$page.url.pathname.startsWith('/dashboard/manager/employees')}>
-  <span class="ico">👥</span><span class="text">Employees</span>
-</a>
+        <a href="/dashboard/manager/employees" class:active={$page.url.pathname.startsWith('/dashboard/manager/employees')}>
+          <span class="ico">
+             <!-- Filled Users Icon -->
+             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"></path></svg>
+          </span>
+          <span class="text">Employees</span>
+        </a>
       </nav>
     </div>
 
     <div class="bottom">
       <a href="/logout" class="signout">
-        <span class="ico">🚪</span><span class="text">Sign out</span>
+        <span class="ico">
+          <!-- Filled Logout Icon -->
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17 7-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"></path></svg>
+        </span>
+        <span class="text">Sign out</span>
       </a>
     </div>
   </aside>
@@ -132,12 +147,7 @@
   {/if}
 </div>
 
-
-
-
       <div class="profile" use:clickOutside>
-        <button class="icon-btn bell" aria-label="Notifications">🔔</button>
-
         <div class="profile-info">
           <img
             src={headerAvatarUrl}
@@ -277,9 +287,120 @@
 {/if}
 
 <style>
-  .sub-links { margin-left: 2rem; display: flex; flex-direction: column; }
-  .sub-links a { font-size: 0.9rem; margin: 2px 0; }
+  /* Global Layout */
+  .container {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    min-height: 100vh;
+  }
+  .aside {
+    background: #fff;
+    border-right: 1px solid #e5e7eb;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+  }
+  .top {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .bottom {
+    margin-top: auto;
+  }
+  .main {
+    background: linear-gradient(180deg, #49bdb3 0%, #0c4a6e 100%);
+  }
+  .container-inner {
+    padding: 16px;
+  }
 
+  /* Sidebar Navigation */
+  .nav {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .nav a, .nav-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    color: #217859; /* Your requested text color */
+    font-weight: 600;
+    text-decoration: none;
+    transition: background-color 0.2s;
+  }
+  .nav a:hover {
+    background: #f3f4f6;
+  }
+  .nav a.active {
+    background: #eaf6f7;
+    color: #1fb3b2; /* Active color */
+  }
+
+  /* Sub-links specific styling */
+  .sub-links {
+    margin-left: 28px; /* Indent sub-links */
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    border-left: 2px solid #e5e7eb;
+    padding-left: 12px;
+  }
+  .sub-links a {
+    font-size: 0.9rem;
+    padding: 6px 8px;
+    font-weight: 500;
+  }
+  .sub-links a .text::before {
+    content: "•";
+    margin-right: 8px;
+    color: #9ca3af;
+  }
+  .sub-links a.active .text::before {
+    color: #1fb3b2; /* Active color for bullet */
+  }
+
+  /* Icons */
+  .ico {
+    width: 24px;
+    height: 24px;
+    display: inline-grid;
+    place-items: center;
+  }
+  .ico svg {
+    width: 22px;
+    height: 22px;
+    fill: #217859; /* Your requested icon color */
+  }
+  .nav a.active .ico svg, .nav-group.active .ico svg {
+    fill: #1fb3b2; /* Active color */
+  }
+
+  /* Sign Out Button */
+  .signout {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    color: #e34040;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .signout:hover {
+    background: #feecec;
+  }
+  .signout .ico svg {
+    fill: #e34040;
+  }
+
+  /* Header */
   .topbar{
     display: flex;
     align-items: flex-end;
@@ -291,7 +412,9 @@
   .title-wrap{ display:flex; flex-direction:column; gap:.5px; color:#fff; }
   .hello{ font-size:18px; font-weight:400; opacity:.95; margin:0; color:#fff; }
   .page-title{ margin:0; font-size:55px; line-height:1.1; font-weight:700; color:#fff; }
+  .logo img{ height:38px; display:block; margin: auto;}
 
+  /* Profile Dropdown */
   .profile{ position:relative; display:flex; align-items:center; gap:10px; }
   .icon-btn{ border:none; background:transparent; cursor:pointer; font-size:18px; line-height:1; padding:6px; border-radius:8px; color:#fff; }
   .icon-btn:hover{ background:rgba(255,255,255,.12); }
@@ -342,7 +465,7 @@
 
   .muted{ color:#64748b; font-size:12px; }
 
-  /* === Larger input look for password fields === */
+  /* Larger input look for password fields */
   .input-lg{
     font-size: 16px;
     padding: 12px 14px;
@@ -382,3 +505,4 @@
     background: #f3f4f6;
   }
 </style>
+

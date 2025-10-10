@@ -14,7 +14,7 @@
 
   // ----- donuts (demo or from server) -----
   const donuts = data?.donuts ?? [
-    { title: 'Team Annual Leave',          spent: 12, total: 60 },
+    { title: 'Team Annual Leave',          spent: 12, total: 60, carryForward: 5 }, // ← added carryForward (dummy)
     { title: 'Team Medical Leave',         spent:  4, total: 60 },
     { title: 'Team Hospitalization Leave', spent:  0, total: 300 }
   ];
@@ -45,7 +45,31 @@
     const dd = String(x.getDate()).padStart(2, '0');
     return `${y}-${m}-${dd}`;
   };
+  // parse 'YYYY-MM-DD' safely in local time (no UTC drift)
+  const parseLocalISO = (iso) => {
+    if (!iso) return null;
+    const [y, m, d] = iso.split('-').map(Number);
+    return new Date(y, (m - 1), d);
+  };
 
+  // Count inclusive days excluding public holidays
+  function countDaysExcludingPH(fromISO, untilISO) {
+    const start = parseLocalISO(fromISO);
+    const end   = parseLocalISO(untilISO || fromISO);
+    if (!start || !end) return 0;
+
+    // ensure start <= end
+    if (atStartOfDay(end) < atStartOfDay(start)) return 0;
+
+    let c = 0;
+    const d = new Date(start);
+    for (;;) {
+      if (!isHoliday(d)) c++;
+      if (sameDay(d, end)) break;
+      d.setDate(d.getDate() + 1);
+    }
+    return c;
+  }
   function isHoliday(d) {
     const y = d.getFullYear();
     const iso = localISO(d);
@@ -245,10 +269,6 @@
 </script>
 
 <main class="main">
-  <div class="donut-row-header">
-    <a class="download" href="#">Download</a>
-  </div>
-
   <div class="grid">
     {#each donuts as d, i}
       <div class="card" style="grid-column: span 4;">
@@ -262,6 +282,16 @@
           <div class="legend-item"><span class="chip unspent"></span><span>Unspent Leave</span></div>
         </div>
         <div class="total-line">Total spent: {d.spent}/{d.total}</div>
+
+        {#if d.title.toLowerCase().includes('annual')}
+          <div class="cf-line">
+            Carry forward: {d.carryForward ?? 0}/7
+            <button type="button" class="info-btn" aria-describedby={"cf-tip-" + i} tabindex="0">ⓘ</button>
+            <span class="tooltip" id={"cf-tip-" + i} role="tooltip">
+              Carry-forward is capped at 7 days and expires before April (start of April).
+            </span>
+          </div>
+        {/if}
       </div>
     {/each}
 
@@ -296,7 +326,7 @@
               class:today={d.today}
               class:holiday={d.holiday}
               class:out={d.outOfWindow}
-              disabled={d.outOfWindow || (!d.today && atStartOfDay(d.date) < today)}
+              disabled={d.outOfWindow || d.holiday || (!d.today && atStartOfDay(d.date) < today)}
               on:click={() => openLeaveForm(d.date)}
               aria-label={`Select ${d.date.toDateString()}`}
               title={d.holiday ? d.holidayName : undefined}
@@ -305,11 +335,10 @@
             </button>
           {/each}
         </div>
-           <div class="legend small">
+        <div class="legend small">
           <span><i class="swatch sw-blue"></i> Public / Additional leave</span>
           <span><i class="swatch sw-today"></i> Today</span>
         </div>
-        
       </div>
     </div>
 
@@ -418,14 +447,12 @@
     display:flex; justify-content:flex-end; align-items:center;
     margin: 8px 0 6px;
   }
-  .download { color: #fff; text-decoration: underline; font-size: 14px; }
-  .download:hover { opacity: 0.85; }
 
   .sw-blue{ background:#71c0f5; border:1px solid #71c0f5; }
   .sw-today{ background:#fff; border:1px solid #49bdb3; }
-    .legend.small{
-    display:flex; justify-content:center; gap:14px; margin-top:8px; font-size:11.5px; color:#6b7280;}
-    
+  .legend.small{
+    display:flex; justify-content:center; gap:14px; margin-top:8px; font-size:11.5px; color:#6b7280;
+  }
   .swatch{ display:inline-block; width:14px; height:9px; border-radius:3px; margin-right:6px; vertical-align:middle; }
 
   .grid{ margin-top:6px; display:grid; gap:10px; grid-template-columns:repeat(12, minmax(0,1fr)); }
@@ -449,6 +476,44 @@
   .chip.spent{ background: var(--spentRed); }
   .chip.unspent{ background: var(--restBlue); }
   .total-line{ text-align:center; font-size:12px; color:#6b7280; margin-top:4px; }
+
+  /* carry-forward line + tooltip (added) */
+  .cf-line{
+    margin-top:6px; text-align:center; font-size:12px; color:#6b7280;
+    position:relative; display:flex; align-items:center; justify-content:center; gap:6px;
+  }
+  .info-btn {
+  border: none;
+  background: none;       /* remove blue background */
+  border-radius: 999px;
+  width: 18px;
+  height: 18px;
+  line-height: 18px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  color: #374151;          /* dark gray for text/icon */
+  transition: background 0.2s ease;
+}
+
+.info-btn:hover {
+  background: #e5e7eb;     /* light gray only when hovered */
+}
+
+  .tooltip{
+    position:absolute; bottom:130%; left:50%; transform:translateX(-50%);
+    background:#111827; color:#fff; padding:6px 8px; border-radius:6px; font-size:12px; white-space:nowrap;
+    box-shadow:0 4px 18px rgba(0,0,0,.18); opacity:0; visibility:hidden; transition:opacity .15s, visibility .15s;
+    pointer-events:none;
+  }
+  .tooltip::after{
+    content:""; position:absolute; top:100%; left:50%; transform:translateX(-50%);
+    border:6px solid transparent; border-top-color:#111827;
+  }
+  .info-btn:hover + .tooltip, .info-btn:focus + .tooltip{ opacity:1; visibility:visible; }
 
   .calendar-small{ max-width:360px; margin:0 auto; }
   .calendar .month{

@@ -3,11 +3,18 @@
 
   // Props (unchanged)
   export let user = null;
-  export let pathname = '';
 
   // ---- NAV (do not change role) ----
   const roleBase = '/dashboard/admin';
-  const isActive = (href) => pathname === href || pathname.startsWith(href + '/');
+  
+  // Updated logic: Dashboard requires an EXACT match, others can be partial.
+  const isActive = (href) => {
+    const current = $page.url.pathname;
+    if (href === roleBase) {
+      return current === href; // Exact match for Dashboard
+    }
+    return current.startsWith(href); // Partial match for other pages
+  };
 
   // ---- Header state (from your reference) ----
   const safeUser = user ?? { name: 'admin', role: 'Human Resources', staffId: 'E8505' };
@@ -67,13 +74,12 @@
   }
 
   // ---- Page title based on admin paths ----
-  $: currentPath = pathname || $page.url.pathname;
   $: pageTitle =
-    currentPath === roleBase
+    $page.url.pathname === roleBase
       ? 'Dashboard'
-      : currentPath.startsWith('/dashboard/admin/history')
+      : $page.url.pathname.startsWith('/dashboard/admin/history')
         ? 'Leave Timeline'
-        : currentPath.startsWith('/dashboard/admin/employees')
+        : $page.url.pathname.startsWith('/dashboard/admin/employees')
           ? 'Employees'
           : 'My Dashboard';
 </script>
@@ -88,20 +94,36 @@
 
       <nav class="nav">
         <a href={roleBase} class:active={isActive(roleBase)}>
-          <span class="ico">📊</span><span class="text">Dashboard</span>
+          <span class="ico">
+            <!-- Filled Grid Icon -->
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 3H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1zm0 11H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-6a1 1 0 0 0-1-1zm11-11h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1zm0 11h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-6a1 1 0 0 0-1-1z"></path></svg>
+          </span>
+          <span class="text">Dashboard</span>
         </a>
         <a href="/dashboard/admin/history" class:active={isActive('/dashboard/admin/history')}>
-          <span class="ico">🗂️</span><span class="text">Leave History</span>
+          <span class="ico">
+            <!-- New Filled Calendar Icon -->
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zM9 14H7v-2h2v2zm4 0h-2v-2h2v2zm4 0h-2v-2h2v2zM5 8V6h14v2H5z"></path></svg>
+          </span>
+          <span class="text">Leave History</span>
         </a>
         <a href="/dashboard/admin/employees" class:active={isActive('/dashboard/admin/employees')}>
-          <span class="ico">👥</span><span class="text">Employees</span>
+          <span class="ico">
+             <!-- Filled Users Icon -->
+             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"></path></svg>
+          </span>
+          <span class="text">Employees</span>
         </a>
       </nav>
     </div>
 
     <div class="bottom">
       <a href="/logout" class="signout">
-        <span class="ico">🚪</span><span class="text">Sign out</span>
+        <span class="ico">
+          <!-- Filled Logout Icon -->
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17 7-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"></path></svg>
+        </span>
+        <span class="text">Sign out</span>
       </a>
     </div>
   </aside>
@@ -116,8 +138,6 @@
       </div>
 
       <div class="profile" use:clickOutside>
-        <button class="icon-btn bell" aria-label="Notifications">🔔</button>
-
         <div class="profile-info">
           <img
             src={headerAvatarUrl}
@@ -261,7 +281,7 @@
   /* Layout */
   .layout{
     display:grid;
-    grid-template-columns: 260px 1fr;
+    grid-template-columns: 220px 1fr;
     min-height:100dvh;
     background:#fafafa;
   }
@@ -301,26 +321,41 @@
   .aside{
     background:#fff;
     border-right:1px solid var(--ring, #e5e7eb);
-    padding:20px 16px;
+    padding:15px 14px; /*sidebar button hover */
     position:sticky; top:0;
     height:100dvh;
     display:flex; flex-direction:column;
   }
   .top{ display:flex; flex-direction:column; gap:16px; }
-  .logo img{ height:26px; display:block; }
+  .logo img{ height:38px; display:block; margin: auto;}
   .nav{ display:flex; flex-direction:column; gap:12px; }
   .nav a{
     display:flex; align-items:center; gap:12px;
     padding:10px 12px; border-radius:12px;
-    color:#0f172a; font-weight:600; text-decoration:none;
+    color:#217859; font-weight:600; text-decoration:none;
   }
   .nav a:hover{ background:#f3f4f6; }
   .nav a.active{
     background:#eaf6f7;
     border-left:4px solid #1fb3b2;
     padding-left:8px;
+    color: #1fb3b2;
   }
-  .ico{ font-size:20px; width:20px; display:inline-grid; place-items:center; }
+  .ico{ font-size:20px; width:24px; height: 24px; display:inline-grid; place-items:center; }
+  
+  /* SVG Icon Styles */
+  .ico svg {
+    width: 22px;
+    height: 22px;
+    fill: #217859; /* Your requested color */
+  }
+  .nav a.active .ico svg {
+    fill: #1fb3b2; /* Active color to match border */
+  }
+  .signout .ico svg {
+    fill: #e34040; /* Keep signout icon red */
+  }
+
   .bottom{ margin-top:auto; }
   .signout{ color:#e34040; display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:12px; }
   .signout:hover{ background:#feecec; }
@@ -336,16 +371,16 @@
   border-bottom:1px solid rgba(255,255,255,.08);
   color:#fff;
 }
-  .title-wrap{ display:flex; flex-direction:column; gap:.25rem; color:#fff; }
+  .title-wrap{ display:flex; flex-direction:column; gap:.5px; color:#fff; }
   .hello{ font-size:18px; font-weight:400; opacity:.95; margin:0; color:#fff; }
-  .page-title{ margin:0; font-size:40px; line-height:1.15; font-weight:700; color:#fff; }
+  .page-title{ margin:0; font-size:55px; line-height:1.1; font-weight:700; color:#fff; }
 
   .profile{ position:relative; display:flex; align-items:center; gap:10px; }
   .icon-btn{ border:none; background:transparent; cursor:pointer; font-size:18px; line-height:1; padding:6px; border-radius:8px; color:#fff; }
   .icon-btn:hover{ background:rgba(255,255,255,.12); }
   .caret{ font-size:16px; }
   .profile-info{ display:flex; align-items:center; gap:10px; color:#fff; }
-  .avatar-img{ height:56px; width:56px; border-radius:9999px; object-fit:cover; box-shadow:0 0 0 2px rgba(255,255,255,.25); }
+  .avatar-img{ height:70px; width:70px; border-radius:9999px; object-fit:cover; box-shadow:0 0 0 2px rgba(255,255,255,.25); }
   .who .name{ font-size:14px; font-weight:700; }
   .who .sub{ font-size:12px; opacity:.95; }
 
@@ -407,3 +442,4 @@
   }
   .eye-btn:hover{ background:#f3f4f6; }
 </style>
+

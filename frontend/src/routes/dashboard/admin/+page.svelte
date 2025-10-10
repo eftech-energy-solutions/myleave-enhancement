@@ -19,12 +19,13 @@
   // ===== Department data for Overview + Chart =====
   // (Replace with your real data source as needed)
   const dataByDept = [
+    
+    { name: "Director",                     count:  3, color: "#FFD9CC" },
     { name: "Administrator",                count: 12, color: "#FCF9BE" },
+    { name: "Operations",            count: 18, color: "#C6DEF1" },
     { name: "Operations Support",           count: 35, color: "#F2C6DE" },
-    { name: "Technical Data",               count: 22, color: "#DBCDF0" },
-    { name: "Operations – RTOC",            count: 18, color: "#C6DEF1" },
     { name: "Sales & Technical Excellence", count: 27, color: "#C9E4DE" },
-    { name: "Director",                     count:  3, color: "#FFD9CC" }
+    { name: "Technical Data",               count: 22, color: "#DBCDF0" }
   ];
   $: totalEmployees = dataByDept.reduce((a,b)=>a+b.count, 0);
 
@@ -448,7 +449,7 @@ const isHoliday = (d) => {
     display:flex; align-items:center; justify-content:space-between;
     font-weight:700; margin-bottom:6px; gap:6px;
   }
-  .calendar .month > span { text-align:center; min-width:160px; font-size:13px; }
+  .calendar .month > span { text-align:center; min-width:160px; font-size:16px; }
   .calendar .month .nav{ display:flex; gap:6px; flex-wrap:wrap; }
   .calendar .month .nav-btn{
     border:none; background:#eef2ff; padding:5px 9px; border-radius:8px; cursor:pointer;
