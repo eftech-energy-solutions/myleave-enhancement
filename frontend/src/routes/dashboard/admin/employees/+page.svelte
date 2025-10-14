@@ -17,7 +17,7 @@
       if (profileMenuOpen) profileMenuOpen = false;
       if (addModalOpen) addModalOpen = false;
       if (detailsOpen) { detailsOpen = false; editMode = false; }
-      if (showDeleteConfirm) showDeleteConfirm = false; // Close confirm modal with ESC
+      if (showDeleteConfirm) showDeleteConfirm = false;
     }
   }
 
@@ -409,7 +409,7 @@
 
   .form{ background:#fff; border:1px solid var(--line); border-radius:16px; padding:18px; box-shadow:0 6px 18px rgba(0,0,0,.05); }
   .row{ display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:12px; }
-  .row.three{ grid-template-columns: 1fr 1fr 1fr; }
+  .row.three{ grid-template-columns:2.1fr 1fr 1fr; }
   .row.single{ grid-template-columns:1fr; }
   label{ font-size:12px; color:#374151; font-weight:700; margin:0 0 6px; display:block; }
   .ctl{ display:flex; align-items:center; background:#fff; border:1px solid var(--line); border-radius:12px; padding:10px 12px; box-shadow: inset 0 1px 0 rgba(0,0,0,.02); }
@@ -666,7 +666,7 @@
                 </div>
               </div>
 
-              <div class="row">
+              <div class="row three">
                 <div>
                   <label>Gender</label>
                   <div class="ctl pill">
@@ -678,11 +678,12 @@
                   </div>
                 </div>
                 <div>
-                  <label class="muted">Leave Entitlements (per year)</label>
-                  <div class="row" style="gap:10px; margin:0;">
-                    <div class="ctl pill"><input type="number" step="0.5" min="0" bind:value={newEmp.annualLeave} placeholder="Annual Leave" /></div>
-                    <div class="ctl pill"><input type="number" step="0.5" min="0" bind:value={newEmp.medicalLeave} placeholder="Medical Leave" /></div>
-                  </div>
+                  <label>Annual Leave</label>
+                  <div class="ctl pill"><input type="number" step="0.5" min="0" bind:value={newEmp.annualLeave} /></div>
+                </div>
+                <div>
+                  <label>Medical Leave</label>
+                  <div class="ctl pill"><input type="number" step="0.5" min="0" bind:value={newEmp.medicalLeave} /></div>
                 </div>
               </div>
 
@@ -766,22 +767,11 @@
                 </div>
               </div>
 
-              <div class="row">
+              <div class="row single">
                 <div>
                   <label>Email</label>
                   <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
                     <input type="email" bind:value={detailsForm.email} disabled={!editMode} />
-                  </div>
-                </div>
-                <div>
-                  <label>Gender</label>
-                  <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
-                    <select bind:value={detailsForm.gender} disabled={!editMode}>
-                      <option value="">Select</option>
-                      <option>Male</option>
-                      <option>Female</option>
-                      <option>Other</option>
-                    </select>
                   </div>
                 </div>
               </div>
@@ -801,22 +791,37 @@
                 </div>
               </div>
 
-              <div class="row">
+              <div class="row three">
+                <div>
+                  <label>Gender</label>
+                  <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
+                    <select bind:value={detailsForm.gender} disabled={!editMode}>
+                      <option value="">Select</option>
+                      <option>Male</option>
+                      <option>Female</option>
+                      <option>Other</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label>Annual Leave</label>
+                  <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
+                      <input type="number" step="0.5" min="0" bind:value={detailsForm.annualLeave} disabled={!editMode} />
+                  </div>
+                </div>
+                <div>
+                  <label>Medical Leave</label>
+                  <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
+                      <input type="number" step="0.5" min="0" bind:value={detailsForm.medicalLeave} disabled={!editMode} />
+                  </div>
+                </div>
+              </div>
+              
+              <div class="row single">
                 <div>
                   <label>Termination Date</label>
                   <div class={"ctl pill date " + (!editMode ? 'disabled' : '')}>
                     <input type="date" bind:value={detailsForm.terminationDate} disabled={!editMode} />
-                  </div>
-                </div>
-                <div>
-                  <label class="muted">Leave Entitlements (per year)</label>
-                  <div class="row" style="gap:10px; margin:0;">
-                    <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
-                      <input type="number" step="0.5" min="0" bind:value={detailsForm.annualLeave} disabled={!editMode} placeholder="Annual Leave" />
-                    </div>
-                    <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
-                      <input type="number" step="0.5" min="0" bind:value={detailsForm.medicalLeave} disabled={!editMode} placeholder="Medical Leave" />
-                    </div>
                   </div>
                 </div>
               </div>
