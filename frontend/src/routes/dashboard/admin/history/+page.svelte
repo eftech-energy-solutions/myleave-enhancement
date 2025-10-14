@@ -63,10 +63,8 @@
 
   function handleKey(e){ if(e.key === 'Escape') closeModal(); }
 
-  // Count only 'Approved' and 'Pending' leaves for the card display
   const count = (row) => row.employees.filter(e => e.status === 'Approved' || e.status === 'Pending').length;
 
-  // months + ALL tab for the rail
   const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   const monthShort = ['All','Jan','Feb','Mar','Apr','May','June','July','Aug','Sept','Oct','Nov','Dec'];
   const railTabs = [{ label: 'All', value: 'All' }, ...months.map((m, i) => ({ label: monthShort[i+1], value: m }))];
@@ -77,22 +75,15 @@
     if(found){ selected = found; resetFiltersForMonthView(); }
   }
 
-  // dates formatting
   const fmt = (iso) => new Date(iso).toLocaleDateString(undefined,{day:'numeric', month:'short', year:'numeric'});
   const dateRange = (a,b) => a===b ? fmt(a) : `${fmt(a)} – ${fmt(b)}`;
 
-  // ======== Top-right filters ========
-  let statusFilter = '';   // '', 'Approved', 'Pending', 'Rejected', 'Cancelled'
-  let deptFilter = '';     // '', or department name
-  let q = '';              // search Name/ID
-  let monthFilter = 'All'; // 'All' or one of months (used in ALL view)
+  let statusFilter = '';
+  let deptFilter = '';
+  let q = '';
+  let monthFilter = 'All';
 
-  // Unique departments (for dropdown)
-  const allDepartments = Array.from(new Set(
-    rows.flatMap(r => r.employees.map(e => e.department))
-  )).sort();
-
-  // Flatten all employees with their month for ALL view
+  const allDepartments = Array.from(new Set(rows.flatMap(r => r.employees.map(e => e.department)))).sort();
   $: allCombined = rows.flatMap(r => r.employees.map(e => ({ ...e, _month: r.month })));
 
   function selectAllMonths(){
@@ -111,7 +102,6 @@
     showAll = false;
   }
 
-  // Apply filters to the selected list
   const applyFilters = (list=[]) => {
     let out = list;
     if (selected?.month === 'All' && monthFilter && monthFilter !== 'All') {
@@ -129,16 +119,105 @@
     return out;
   };
 
-  // reactive derived lists
   $: filtered = selected ? applyFilters(selected.employees) : [];
   $: total = filtered.length;
+
+  // ===== Print Report Logic =====
+  function buildReportHTML(items, title) {
+    const tableRows = items.map((emp, i) => `
+      <tr>
+        <td>${i + 1}</td>
+        ${selected.month === 'All' ? `<td>${emp._month}</td>` : ''}
+        <td>${emp.id}</td>
+        <td>${emp.name}</td>
+        <td>${emp.department}</td>
+        <td>${dateRange(emp.dateFrom, emp.dateTo)}</td>
+        <td style="text-align:center;">${emp.totalDays}</td>
+        <td>${emp.leaveType}</td>
+        <td>${emp.status}</td>
+      </tr>
+    `).join('');
+
+    const tableHeader = `
+      <tr>
+        <th>No.</th>
+        ${selected.month === 'All' ? '<th>Month</th>' : ''}
+        <th>Staff ID</th>
+        <th>Name</th>
+        <th>Department</th>
+        <th>Dates</th>
+        <th style="text-align:center;">Total Days</th>
+        <th>Leave Type</th>
+        <th>Status</th>
+      </tr>
+    `;
+
+    const styles = `
+      <style>
+        @page { size: A4; margin: 20mm; }
+        body { font-family: system-ui, sans-serif; font-size: 11px; }
+        .report-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom: 20px; }
+        .logos { display: flex; align-items: center; gap: 15px; }
+        .logos img { max-height: 40px; }
+        .report-title { text-align: right; }
+        h1 { font-size: 18px; margin: 0; }
+        p { margin: 0; font-size: 12px; color: #555; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+      </style>
+    `;
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>${title}</title>
+          ${styles}
+        </head>
+        <body>
+          <div class="report-header">
+            <div class="logos">
+              <img src="/images/eftech.logo.png" alt="EFTECH Logo">
+              <img src="/images/myleave.logo.png" alt="MyLeave Logo">
+            </div>
+            <div class="report-title">
+              <h1>${title}</h1>
+              <p>Generated on: ${new Date().toLocaleString()}</p>
+            </div>
+          </div>
+          <table>
+            <thead>${tableHeader}</thead>
+            <tbody>${tableRows}</tbody>
+          </table>
+        </body>
+      </html>
+    `;
+    return html;
+  }
+
+  function printFilteredReport() {
+    if (!filtered || filtered.length === 0) {
+      alert("No records to print.");
+      return;
+    }
+    const reportTitle = `Leave Report for ${selected?.month}`;
+    const html = buildReportHTML(filtered, reportTitle);
+    const win = window.open("", "_blank");
+    if (win) {
+      win.document.write(html);
+      win.document.close();
+      win.print();
+    } else {
+      alert("Please allow pop-ups for this site to print the report.");
+    }
+  }
+
 </script>
 
 <svelte:window on:keydown={handleKey}/>
 
 <div class="page">
-
-    <!-- Grid of month cards -->
     <div class="card-grid">
       {#each rows as row}
         <div class="month-card" on:click={() => onDetails(row)}>
@@ -149,7 +228,6 @@
       {/each}
     </div>
 </div>
-
 
 <!-- Modal -->
 {#if showModal}
@@ -177,7 +255,6 @@
         <section class="table-wrap">
           <div class="controls">
             <div class="spacer"></div>
-
             <label class="control">
               <span>Status</span>
               <select bind:value={statusFilter}>
@@ -188,7 +265,6 @@
                 <option>Cancelled</option>
               </select>
             </label>
-
             <label class="control">
               <span>Department</span>
               <select bind:value={deptFilter}>
@@ -196,12 +272,10 @@
                 {#each allDepartments as d}<option>{d}</option>{/each}
               </select>
             </label>
-
             <label class="control">
               <span>Name / ID</span>
               <input type="text" placeholder="Search…" bind:value={q} />
             </label>
-
             <label class="control">
               <span>Month</span>
               <select on:change={(e)=>onMonthFilterChange(e.target.value)} bind:value={monthFilter}>
@@ -267,7 +341,7 @@
       </div>
 
       <div class="dialog-foot">
-        <button class="btn" on:click={closeModal}>Close</button>
+        <button class="btn download" on:click={printFilteredReport}>Download Report</button>
       </div>
     </div>
   </div>
@@ -356,6 +430,13 @@
     font-weight:700; cursor:pointer; font-size:13px;
   }
   .btn:hover{ background:#f3f4f6; }
+  .btn.download {
+    background: #49bdb3;
+    color: #fff;
+  }
+  .btn.download:hover {
+    background: #40b1a7;
+  }
 
   /* ===== Modal ===== */
   .modal{ position:fixed; inset:0; z-index:50; display:grid; place-items:center; }
@@ -395,7 +476,7 @@
     text-align: center;
   }
 
-  .status{ display:inline-block; padding:4px 8px; border-radius:999px; font-weight:700; font-size:12px; border:1px solid transparent; text-transform: capitalize; }
+  .status{ display:inline-block; padding:4px 8px; border-radius:9999px; font-weight:700; font-size:12px; border:1px solid transparent; text-transform: capitalize; }
   .status.approved{ background:#e8f8f3; color:#116a51; border-color:#cbeee3; }
   .status.pending{  background:#fff8e7; color:#8a5b00; border-color:#f5e1b7; }
   .status.rejected{ background:#fdecec; color:#9b1c1c; border-color:#f3c2c2; }

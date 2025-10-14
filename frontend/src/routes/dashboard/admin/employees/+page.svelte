@@ -17,6 +17,7 @@
       if (profileMenuOpen) profileMenuOpen = false;
       if (addModalOpen) addModalOpen = false;
       if (detailsOpen) { detailsOpen = false; editMode = false; }
+      if (showDeleteConfirm) showDeleteConfirm = false; // Close confirm modal with ESC
     }
   }
 
@@ -246,12 +247,15 @@
   }
 
   // =======================
-  // 8) DETAILS MODAL (UPDATE)
+  // 8) DETAILS & DELETE MODAL
   // =======================
   let detailsOpen = false;
   let selectedEmp = null;
   let editMode = false;
   let detailsForm = null; // working copy
+  
+  let showDeleteConfirm = false;
+  let employeeToDelete = null;
 
   function openDetails(empId) {
     const base = detailsById[empId] ?? null;
@@ -291,6 +295,29 @@
     }
     editMode = true;
   }
+  
+  function openDeleteConfirm() {
+    if (!selectedEmp) return;
+    employeeToDelete = selectedEmp;
+    showDeleteConfirm = true;
+  }
+
+  function deleteEmployee() {
+    if (!employeeToDelete) return;
+    const empId = employeeToDelete.id || employeeToDelete.empId;
+    
+    // Remove from the main grid
+    employees = employees.filter(e => e.id !== empId);
+    
+    // Remove from details object
+    delete detailsById[empId];
+
+    // Clean up and close modals
+    showDeleteConfirm = false;
+    detailsOpen = false;
+    employeeToDelete = null;
+  }
+
 </script>
 
 <svelte:window on:keydown={handleKey} />
@@ -395,6 +422,9 @@
   .btn-ghost{ background:#fff; color:#0c4a6e; border:1px solid var(--line); border-radius:12px; padding:.7rem 1rem; font-weight:700; cursor:pointer; }
   .btn-primary{ background:#49bdb3; color:#fff; border:none; border-radius:10px; padding:.8rem 1.4rem; font-weight:700; cursor:pointer; }
   .btn-primary:hover{ filter:brightness(.96); }
+  .btn-danger { background:#dc2626; color:#fff; border:none; border-radius:10px; padding:.8rem 1.4rem; font-weight:700; cursor:pointer; }
+  .btn-danger:hover { filter:brightness(.96); }
+
 
   /* Date inputs with calendar icon on the right */
   .ctl.date { position:relative; }
@@ -407,6 +437,18 @@
   .filter-icon { width: 16px; height: 16px; color: #fff; opacity: 0.9; }
   .filter-select { padding:4px 8px; min-width:180px; border-radius: 9999px; } /* Pill shape */
   .filter-select select { font-size:13px; padding:4px 6px; height:28px; }
+
+  /* ===== Confirmation Modal specific styles ===== */
+  .modal.confirm-modal { width: min(450px, 94vw); }
+  .modal.confirm-modal .modal-hd {
+    position: relative;
+    justify-content: center;
+  }
+  .modal.confirm-modal .modal-x {
+    position: absolute;
+    right: 18px;
+  }
+  .modal.confirm-modal .muted { font-size: 14px; margin-top: 8px; }
 
   /* ===== Responsive ===== */
   @media (max-width:740px){
@@ -793,6 +835,7 @@
                   <button class="btn-ghost" on:click={() => { editMode = false; detailsForm = structuredClone(selectedEmp); }}>Cancel</button>
                   <button class="btn-primary" on:click={toggleEditSave}>Save Changes</button>
                 {:else}
+                  <button class="btn-danger" style="margin-right: auto;" on:click={openDeleteConfirm}>Delete Employee</button>
                   <button class="btn-primary" on:click={toggleEditSave}>Edit Profile</button>
                 {/if}
               </div>
@@ -813,6 +856,27 @@
               {/if}
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+  </div>
+{/if}
+
+<!-- Confirmation Modal for Deletion -->
+{#if showDeleteConfirm && employeeToDelete}
+  <div class="modal-wrap" style="z-index: 90;">
+    <div class="modal confirm-modal">
+      <div class="modal-hd">
+        <div style="width: 22px;" aria-hidden="true"></div>
+        <div class="modal-ttl" style="color: #49bdb3;">Confirm Deletion</div>
+        <button class="modal-x" on:click={() => showDeleteConfirm = false}>✕</button>
+      </div>
+      <div class="modal-bd" style="padding: 22px; text-align: center;">
+        <p>Are you sure you want to delete the profile for <strong>{employeeToDelete.name}</strong>?</p>
+        <p class="muted">This action cannot be undone.</p>
+        <div class="form-ft" style="margin-top: 20px; justify-content: center;">
+          <button class="btn-ghost" on:click={() => showDeleteConfirm = false}>Cancel</button>
+          <button class="btn-danger" on:click={deleteEmployee}>Yes, Delete</button>
         </div>
       </div>
     </div>
