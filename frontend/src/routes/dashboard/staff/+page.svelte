@@ -1,33 +1,79 @@
 <script>
   import { onMount, tick } from 'svelte';
-  export let data; // comes from +layout.server.js -> { user }
-
-  // ----- user/profile -----
-  const user = data?.user ?? { name: 'admin', role: 'Human Resources', staffId: 'E8505' };
-  const initials = (name) => (name || 'A B').split(' ').map(x => x[0]).slice(0,2).join('').toUpperCase();
-  let profileMenuOpen = false;
-
-  // click-outside action for dropdown
-  function clickOutside(node) {
-    const onClick = (e) => { if (!node.contains(e.target)) profileMenuOpen = false; };
-    document.addEventListener('click', onClick);
-    return { destroy: () => document.removeEventListener('click', onClick) };
-  }
+  export let data; // comes from +layout.server.js -> { user, holidaysByYear }
 
   // ----- donuts -----
   const donuts = [
-    { title: 'Annual Leave Summary',          spent: 1,  total: 14 },
+    { title: 'Annual Leave Summary',          spent: 1,  total: 14, carryForward: 0 }, // added carryForward (dummy)
     { title: 'Medical Leave Summary',         spent: 0,  total: 14 },
     { title: 'Hospitalization Leave Summary', spent: 0,  total: 60 }
   ];
   const pct = (s, t) => Math.min(100, Math.max(0, Math.round((s / t) * 100)));
 
-  // ----- calendar helpers -----
+  // Shared public holidays (single source from layout)
+  const holidaysByYear = data.holidaysByYear;
+
+  // Build quick lookups from shared holidays
+  const years = Object.keys(holidaysByYear).map(Number);
+  const holidayDatesByYear = {};
+  const holidayNamesByYear = {};
+  for (const y of years) {
+    const list = holidaysByYear[y] ?? [];
+    holidayDatesByYear[y] = new Set(list.map(h => h.date)); // 'YYYY-MM-DD'
+    holidayNamesByYear[y] = new Map(list.map(h => [h.date, h.name || 'Public Holiday']));
+  }
+
+  // ---- Local ISO helper to avoid UTC off-by-one (CRITICAL FIX) ----
   const atStartOfDay = (d) => { const x = new Date(d); x.setHours(0,0,0,0); return x; };
+  const localISO = (d) => {
+    const x = atStartOfDay(d);
+    const y = x.getFullYear();
+    const m = String(x.getMonth() + 1).padStart(2, '0');
+    const dd = String(x.getDate()).padStart(2, '0');
+    return `${y}-${m}-${dd}`;
+  };
+
+  function isHoliday(d) {
+    const y = d.getFullYear();
+    const iso = localISO(d);
+    return holidayDatesByYear[y]?.has(iso) ?? false;
+  }
+  // parse 'YYYY-MM-DD' safely in local time (no UTC drift)
+  const parseLocalISO = (iso) => {
+    if (!iso) return null;
+    const [y, m, d] = iso.split('-').map(Number);
+    return new Date(y, (m - 1), d);
+  };
+
+  // Count inclusive days excluding public holidays
+  function countDaysExcludingPH(fromISO, untilISO) {
+    const start = parseLocalISO(fromISO);
+    const end   = parseLocalISO(untilISO || fromISO);
+    if (!start || !end) return 0;
+
+    // ensure start <= end
+    if (atStartOfDay(end) < atStartOfDay(start)) return 0;
+
+    let c = 0;
+    const d = new Date(start);
+    for (;;) {
+      if (!isHoliday(d)) c++;
+      if (sameDay(d, end)) break;
+      d.setDate(d.getDate() + 1);
+    }
+    return c;
+  }
+  function holidayTitle(d) {
+    const y = d.getFullYear();
+    const iso = localISO(d);
+    return holidayNamesByYear[y]?.get(iso) || null;
+  }
+
+  // ----- calendar helpers -----
   const sameDay = (a, b) => atStartOfDay(a).getTime() === atStartOfDay(b).getTime();
 
   let today = atStartOfDay(new Date());
-  const todayISO = today.toISOString().slice(0,10); // handy for <input min=...>
+  const todayISO = localISO(today); // use local ISO for inputs too
 
   // moving "view base" for the visible calendar
   let viewBase = atStartOfDay(new Date());
@@ -46,12 +92,15 @@
     const arr = [];
     for (let i = 0; i < 42; i++) {
       const d = new Date(start); d.setDate(start.getDate() + i);
+      const hol = isHoliday(d);
       arr.push({
-        key: d.toISOString().slice(0,10),
+        key: localISO(d),               // FIX: use local ISO for stable keys
         label: d.getDate(),
         date: d,
         muted: d.getMonth() !== m,
-        today: sameDay(d, today)
+        today: sameDay(d, today),
+        holiday: hol,
+        title: hol ? holidayTitle(d) : null
       });
     }
     monthLabel = new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(first);
@@ -91,10 +140,31 @@
   }
 
   // ===== Leave form state (auto-calc total) =====
-  let duration = 'Full';     // 'Full' | 'Half'
+  let leaveType = 'Annual';     // added for Medical attachment requirement
+  let duration = 'Full';        // 'Full' | 'Half'
   let dateFrom = '';
   let dateUntil = '';
   let totalDays = 1;
+
+  // ---- Medical: attachment required ----
+  let attachmentFiles;  // FileList
+  let fileInputEl;      // <input type="file">
+  $: showAttachmentReminder =
+    (leaveType === 'Medical') && (!attachmentFiles || attachmentFiles.length === 0);
+
+  // Toggle native required + message live (minimal, only for Medical)
+  $: {
+    if (fileInputEl) {
+      const needs = (leaveType === 'Medical');
+      fileInputEl.required = needs;
+      if (needs && (!attachmentFiles || attachmentFiles.length === 0)) {
+        fileInputEl.setCustomValidity('For Medical leave, please attach your medical certificate.');
+        setTimeout(() => fileInputEl.reportValidity(), 0);
+      } else {
+        fileInputEl.setCustomValidity('');
+      }
+    }
+  }
 
   const dayMs = 24 * 60 * 60 * 1000;
   const diffDays = (from, until) => {
@@ -124,12 +194,14 @@
   }
 
   async function openLeaveForm(date) {
-    const iso = atStartOfDay(date).toISOString().slice(0,10);
+    const iso = localISO(date); // FIX: use local ISO
     // initialize form state for the clicked date
-    duration = 'Full';
-    dateFrom = iso;
+    leaveType = 'Annual';
+    duration  = 'Full';
+    dateFrom  = iso;
     dateUntil = iso;
     totalDays = 1;
+    attachmentFiles = undefined; // reset
 
     if (!modal?.open) modal.showModal();
     await tick();
@@ -137,6 +209,7 @@
 
   function submitLeave(e) {
     const fd = new FormData(e.currentTarget);
+    if (!e.currentTarget.reportValidity()) return; // blocks submit if Medical has no file
     // TODO: post to backend
     modal?.close();
   }
@@ -150,47 +223,6 @@
 </script>
 
 <main class="main">
-  <!-- HEADER (simple row, no boxed container) -->
-  <div class="topbar">
-    <div class="title-wrap">
-      <div class="hello">Welcome back, {user?.name || 'admin'}!</div>
-      <h1 class="page-title">My Dashboard</h1>
-    </div>
-
-    <div class="profile" use:clickOutside>
-      <button class="icon-btn bell" aria-label="Notifications">🔔</button>
-
-      <div class="profile-info">
-        <img src="/images/icontest1.png" alt="" class="avatar-img"
-             on:error={(e)=> e.currentTarget.style.display='none'} />
-        <div class="who">
-          <div class="name">{user?.name || 'Afiq Mikail'}</div>
-          <div class="sub">{user?.role || 'Human Resources'}</div>
-          <div class="sub">#{user?.staffId || 'E8505'}</div>
-        </div>
-      </div>
-
-      <button
-        class="icon-btn caret"
-        aria-haspopup="menu"
-        aria-expanded={profileMenuOpen}
-        on:click={() => (profileMenuOpen = !profileMenuOpen)}
-        aria-label="Open profile menu"
-      >▾</button>
-
-      {#if profileMenuOpen}
-        <div class="menu" role="menu">
-          <a role="menuitem" href="/dashboard/admin/profile">Update Profile</a>
-        </div>
-      {/if}
-    </div>
-  </div>
-
-  <!-- ===== DONUT ROW HEADER: Download on top-right ===== -->
-  <div class="donut-row-header">
-    <a class="download" href="#">Download</a>
-  </div>
-
   <!-- ===== GRID ===== -->
   <div class="grid">
     <!-- Top: 3 donuts -->
@@ -206,6 +238,17 @@
           <div class="legend-item"><span class="chip unspent"></span><span>Unspent Leave</span></div>
         </div>
         <div class="total-line">Total spent: {d.spent}/{d.total}</div>
+
+        {#if d.title === 'Annual Leave Summary'}
+          <!-- added carry forward line + tooltip, nothing else touched -->
+          <div class="cf-line">
+            Carry forward: {d.carryForward ?? 0}/7
+            <button type="button" class="info-btn" aria-describedby={"cf-tip-" + d.title} tabindex="0">ⓘ</button>
+            <span class="tooltip" id={"cf-tip-" + d.title} role="tooltip">
+              Carry-forward is capped at 7 days and expires before April (start of April).
+            </span>
+          </div>
+        {/if}
       </div>
     {/each}
 
@@ -236,16 +279,21 @@
         <div class="days">
           {#each days as d (d.key)}
             <button
-  class:muted={d.muted}
-  class:today={d.today}
-  disabled={!d.today && atStartOfDay(d.date) < today}
-  on:click={() => openLeaveForm(d.date)}
-  aria-label={`Select ${d.date.toDateString()}`}
->
-  {d.label}
-</button>
-
+              class:muted={d.muted}
+              class:today={d.today}
+              class:holiday={d.holiday}    
+              title={d.title}
+              disabled={d.outOfWindow || d.holiday || (!d.today && atStartOfDay(d.date) < today)}
+              on:click={() => openLeaveForm(d.date)}
+              aria-label={`Select ${d.date.toDateString()}`}
+            >
+              {d.label}
+            </button>
           {/each}
+        </div>
+        <div class="legend small">
+          <span><i class="swatch sw-blue"></i> Public / Additional leave</span>
+          <span><i class="swatch sw-today"></i> Today</span>
         </div>
       </div>
     </div>
@@ -277,7 +325,8 @@
 
     <label>
       <span>Type</span>
-      <select name="type" required>
+      <!-- bind:value added so we can enforce Medical attachment -->
+      <select name="type" bind:value={leaveType} required>
         <option value="Annual">Annual / Emergency</option>
         <option value="Medical">Medical</option>
         <option value="Maternity">Maternity</option>
@@ -340,7 +389,22 @@
     </label>
 
     <label><span>Reason</span><textarea name="reason" rows="3" required></textarea></label>
-    <label><span>Attachment</span><input type="file" name="attachment" /></label>
+
+    <label>
+      <span>Attachment</span>
+      <!-- only these minimal changes: bind refs, required based on Medical, clear validity on change -->
+      <input
+        type="file"
+        name="attachment"
+        bind:this={fileInputEl}
+        bind:files={attachmentFiles}
+        required={leaveType === 'Medical'}
+        on:change={() => fileInputEl?.setCustomValidity('')}
+      />
+      {#if showAttachmentReminder}
+        <small class="help warn">Reminder: please attach your medical certificate.</small>
+      {/if}
+    </label>
 
     <button type="submit" class="submit-btn">SUBMIT</button>
   </form>
@@ -350,41 +414,27 @@
   /* page container */
   .main { padding: 18px; }
 
-  /* donut-row header */
-  .donut-row-header{
-    display:flex; justify-content:flex-end; align-items:center;
-    margin: 12px 0 6px;
-  }
-
   /* grid spacing */
-  .grid{ margin-top:6px; display:grid; gap:10px; grid-template-columns:repeat(12, minmax(0,1fr)); }
-
-  /* profile cluster + dropdown */
-  .profile{ position:relative; display:flex; align-items:center; gap:10px; }
-  .icon-btn{ border:none; background:transparent; cursor:pointer; font-size:18px; line-height:1; padding:6px; border-radius:8px; color:#fff; }
-  .icon-btn:hover{ background:rgba(255,255,255,.12); }
-  .profile-info{ display:flex; align-items:center; gap:10px; color:#fff; position:relative; }
-  .avatar-img{ height:70px; width:70px; border-radius:9999px; display:block; box-shadow:0 0 0 2px rgba(255,255,255,.25); }
-  .who .name{  font-size: 20px; font-weight:700; }
-  .who .sub{ font-size:16px; opacity:.95; }
-  .caret{ font-size:16px; }
-  .profile .menu{
-    position:absolute; right:0; top:calc(100% + 8px);
-    background:#fff; border:1px solid var(--ring); border-radius:10px; box-shadow:var(--shadow);
-    min-width:200px; padding:6px; z-index:30;
-  }
-  .profile .menu a{ display:block; padding:10px 12px; border-radius:8px; color:#111827; font-weight:600; text-decoration:none; }
-  .profile .menu a:hover{ background:#f3f4f6; }
-  @media (max-width:640px){ .who .sub{ display:none; } }
+  .grid{ margin-top:0px; display:grid; gap:10px; grid-template-columns:repeat(12, minmax(0,1fr)); }
 
   /* donut colors & size */
-  :global(:root){ --spentRed:#ef4444; --restBlue:#3b82f6; }
+  :global(:root){ --spentRed:#ef4444; --restBlue:#3b82f6; --ring:#e5e7eb; --shadow:0 2px 12px rgba(0,0,0,.06); }
+  .card{ border:1px solid var(--ring); border-radius:12px; padding:12px; background:#fff; box-shadow:var(--shadow); }
+
   .donut.fancy{
     height: var(--size, 110px); width: var(--size, 110px);
     border-radius:9999px; margin:6px auto 8px;
     background: conic-gradient(var(--spent-color, #ef4444) calc(var(--spent) * 1%), var(--rest-color, #3b82f6) 0);
     display:grid; place-items:center; box-shadow:var(--shadow);
   }
+
+  .sw-blue{ background:#71c0f5; border:1px solid #71c0f5; }
+  .sw-today{ background:#fff; border:1px solid #49bdb3; }
+  .legend.small{
+    display:flex; justify-content:center; gap:14px; margin-top:8px; font-size:11.5px; color:#6b7280;}
+    
+  .swatch{ display:inline-block; width:14px; height:9px; border-radius:3px; margin-right:6px; vertical-align:middle; }
+
   .donut.fancy::after{
     content:""; height:66%; width:66%; background:#fff; border-radius:9999px; box-shadow:inset 0 0 0 1px var(--ring);
   }
@@ -396,9 +446,74 @@
   .chip.unspent{ background: var(--restBlue); }
   .total-line{ text-align:center; font-size:12px; color:#6b7280; margin-top:4px; }
 
+  /* carry-forward line + tooltip (added) */
+  .cf-line{
+    margin-top:6px;
+    text-align:center;
+    font-size:12px;
+    color:#6b7280;
+    position:relative;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:6px;
+  }
+  .info-btn{
+    border:none;
+    background:#eef2ff;
+    border-radius:999px;
+    width:18px; height:18px;
+    line-height:18px;
+    font-size:12px;
+    font-weight:700;
+    cursor:pointer;
+    padding:0;
+    display:inline-grid;
+    place-items:center;
+    color:#374151;
+  }
+  .info-btn {
+  border: none;
+  background: none;       /* remove blue background */
+  border-radius: 999px;
+  width: 18px;
+  height: 18px;
+  line-height: 18px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  color: #374151;          /* dark gray for text/icon */
+  transition: background 0.2s ease;
+  margin-top: 2px; /* cuba 2–4px ikut sedap */
+}
+
+.info-btn:hover {
+  background: #e5e7eb;     /* light gray only when hovered */
+}
+
+  .tooltip{
+    position:absolute;
+    bottom:130%;
+    left:50%;
+    transform:translateX(-50%);
+    background:#111827; color:#fff;
+    padding:6px 8px; border-radius:6px; font-size:12px; white-space:nowrap;
+    box-shadow:0 4px 18px rgba(0,0,0,.18);
+    opacity:0; visibility:hidden; transition:opacity .15s ease, visibility .15s ease;
+    pointer-events:none;
+  }
+  .tooltip::after{
+    content:""; position:absolute; top:100%; left:50%; transform:translateX(-50%);
+    border:6px solid transparent; border-top-color:#111827;
+  }
+  .info-btn:hover + .tooltip, .info-btn:focus + .tooltip{ opacity:1; visibility:visible; }
+
   /* calendar sizing */
-  .calendar-small{ max-width:360px; margin:0 auto; }
-  .calendar-small .days button{ padding:6px; }
+  .calendar-small{ max-width:350px; margin:0 auto; }
+  .calendar-small .days button{ padding:4px; }
 
   /* month header with full nav */
   .calendar .month{
@@ -421,13 +536,18 @@
     border:1px solid var(--ring); border-radius:8px; background:#fff; cursor:pointer;
   }
   .days button.today {
-  border: 2px solid #49bdb3;   /* teal border */
-  font-weight: 700;            /* bold text */
-  color: #111827;              /* dark text so it's readable */
-  background: #ffff;         /* light teal background (optional) */
-}
+    border: 2px solid #49bdb3;
+    font-weight: 700;
+    color: #111827;
+    background: #ffff;
+  }
   .days button.muted{ opacity:.5; }
   .days button:disabled{ background:#f3f4f6; color:#9ca3af; cursor:not-allowed; }
+
+  /* Public holiday highlight — SAME as Admin */
+  .days button.holiday { background: #71c0f5; border-color: #71c0f5; }
+  .days button.today.holiday { background: #FFF7CC; }
+  /* (Keep styles minimal; just matching Admin’s look) */
 
   /* recent card */
   .recent-wrap{ display:grid; gap:12px; }
@@ -435,61 +555,6 @@
   .recent-item .when{ font-weight:700; color:#111827; }
   .recent-item .cols{ display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; font-size:12px; }
   .recent-item .muted{ color:#6b7280; }
-
-  .download {
-    color: #fff;
-    text-decoration: underline;
-    font-size: 14px;
-  }
-  .download:hover { opacity: 0.85; }
-
-  /* row layout */
-  .topbar{
-    display:flex;
-    align-items:flex-start;
-    justify-content:space-between;
-    gap: 16px;
-    margin-bottom: 8px;
-  }
-
-  /* left side */
-  .title-wrap{ color:#fff; }
-  .hello{
-    font-size:18px;
-    font-weight:400;
-    margin: 4px 0 6px;
-    opacity:.95;
-  }
-  .page-title{
-    margin:0;
-    font-size:58px;
-    line-height:0.80;
-    color:#fff;
-    letter-spacing:.3px;
-  }
-
-  /* right side cluster */
-  .profile{ position:relative; display:flex; align-items:center; gap:10px; }
-  .icon-btn{ border:none; background:transparent; cursor:pointer; font-size:18px; line-height:1; padding:6px; border-radius:8px; color:#fff; }
-  .icon-btn:hover{ background:rgba(255,255,255,.12); }
-  .profile-info{ display:flex; align-items:center; gap:10px; color:#fff; }
-  .avatar-img{ box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25); }
-  .who .name{ font-weight:700; color:#fff; }
-  .who .sub{ font-size:12px; opacity:.95; color:#fff; }
-  .caret{ font-size:16px; color:#fff; }
-
-  .profile .menu{
-    position:absolute; right:0; top:calc(100% + 8px);
-    background:#fff; border:1px solid var(--ring); border-radius:10px; box-shadow:var(--shadow);
-    min-width:200px; padding:6px; z-index:30;
-  }
-  .profile .menu a{ display:block; padding:10px 12px; border-radius:8px; color:#111827; font-weight:600; text-decoration:none; }
-  .profile .menu a:hover{ background:#f3f4f6; }
-
-  /* responsive tweak: reduce title on small screens */
-  @media (max-width: 740px){
-    .page-title{ font-size:40px; }
-  }
 
   /* --- Keep radios inline/left without changing their markup position --- */
   .leave-form .duration {
@@ -520,4 +585,8 @@
     color:#6b7280;
     cursor:not-allowed;
   }
+
+  /* helper text */
+  .help { color:#6b7280; font-size:12px; display:block; margin-top:4px; }
+  .help.warn { color:#b45309; }
 </style>

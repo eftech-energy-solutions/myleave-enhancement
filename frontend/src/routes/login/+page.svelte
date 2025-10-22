@@ -51,7 +51,7 @@
     </h1>
 
     <form on:submit|preventDefault={handleLogin}>
-      <input type="text" bind:value={email} placeholder="Email" required />
+      <input type="text" name="email" bind:value={email} placeholder="Email" autocomplete="email" required />
       <input type="password" bind:value={password} placeholder="Password" required />
       <button type="button" on:click={handleLogin}>Login</button>
     </form>

@@ -3,6 +3,9 @@ import bodyParser from 'body-parser';
 import cookieParser from 'cookie-parser';
 import pool from './src/db.js';
 import cors from 'cors';
+import profileRoutes from './src/routes/profile.js';
+import dotenv from 'dotenv';
+dotenv.config();
 
 const app = express();
 
@@ -13,6 +16,7 @@ app.use(cors({
 
 app.use(bodyParser.json());
 app.use(cookieParser());
+app.use('/api/employee', profileRoutes);
 
 // ✅ Test route
 app.get('/', (req, res) => {
@@ -41,7 +45,7 @@ app.post('/api/login', async (req, res) => {
     }
 
     let redirectTo = '/dashboard/staff';
-    if (user.role === 'admin') redirectTo = '/dashboard/admin/main';
+    if (user.role === 'admin') redirectTo = '/dashboard/admin';
     else if (user.role === 'manager') redirectTo = '/dashboard/manager';
 
       res.cookie(
