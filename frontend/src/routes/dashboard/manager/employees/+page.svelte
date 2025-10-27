@@ -68,7 +68,11 @@
     };
   }
   
-  $: filteredEmployees = employees;
+  // Always show employees sorted by name (case-insensitive)
+$: filteredEmployees = [...employees].sort((a, b) =>
+  a.name.localeCompare(b.name, 'en', { sensitivity: 'base' })
+);
+
 
   // =======================
   // 5) PENDING APPROVALS

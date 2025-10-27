@@ -64,8 +64,8 @@
       terminationDate: "",
       confirmationDate: "",
       gender: "",
-      annualLeave: "14.0",
-      medicalLeave: "14.0",
+      annualLeave: "",
+      medicalLeave: "",
       notes: ""
     };
   }
@@ -74,8 +74,18 @@
   // 4) FILTERS
   // =======================
   let deptFilter = 'All';
-  const deptOptions = ['All', ...Array.from(new Set(DEPTS))];
-  $: filteredEmployees = deptFilter === 'All' ? employees : employees.filter(e => e.department === deptFilter);
+  const deptOptions = ['All', ...Array.from(new Set(DEPTS)).sort((a,b) =>
+  a.localeCompare(b, 'en', { sensitivity: 'base' })
+)];
+
+ $: filteredEmployees = (
+  deptFilter === 'All'
+    ? employees
+    : employees.filter(e => e.department === deptFilter)
+).slice().sort((a, b) => {
+  const byName = a.name.localeCompare(b.name, 'en', { sensitivity: 'base' });
+  return byName !== 0 ? byName : a.id.localeCompare(b.id, 'en', { sensitivity: 'base' });
+});
 
   // =======================
   // 5) PENDING APPROVALS (New logic)
@@ -138,7 +148,7 @@
         photoUrl: "",
         empId: item.id, name: item.name, email: "", position: item.role,
         department: item.department, employmentDate: "", terminationDate: "",
-        confirmationDate: "", gender: "", annualLeave: "14.0", medicalLeave: "14.0", notes: ""
+        confirmationDate: "", gender: "", annualLeave: "", medicalLeave: "", notes: ""
       };
     }
   }
@@ -177,15 +187,15 @@
     terminationDate: "",
     confirmationDate: "",
     gender: "Male",
-    annualLeave: "14.0",
-    medicalLeave: "14.0",
+    annualLeave: "",
+    medicalLeave: "",
     department: "Technical Data",
     notes: ""
   };
 
   function openAddModal() {
     addModalOpen = true;
-    newEmp = { ...newEmp, photoUrl: "", empId: "", name: "", email: "", position: "", employmentDate: "", terminationDate: "", confirmationDate: "", gender: "Male", annualLeave: "14.0", medicalLeave: "14.0", department: "Technical Data", notes: "" };
+    newEmp = { ...newEmp, photoUrl: "", empId: "", name: "", email: "", position: "", employmentDate: "", terminationDate: "", confirmationDate: "", gender: "Male", annualLeave: "", medicalLeave: "", department: "Technical Data", notes: "" };
   }
 
   function handleNewPhotoFile(e) {
@@ -237,8 +247,8 @@
       terminationDate: newEmp.terminationDate,
       confirmationDate: newEmp.confirmationDate,
       gender: newEmp.gender,
-      annualLeave: String(newEmp.annualLeave ?? "14.0"),
-      medicalLeave: String(newEmp.medicalLeave ?? "14.0"),
+      annualLeave: parseFloat(newEmp.annualLeave ?? ""),
+      medicalLeave: parseFloat(newEmp.medicalLeave ?? ""),
       notes: newEmp.notes
     };
 
@@ -673,7 +683,6 @@
                     <select bind:value={newEmp.gender}>
                       <option>Male</option>
                       <option>Female</option>
-                      <option>Other</option>
                     </select>
                   </div>
                 </div>

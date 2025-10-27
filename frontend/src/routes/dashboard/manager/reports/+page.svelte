@@ -297,7 +297,7 @@
 
     <!-- Calendar -->
     <div class="card" style="grid-column: span 4;">
-      <h3>Calendar of Application</h3>
+      <h3>Leave Application</h3>
       <div class="calendar calendar-small">
         <div class="month">
           <div class="nav">
