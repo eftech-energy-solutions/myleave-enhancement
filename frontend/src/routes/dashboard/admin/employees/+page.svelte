@@ -17,6 +17,7 @@
       if (profileMenuOpen) profileMenuOpen = false;
       if (addModalOpen) addModalOpen = false;
       if (detailsOpen) { detailsOpen = false; editMode = false; }
+      if (showDeleteConfirm) showDeleteConfirm = false;
     }
   }
 
@@ -116,8 +117,18 @@ function formatDate(dbDate) {
   // 4) FILTERS
   // =======================
   let deptFilter = 'All';
-  const deptOptions = ['All', ...Array.from(new Set(DEPTS))];
-  $: filteredEmployees = deptFilter === 'All' ? employees : employees.filter(e => e.department === deptFilter);
+  const deptOptions = ['All', ...Array.from(new Set(DEPTS)).sort((a,b) =>
+  a.localeCompare(b, 'en', { sensitivity: 'base' })
+)];
+
+ $: filteredEmployees = (
+  deptFilter === 'All'
+    ? employees
+    : employees.filter(e => e.department === deptFilter)
+).slice().sort((a, b) => {
+  const byName = a.name.localeCompare(b.name, 'en', { sensitivity: 'base' });
+  return byName !== 0 ? byName : a.id.localeCompare(b.id, 'en', { sensitivity: 'base' });
+});
 
   // =======================
   // 5) PENDING APPROVALS (New logic)
@@ -357,8 +368,8 @@ async function submitNewEmployee(e) {
       terminationDate: newEmp.terminationDate,
       confirmationDate: newEmp.confirmationDate,
       gender: newEmp.gender,
-      annualLeave: String(newEmp.annualLeave ?? ""),
-      medicalLeave: String(newEmp.medicalLeave ?? ""),
+      annualLeave: parseFloat(newEmp.annualLeave ?? ""),
+      medicalLeave: parseFloat(newEmp.medicalLeave ?? ""),
       notes: newEmp.notes
     };
 
@@ -369,6 +380,8 @@ async function submitNewEmployee(e) {
   let selectedEmp = null;
   let editMode = false;
   let detailsForm = null; // working copy
+  let showDeleteConfirm = false;
+  let employeeToDelete = null;
 
   function openDetails(empId) {
     const base = detailsById[empId] ?? null;
@@ -408,6 +421,29 @@ async function submitNewEmployee(e) {
     }
     editMode = true;
   }
+  
+  function openDeleteConfirm() {
+    if (!selectedEmp) return;
+    employeeToDelete = selectedEmp;
+    showDeleteConfirm = true;
+  }
+
+  function deleteEmployee() {
+    if (!employeeToDelete) return;
+    const empId = employeeToDelete.id || employeeToDelete.empId;
+    
+    // Remove from the main grid
+    employees = employees.filter(e => e.id !== empId);
+    
+    // Remove from details object
+    delete detailsById[empId];
+
+    // Clean up and close modals
+    showDeleteConfirm = false;
+    detailsOpen = false;
+    employeeToDelete = null;
+  }
+
 </script>
 
 <svelte:window on:keydown={handleKey} />
@@ -499,7 +535,7 @@ async function submitNewEmployee(e) {
 
   .form{ background:#fff; border:1px solid var(--line); border-radius:16px; padding:18px; box-shadow:0 6px 18px rgba(0,0,0,.05); }
   .row{ display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:12px; }
-  .row.three{ grid-template-columns: 1fr 1fr 1fr; }
+  .row.three{ grid-template-columns:2.1fr 1fr 1fr; }
   .row.single{ grid-template-columns:1fr; }
   label{ font-size:12px; color:#374151; font-weight:700; margin:0 0 6px; display:block; }
   .ctl{ display:flex; align-items:center; background:#fff; border:1px solid var(--line); border-radius:12px; padding:10px 12px; box-shadow: inset 0 1px 0 rgba(0,0,0,.02); }
@@ -512,6 +548,8 @@ async function submitNewEmployee(e) {
   .btn-ghost{ background:#fff; color:#0c4a6e; border:1px solid var(--line); border-radius:12px; padding:.7rem 1rem; font-weight:700; cursor:pointer; }
   .btn-primary{ background:#49bdb3; color:#fff; border:none; border-radius:10px; padding:.8rem 1.4rem; font-weight:700; cursor:pointer; }
   .btn-primary:hover{ filter:brightness(.96); }
+  .btn-danger { background:#dc2626; color:#fff; border:none; border-radius:10px; padding:.8rem 1.4rem; font-weight:700; cursor:pointer; }
+  .btn-danger:hover { filter:brightness(.96); }
 
   /* Date inputs with calendar icon on the right */
   .ctl.date { position:relative; }
@@ -524,6 +562,18 @@ async function submitNewEmployee(e) {
   .filter-icon { width: 16px; height: 16px; color: #fff; opacity: 0.9; }
   .filter-select { padding:4px 8px; min-width:180px; border-radius: 9999px; } /* Pill shape */
   .filter-select select { font-size:13px; padding:4px 6px; height:28px; }
+
+  /* ===== Confirmation Modal specific styles ===== */
+  .modal.confirm-modal { width: min(450px, 94vw); }
+  .modal.confirm-modal .modal-hd {
+    position: relative;
+    justify-content: center;
+  }
+  .modal.confirm-modal .modal-x {
+    position: absolute;
+    right: 18px;
+  }
+  .modal.confirm-modal .muted { font-size: 14px; margin-top: 8px; }
 
   /* ===== Responsive ===== */
   @media (max-width:740px){
@@ -741,23 +791,23 @@ async function submitNewEmployee(e) {
                 </div>
               </div>
 
-              <div class="row">
+              <div class="row three">
                 <div>
                   <label>Gender</label>
                   <div class="ctl pill">
                     <select bind:value={newEmp.gender}>
                       <option>Male</option>
                       <option>Female</option>
-                      <option>Other</option>
                     </select>
                   </div>
                 </div>
                 <div>
-                  <label class="muted">Leave Entitlements (per year)</label>
-                  <div class="row" style="gap:10px; margin:0;">
-                    <div class="ctl pill"><input type="number" step="0.5" min="0" bind:value={newEmp.annualLeave} placeholder="Annual Leave" /></div>
-                    <div class="ctl pill"><input type="number" step="0.5" min="0" bind:value={newEmp.medicalLeave} placeholder="Medical Leave" /></div>
-                  </div>
+                  <label>Annual Leave</label>
+                  <div class="ctl pill"><input type="number" step="0.5" min="0" bind:value={newEmp.annualLeave} /></div>
+                </div>
+                <div>
+                  <label>Medical Leave</label>
+                  <div class="ctl pill"><input type="number" step="0.5" min="0" bind:value={newEmp.medicalLeave} /></div>
                 </div>
               </div>
 
@@ -841,22 +891,11 @@ async function submitNewEmployee(e) {
                 </div>
               </div>
 
-              <div class="row">
+              <div class="row single">
                 <div>
                   <label>Email</label>
                   <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
                     <input type="email" bind:value={detailsForm.email} disabled={!editMode} />
-                  </div>
-                </div>
-                <div>
-                  <label>Gender</label>
-                  <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
-                    <select bind:value={detailsForm.gender} disabled={!editMode}>
-                      <option value="">Select</option>
-                      <option>Male</option>
-                      <option>Female</option>
-                      <option>Other</option>
-                    </select>
                   </div>
                 </div>
               </div>
@@ -876,22 +915,37 @@ async function submitNewEmployee(e) {
                 </div>
               </div>
 
-              <div class="row">
+              <div class="row three">
+                <div>
+                  <label>Gender</label>
+                  <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
+                    <select bind:value={detailsForm.gender} disabled={!editMode}>
+                      <option value="">Select</option>
+                      <option>Male</option>
+                      <option>Female</option>
+                      <option>Other</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label>Annual Leave</label>
+                  <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
+                      <input type="number" step="0.5" min="0" bind:value={detailsForm.annualLeave} disabled={!editMode} />
+                  </div>
+                </div>
+                <div>
+                  <label>Medical Leave</label>
+                  <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
+                      <input type="number" step="0.5" min="0" bind:value={detailsForm.medicalLeave} disabled={!editMode} />
+                  </div>
+                </div>
+              </div>
+              
+              <div class="row single">
                 <div>
                   <label>Termination Date</label>
                   <div class={"ctl pill date " + (!editMode ? 'disabled' : '')}>
                     <input type="date" bind:value={detailsForm.terminationDate} disabled={!editMode} />
-                  </div>
-                </div>
-                <div>
-                  <label class="muted">Leave Entitlements (per year)</label>
-                  <div class="row" style="gap:10px; margin:0;">
-                    <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
-                      <input type="number" step="0.5" min="0" bind:value={detailsForm.annualLeave} disabled={!editMode} placeholder="Annual Leave" />
-                    </div>
-                    <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
-                      <input type="number" step="0.5" min="0" bind:value={detailsForm.medicalLeave} disabled={!editMode} placeholder="Medical Leave" />
-                    </div>
                   </div>
                 </div>
               </div>
@@ -910,6 +964,7 @@ async function submitNewEmployee(e) {
                   <button class="btn-ghost" on:click={() => { editMode = false; detailsForm = structuredClone(selectedEmp); }}>Cancel</button>
                   <button class="btn-primary" on:click={toggleEditSave}>Save Changes</button>
                 {:else}
+                  <button class="btn-danger" style="margin-right: auto;" on:click={openDeleteConfirm}>Delete Employee</button>
                   <button class="btn-primary" on:click={toggleEditSave}>Edit Profile</button>
                 {/if}
               </div>
@@ -930,6 +985,27 @@ async function submitNewEmployee(e) {
               {/if}
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+  </div>
+{/if}
+
+<!-- Confirmation Modal for Deletion -->
+{#if showDeleteConfirm && employeeToDelete}
+  <div class="modal-wrap" style="z-index: 90;">
+    <div class="modal confirm-modal">
+      <div class="modal-hd">
+        <div style="width: 22px;" aria-hidden="true"></div>
+        <div class="modal-ttl" style="color: #49bdb3;">Confirm Deletion</div>
+        <button class="modal-x" on:click={() => showDeleteConfirm = false}>✕</button>
+      </div>
+      <div class="modal-bd" style="padding: 22px; text-align: center;">
+        <p>Are you sure you want to delete the profile for <strong>{employeeToDelete.name}</strong>?</p>
+        <p class="muted">This action cannot be undone.</p>
+        <div class="form-ft" style="margin-top: 20px; justify-content: center;">
+          <button class="btn-ghost" on:click={() => showDeleteConfirm = false}>Cancel</button>
+          <button class="btn-danger" on:click={deleteEmployee}>Yes, Delete</button>
         </div>
       </div>
     </div>

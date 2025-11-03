@@ -15,7 +15,7 @@
   // Picture state
   let profilePhotoUrl = '';
 
-  // === NEW: toggle state utk New Password show/hide ===
+  // Toggle state utk New Password show/hide
   let showPwd1 = false;
 
   function clickOutside(node) {
@@ -62,7 +62,7 @@
       alert('Password updated (demo).');
     } else {
       if (!profilePhotoUrl) { alert('Please select a profile picture.'); return; }
-      // ✅ Update header avatar immediately
+      // Update header avatar immediately
       headerAvatarUrl = profilePhotoUrl;
       alert('Profile picture updated (demo).');
     }
@@ -72,7 +72,6 @@
 </script>
 
 <div class="container">
-  <!-- LEFT SIDEBAR -->
   <aside class="aside">
     <div class="top">
       <div class="logo">
@@ -82,34 +81,42 @@
       <nav class="nav">
         <div class="nav-group">
           <span class="ico">
-            <!-- Filled Grid Icon -->
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 3H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1zm0 11H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-6a1 1 0 0 0-1-1zm11-11h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1zm0 11h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-6a1 1 0 0 0-1-1z"></path></svg>
           </span>
           <span class="text">Dashboard</span>
         </div>
         <div class="sub-links">
           <a href="/dashboard/manager/main"
-            class:active={$page.url.pathname.startsWith('/dashboard/manager/main')}>
+             class:active={$page.url.pathname.startsWith('/dashboard/manager/main')}>
             <span class="text">Main</span>
           </a>
           <a href="/dashboard/manager/reports"
-            class:active={$page.url.pathname.startsWith('/dashboard/manager/reports')}>
+             class:active={$page.url.pathname.startsWith('/dashboard/manager/reports')}>
             <span class="text">Reports</span>
           </a>
         </div>
 
-        <a href="/dashboard/manager/history" class:active={$page.url.pathname.startsWith('/dashboard/manager/history')}>
+        <div class="nav-group">
           <span class="ico">
-            <!-- Filled Calendar Icon -->
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zM9 14H7v-2h2v2zm4 0h-2v-2h2v2zm4 0h-2v-2h2v2zM5 8V6h14v2H5z"></path></svg>
           </span>
           <span class="text">Leave History</span>
-        </a>
+        </div>
+        <div class="sub-links">
+          <a href="/dashboard/manager/history"
+             class:active={$page.url.pathname.startsWith('/dashboard/manager/history')}>
+            <span class="text">Staff</span>
+          </a>
+          <a href="/dashboard/manager/myhistory"
+             class:active={$page.url.pathname.startsWith('/dashboard/manager/myhistory')}>
+            <span class="text">Personal</span>
+          </a>
+        </div>
 
-        <a href="/dashboard/manager/employees" class:active={$page.url.pathname.startsWith('/dashboard/manager/employees')}>
+        <a href="/dashboard/manager/employees"
+           class:active={$page.url.pathname.startsWith('/dashboard/manager/employees')}>
           <span class="ico">
-             <!-- Filled Users Icon -->
-             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"></path></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"></path></svg>
           </span>
           <span class="text">Employees</span>
         </a>
@@ -119,7 +126,6 @@
     <div class="bottom">
       <a href="/logout" class="signout">
         <span class="ico">
-          <!-- Filled Logout Icon -->
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17 7-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"></path></svg>
         </span>
         <span class="text">Sign out</span>
@@ -127,25 +133,27 @@
     </div>
   </aside>
 
-  <!-- RIGHT MAIN -->
   <main class="main dash-main">
     <header class="topbar">
- <div class="title-wrap">
-  <div class="hello">Welcome back, {user?.name || 'admin'}!</div>
+      <div class="title-wrap">
+        <div class="hello">Welcome back, {user?.name || 'admin'}!</div>
 
-  {#if $page.url.pathname.startsWith('/dashboard/manager/main')}
-    <h1 class="page-title">Dashboard</h1>
-  {:else if $page.url.pathname.startsWith('/dashboard/manager/reports')}
-    <h1 class="page-title">My Dashboard</h1>
-  {:else if $page.url.pathname.startsWith('/dashboard/manager/history') 
-        || $page.url.pathname.startsWith('/dashboard/history')}
-    <h1 class="page-title">Leave Timeline</h1>
-  {:else if $page.url.pathname.startsWith('/dashboard/manager/employees')}
-    <h1 class="page-title">Employees</h1>
-  {:else}
-    <h1 class="page-title">My Dashboard</h1>
-  {/if}
-</div>
+        {#if $page.url.pathname.startsWith('/dashboard/manager/main')}
+          <h1 class="page-title">Dashboard</h1>
+        {:else if $page.url.pathname.startsWith('/dashboard/manager/reports')}
+          <h1 class="page-title">My Dashboard</h1>
+        {:else if $page.url.pathname.startsWith('/dashboard/manager/myhistory')}
+          <h1 class="page-title">My Leave History</h1>
+        {:else if $page.url.pathname.startsWith('/dashboard/manager/history')}
+          <h1 class="page-title">Leave History</h1>
+        {:else if $page.url.pathname.startsWith('/dashboard/history')}
+          <h1 class="page-title">Leave Timeline</h1>
+        {:else if $page.url.pathname.startsWith('/dashboard/manager/employees')}
+          <h1 class="page-title">Employees</h1>
+        {:else}
+          <h1 class="page-title">My Dashboard</h1>
+        {/if}
+      </div>
 
       <div class="profile" use:clickOutside>
         <div class="profile-info">
@@ -186,7 +194,6 @@
   </main>
 </div>
 
-<!-- PROFILE MODAL -->
 {#if profileModalOpen}
   <div class="modal-wrap" role="dialog" aria-modal="true" aria-labelledby="profile-title">
     <div class="modal">
@@ -195,7 +202,6 @@
         <button class="modal-x" on:click={closeProfileModal} aria-label="Close">✕</button>
       </div>
 
-      <!-- Tabs -->
       <div class="tabs" role="tablist" aria-label="Update Profile Tabs">
         <button
           class:selected={activeProfilePane === 'picture'}
@@ -212,7 +218,6 @@
         >Password</button>
       </div>
 
-      <!-- Content -->
       <form class="modal-bd" on:submit={saveProfile}>
         {#if activeProfilePane === 'picture'}
           <div class="pic-wrap">
@@ -225,7 +230,6 @@
             <div class="muted">PNG/JPG up to ~5 MB. Square images (1:1) look best.</div>
           </div>
         {:else}
-          <!-- New Password -->
           <div class="row">
             <label>New Password</label>
             <div class="input-wrap-lg">
@@ -244,18 +248,20 @@
                 title={showPwd1 ? 'Hide' : 'Show'}
               >
                 {#if showPwd1}
-                  <!-- eye-off icon -->
+                  <!-- Eye OFF -->
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
-                       fill="none" stroke="currentColor" width="20" height="20" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                       fill="none" stroke="currentColor" width="20" height="20"
+                       stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-5 0-9.27-3.11-11-8 1.04-2.84 3.05-5.2 5.66-6.6"/>
                     <path d="M9.9 4.24A10.94 10.94 0 0 1 12 4c5 0 9.27 3.11 11 8a10.95 10.95 0 0 1-4.06 5.06"/>
                     <path d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"/>
                     <line x1="1" y1="1" x2="23" y2="23"/>
                   </svg>
                 {:else}
-                  <!-- eye icon -->
+                  <!-- Eye ON -->
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
-                       fill="none" stroke="currentColor" width="20" height="20" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                       fill="none" stroke="currentColor" width="20" height="20"
+                       stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
                     <circle cx="12" cy="12" r="3"/>
                   </svg>
@@ -264,7 +270,6 @@
             </div>
           </div>
 
-          <!-- Confirm Password -->
           <div class="row">
             <label>Confirm Password</label>
             <input
@@ -330,7 +335,7 @@
     gap: 12px;
     padding: 10px 12px;
     border-radius: 10px;
-    color: #217859; /* Your requested text color */
+    color: #217859; /* requested text color */
     font-weight: 600;
     text-decoration: none;
     transition: background-color 0.2s;
@@ -348,13 +353,6 @@
     margin-left: 28px; /* Indent sub-links */
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    border-left: 2px solid #e5e7eb;
-    padding-left: 12px;
-  }
-  .sub-links a {
-    font-size: 0.9rem;
-    padding: 6px 8px;
     font-weight: 500;
   }
   .sub-links a .text::before {
@@ -376,7 +374,7 @@
   .ico svg {
     width: 22px;
     height: 22px;
-    fill: #217859; /* Your requested icon color */
+    fill: #217859; /* icon color */
   }
   .nav a.active .ico svg, .nav-group.active .ico svg {
     fill: #1fb3b2; /* Active color */
@@ -505,4 +503,3 @@
     background: #f3f4f6;
   }
 </style>
-

@@ -3,6 +3,8 @@
   let email = '';
   let password = '';
   let errorMsg = '';
+  let form = '';
+  let uiState = 'login';
 
   async function handleLogin(e) {
     e.preventDefault();
@@ -37,30 +39,125 @@
       errorMsg = 'Something went wrong.';
     }
   }
+
+// * RESEND CODE ALYA*
+  
+//   export let form;
+
+//   let uiState = 'login';
+//   let emailValue = '';
+//   let resendCooldown = 0;
+//   let sending = false;
+//   let resendTimer;
+
+//   $: if (form?.success) {
+//     uiState = 'success';
+//   }
+
+//   async function resendCode() {
+//     if (resendCooldown > 0 || sending || !emailValue) return;
+
+//     sending = true;
+//     resendCooldown = 60;
+//     clearInterval(resendTimer);
+//     resendTimer = setInterval(() => {
+//       resendCooldown = Math.max(0, resendCooldown - 1);
+//       if (resendCooldown === 0) clearInterval(resendTimer);
+//     }, 1000);
+
+//     try {
+//       const fd = new FormData();
+//       fd.set('email', emailValue);
+//       await fetch('?/forgotPassword', { method: 'POST', body: fd });
+//     } catch (e) {
+//       console.error('Resend failed', e);
+//       clearInterval(resendTimer);
+//       resendCooldown = 0;
+//     } finally {
+//       sending = false;
+//     }
+//   }
 </script>
 
 <div class="login-wrap">
   <section class="left">
     <div class="flex items-center justify-center gap-4 mb-6">
       <img src="/images/eftech.logo.png" alt="EFTECH" class="h-8 md:h-9" />
-      <img src="/images/myleave.logo.png" alt="MYLEAVE" class="h-6 md:h-7" />
+      <img src="/images/myleave.logo.png" alt="MYLEAVE" class="h-8 md:h-9" />
     </div>
 
-    <h1 class="text-center text-4xl md:text-6xl font-extrabold mb-8 text-[#49bdb3]">
-      Hi, Welcome!
-    </h1>
-
-    <form on:submit|preventDefault={handleLogin}>
-      <input type="text" name="email" bind:value={email} placeholder="Email" autocomplete="email" required />
-      <input type="password" bind:value={password} placeholder="Password" required />
-      <button type="button" on:click={handleLogin}>Login</button>
+    {#if uiState === 'login'}
+      <h1 class="title">Hi, Welcome!</h1>
+      <form on:submit|preventDefault={handleLogin} class="form-layout">
+      <input type="email" name="email" bind:value={email} placeholder="Email" autocomplete="email" required />
+      <input type="password" name="password" bind:value={password} placeholder="Password" required />
+      <button type="submit" on:click={handleLogin}>Login</button>
     </form>
+      <div class="links">
+        <button class="link-btn" on:click={() => { uiState = 'forgot'; form = null; }}>
+          Forgot Password?
+        </button>
+      </div>
+      {#if form?.error && !form.success}
+        <p class="error-msg">{form.error}</p>
+      {/if}
 
-    <p>Contact your company's administrator for registration and any problem occur.</p>
+    <!-- {:else if uiState === 'forgot'}
+      <h1 class="title">Reset Password</h1>
+      <p class="subtitle">Enter your registered email address to receive a temporary password.</p>
+      <form method="POST" action="?/forgotPassword" class="form-layout">
+        <input
+          name="email"
+          type="email"
+          placeholder="Registered Email"
+          required
+          bind:value={emailValue}
+        />
+        <button type="submit">SEND RESET LINK</button>
+      </form>
+      <div class="links">
+        <button class="link-btn" on:click={() => { uiState = 'login'; form = null; }}>
+          &larr; Back to Login
+        </button>
+      </div>
+      {#if form?.error}
+        <p class="error-msg">{form.error}</p>
+      {/if}
 
-    {#if errorMsg}
-      <p style="color:#ef4444; margin-top:.75rem">{errorMsg}</p>
+    {:else if uiState === 'success'}
+      <h1 class="title" style="color:#49bdb3;">Email Sent!</h1>
+      <p class="subtitle" style="max-width:450px;">
+        {#if form.emailMasked}
+          An OTP has been sent to <b>{form.emailMasked}</b>.<br />The code is valid for 10 minutes only.
+        {:else}
+          If an account with that email exists, instructions have been sent.
+        {/if}
+        <br />Please also check your spam folder.
+      </p>
+      <div class="links">
+        <button
+          class="link-btn"
+          on:click={resendCode}
+          disabled={sending || resendCooldown > 0}
+        >
+          {#if sending}
+            Sending...
+          {:else if resendCooldown > 0}
+            Resend in {resendCooldown}s
+          {:else}
+            Resend code
+          {/if}
+        </button>
+        &nbsp;|&nbsp;
+        <button class="link-btn" on:click={() => { uiState = 'forgot'; form = null; }}>
+          Change email
+        </button>
+      </div> -->
     {/if}
+
+    <p class="footer-note">
+      Contact your company's administrator for registration and any problem occur.
+    </p>
   </section>
 
   <section class="right"></section>
@@ -68,77 +165,164 @@
 
 <style>
   :root {
-    --teal:#34c5b7;
-    --teal-d:#149383;
-    --ring:#e6e8ee;
-    --text:#0f172a;
-    --muted:#9ca3af;
+    --teal: #34c5b7;
+    --teal-d: #149383;
+    --ring: #e6e8ee;
+    --text: #0f172a;
+    --muted: #9ca3af;
   }
 
   .login-wrap {
-    display:grid;
+    display: grid;
     grid-template-columns: 1fr 40%;
-    min-height:100vh;
+    min-height: 100vh;
   }
 
   .left {
-    display:flex;flex-direction:column;justify-content:center;align-items:center;
-    padding:48px 32px;
-  }
-  .left .flex{ margin-top:20px; margin-bottom:18px; }
-  .left img{ display:block; object-fit:contain; }
-
-  h1 {
-    margin:10px 0 22px;
-    font-weight:800;
-    text-align:center;
-    color:#49bdb3;
-    font-size:64px;
-    line-height:1.1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 48px 32px;
   }
 
-  form {
-    width:min(560px, 100%);
-    display:grid; gap:16px;
+  .left .flex {
+    margin-top: 20px;
+    margin-bottom: 18px;
+  }
+
+  .left img {
+    object-fit: contain;
+  }
+
+  .left img.h-8 {
+    height: 48px;
+  }
+
+  .left img.h-6 {
+    height: 34px;
+  }
+
+  .title {
+    margin: 10px 0 22px;
+    font-weight: 800;
+    text-align: center;
+    color: #49bdb3;
+    font-size: 60px;
+    line-height: 1.1;
+    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI";
+  }
+
+  .subtitle {
+    font-size: 16px;
+    color: #4b5563;
+    text-align: center;
+    margin-top: -1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .form-layout {
+    width: min(560px, 100%);
+    display: grid;
+    gap: 16px;
   }
 
   input {
-    height:56px;
-    padding:0 16px;
-    border-radius:14px;
-    border:1px solid var(--ring);
-    background:#fff;
-    box-shadow:0 6px 18px rgba(0,0,0,.05);
-    font-size:16px;
-    color:var(--text);
+    height: 56px;
+    padding: 0 16px 0 46px;
+    border-radius: 14px;
+    border: 1px solid var(--ring);
+    background: #fff;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.05);
+    font-size: 16px;
+    color: var(--text);
   }
-  input::placeholder{ color:var(--muted); }
 
-  button {
-    height:56px;
-    border:none; cursor:pointer;
-    border-radius:9999px;
-    font-weight:800; letter-spacing:.3px; color:#fff;
-    background:linear-gradient(180deg, var(--teal), var(--teal-d));
-    box-shadow:0 12px 24px rgba(20,147,131,.25);
+  input::placeholder {
+    color: var(--muted);
   }
-  button:hover{ filter:brightness(.98) }
 
-  .left p {
-    margin-top:16px; font-size:14px; color:#64748b; text-align:center;
+  input[name="email"],
+  input[type="email"] {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' fill='none' stroke='%239ca3af' stroke-width='2' viewBox='0 0 24 24'%3E%3Cpath d='M20 21a8 8 0 0 0-16 0'/%3E%3Ccircle cx='12' cy='7' r='4'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: 14px center;
+  }
+
+  input[name="password"] {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' fill='none' stroke='%239ca3af' stroke-width='2' viewBox='0 0 24 24'%3E%3Crect x='3' y='11' width='18' height='10' rx='2'/%3E%3Cpath d='M7 11V7a5 5 0 1 1 10 0v4'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: 14px center
+  }
+
+  button[type="submit"] {
+    height: 56px;
+    border: none;
+    cursor: pointer;
+    border-radius: 9999px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    color: #fff;
+    background: linear-gradient(180deg, var(--teal), var(--teal-d));
+  }
+
+  button:hover {
+    filter: brightness(0.9);
+  }
+
+  .links {
+    margin-top: 1rem;
+    text-align: center;
+  }
+
+  .link-btn {
+    background: none;
+    border: none;
+    color: var(--teal-d);
+    text-decoration: underline;
+    cursor: pointer;
+    font-size: 14px;
+  }
+
+  .link-btn:disabled {
+    color: #9ca3af;
+    text-decoration: none;
+    cursor: not-allowed;
+  }
+
+  .footer-note,
+  .error-msg {
+    margin-top: 16px;
+    font-size: 14px;
+    color: #64748b;
+    text-align: center;
+  }
+
+  .error-msg {
+    color: #ef4444;
   }
 
   .right {
-    position:relative;
+    position: relative;
     background: url('/images/bek7.jpg') center/cover no-repeat fixed;
   }
+
   .right::after {
-    content:""; position:absolute; inset:0; background:rgba(0,0,0,.08);
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.08);
   }
 
-  @media (max-width: 980px){
-    .login-wrap{ grid-template-columns: 1fr; }
-    .right{ display:none; }
-    h1{ font-size:44px; }
+  @media (max-width: 980px) {
+    .login-wrap {
+      grid-template-columns: 1fr;
+    }
+    .right {
+      display: none;
+    }
+    .title {
+      font-size: 44px;
+    }
   }
 </style>
