@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser';
 import pool from './src/db.js';
 import cors from 'cors';
 import profileRoutes from './src/routes/profile.js';
+import uploadRoute from "./src/routes/uploadRoute.js";
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -17,6 +18,8 @@ app.use(cors({
 app.use(bodyParser.json());
 app.use(cookieParser());
 app.use('/api/employee', profileRoutes);
+app.use("/api/upload", uploadRoute);
+app.use("/uploads", express.static("uploads"));
 
 // ✅ Test route
 app.get('/', (req, res) => {

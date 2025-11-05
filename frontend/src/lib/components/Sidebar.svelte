@@ -157,6 +157,20 @@
     roleToEdit = null;
   }
 
+  // NEW: Delete role handler
+  function deleteRole(roleId) {
+    const target = roles.find(r => r.id === roleId);
+    if (!target) return;
+    if (!confirm(`Delete role "${target.name}"? This action cannot be undone.`)) return;
+
+    roles = roles.filter(r => r.id !== roleId);
+
+    // If currently editing the deleted role, go back to list
+    if (roleToEdit && roleToEdit.id === roleId) {
+      goBackToList();
+    }
+  }
+
   // ---- Simpan Role (unchanged) ----
   function handleSaveRole() {
     if (!newRoleName) return alert('Please enter a role name.');
@@ -457,6 +471,8 @@
                   </div>
                 </details>
                 <button class="btn-edit" on:click={() => startEditRole(role)}>Edit</button>
+                <!-- NEW: Delete button -->
+                <button class="btn-danger" on:click={() => deleteRole(role.id)} aria-label={`Delete role ${role.name}`}>Delete</button>
               </div>
             {:else}
               <div class="placeholder">No roles defined. Click 'Add New Role' to start.</div>
@@ -707,6 +723,21 @@
   }
   .chip-x:hover {
     background: #dff2f1;
+  }
+
+  /* NEW: Danger button */
+  .btn-danger{
+    padding:6px 12px;
+    font-size:13px;
+    font-weight:700;
+    background:#e30707;
+    color:#ffff;
+    border:1px solid #f1b3af;
+    border-radius:8px;
+    cursor:pointer;
+  }
+  .btn-danger:hover{
+    background:#d10606;
   }
 
   @media (max-width:768px){

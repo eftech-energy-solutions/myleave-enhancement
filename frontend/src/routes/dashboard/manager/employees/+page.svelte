@@ -273,7 +273,7 @@ $: filteredEmployees = [...employees].sort((a, b) =>
               </svg>
             </div>
             {#if (detailsById[emp.id]?.photoUrl)}
-              <img src={detailsById[emp.id].photoUrl} alt="profile" on:error={(e)=> (e.currentTarget.style.display='none')} />
+              <img src={detailsById[emp.id]?.photoUrl || ""} alt="profile" on:error={(e)=> (e.currentTarget.style.display='none')} />
             {/if}
           </div>
           <h3>{emp.name}</h3>

@@ -82,8 +82,15 @@ function formatDate(dbDate) {
       // Fill detailed data for modal/view
       detailsById = {};
       for (const e of data) {
+
+      const fixedPhotoUrl = e.photourl
+        ? (e.photourl.startsWith("http")
+            ? e.photourl
+            : `http://localhost:5000${e.photourl}`)
+        : "";
+
         detailsById[e.staff_id] = {
-          photoUrl: "",
+          photoUrl: fixedPhotoUrl,
           empId: e.staff_id,
           name: e.full_name,
           email: e.email,
@@ -241,16 +248,28 @@ function formatDate(dbDate) {
     newEmp = { ...newEmp, photoUrl: "", empId: "", name: "", email: "", role: "", employmentDate: "", terminationDate: "", confirmationDate: "", gender: "Male", annualLeave: "", medicalLeave: "", department: "Technical Data", notes: "" };
   }
 
-  function handleNewPhotoFile(e) {
-    const file = e.currentTarget.files?.[0];
-    if (!file) return;
-    if (!/^image\/(png|jpeg)$/i.test(file.type)) {
-      alert("Please choose a PNG or JPG image.");
-      e.currentTarget.value = "";
-      return;
-    }
-    newEmp.photoUrl = URL.createObjectURL(file); // preview only
-  }
+  // function handleNewPhotoFile(e) {
+  //   const file = e.currentTarget.files?.[0];
+  //   if (!file) return;
+  //   if (!/^image\/(png|jpeg)$/i.test(file.type)) {
+  //     alert("Please choose a PNG or JPG image.");
+  //     e.currentTarget.value = "";
+  //     return;
+  //   }
+  //   newEmp.photoUrl = URL.createObjectURL(file); // preview only
+  // }
+
+  async function handleNewPhotoFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  // store locally for preview
+  newEmp.photoUrl = URL.createObjectURL(file);
+
+  // also store the actual file for upload
+  newEmp.photoFile = file;
+}
+
 
   let employmentDateEl; // ref to focus when missing
 
@@ -285,6 +304,21 @@ async function submitNewEmployee(e) {
   }
 
   try {
+
+    if (newEmp.photoFile) {
+      const formData = new FormData();
+      formData.append("photo", newEmp.photoFile);
+
+      const uploadRes = await fetch("http://localhost:5000/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+      const uploadData = await uploadRes.json();
+      newEmp.photoUrl = uploadData.filePath
+      ? `http://localhost:5000${uploadData.filePath}`
+      : ""; // e.g. /uploads/1730707859123.jpg
+    }
+    
     const res = await fetch("http://localhost:5000/api/employee", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -310,18 +344,21 @@ async function submitNewEmployee(e) {
     if (res.ok) {
       alert(`✅ ${newEmp.name} with ID ${newEmp.empId} added successfully!`);
 
+      const fullPhotoUrl = newEmp.photoUrl || "";
+
       // Add to grid (dummy frontend data)
       const card = {
         id: newEmp.empId,
         name: newEmp.name,
         role: newEmp.position || "Employee",
-        department: newEmp.department || "General"
+        department: newEmp.department || "General",
+        photoUrl: fullPhotoUrl
       };
       employees = [card, ...employees];
 
       // Persist details (dummy)
       detailsById[newEmp.empId] = {
-        photoUrl: newEmp.photoUrl || "",
+        photoUrl: fullPhotoUrl,
         empId: newEmp.empId,
         name: newEmp.name,
         email: newEmp.email,
@@ -347,32 +384,6 @@ async function submitNewEmployee(e) {
     alert("⚠️ Server error while adding employee.");
   }
 }
-    // Add to grid
-    const card = {
-      id: newEmp.empId,
-      name: newEmp.name,
-      role: newEmp.position || "Employee",
-      department: newEmp.department || "General"
-    };
-    employees = [card, ...employees];
-
-    // Persist details (dummy)
-    detailsById[newEmp.empId] = {
-      photoUrl: newEmp.photoUrl || "",
-      empId: newEmp.empId,
-      name: newEmp.name,
-      email: newEmp.email,
-      role: newEmp.role,
-      department: newEmp.department,
-      employmentDate: newEmp.employmentDate,
-      terminationDate: newEmp.terminationDate,
-      confirmationDate: newEmp.confirmationDate,
-      gender: newEmp.gender,
-      annualLeave: parseFloat(newEmp.annualLeave ?? ""),
-      medicalLeave: parseFloat(newEmp.medicalLeave ?? ""),
-      notes: newEmp.notes
-    };
-
   // =======================
   // 8) DETAILS MODAL (UPDATE)
   // =======================
@@ -619,9 +630,14 @@ async function submitNewEmployee(e) {
                 <path d="M4 20c0-4.2 4.2-6.5 8-6.5s8 2.3 8 6.5" fill="#9ca3af"/>
               </svg>
             </div>
-            {#if (detailsById[emp.id]?.photoUrl)}
-              <img src={detailsById[emp.id].photoUrl} alt="profile" on:error={(e)=> (e.currentTarget.style.display='none')} />
-            {/if}
+            {#if detailsById[emp.id]?.photoUrl}
+            {console.log('Rendering image URL:', detailsById[emp.id]?.photoUrl)}
+            <img
+              src={detailsById[emp.id]?.photoUrl || ""}
+              alt="profile"
+              on:error={(e) => (e.currentTarget.style.display = 'none')}
+            />
+          {/if}
           </div>
           <h3>{emp.name}</h3>
           <p>{emp.role}</p>
