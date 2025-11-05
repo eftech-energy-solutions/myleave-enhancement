@@ -249,7 +249,8 @@
 
   /* ===== TABLE ===== */
   table.leave-table {
-    width: 100%;
+    width: 97%;
+    margin: 0 auto;
     border-collapse: collapse;
     background: #f9fafb;
     border-radius: 10px;

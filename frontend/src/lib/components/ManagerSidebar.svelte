@@ -105,11 +105,11 @@
         <div class="sub-links">
           <a href="/dashboard/manager/history"
              class:active={$page.url.pathname.startsWith('/dashboard/manager/history')}>
-            <span class="text">Team Leaves</span>
+            <span class="text">Staff</span>
           </a>
           <a href="/dashboard/manager/myhistory"
              class:active={$page.url.pathname.startsWith('/dashboard/manager/myhistory')}>
-            <span class="text">My Leaves</span>
+            <span class="text">Personal</span>
           </a>
         </div>
 

@@ -1,5 +1,6 @@
 <!-- letak dalam app.html (head) -->
 <link href="https://fonts.googleapis.com/css2?family=Bungee&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&display=swap" rel="stylesheet" />
 
 <script>
   // ——— Demo data (with dateFrom/dateTo) ———
@@ -403,12 +404,12 @@
   .month-card h2 {
     margin: 0 0 0.5rem;
     color: #0c4a6e;
-    font-family:'Bungee', cursive;
-    font-weight: 400;
+    font-family:'Outfit', sans-serif;
+    font-weight: 900;
     background: rgba(73, 189, 179, 0.15);
     padding: 8px 0;
     border-radius: 8px;
-
+    text-transform: uppercase;
   }
   .month-card p {
     margin: 0 0 1rem;
