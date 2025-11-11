@@ -6,6 +6,7 @@ import cors from 'cors';
 import profileRoutes from './src/routes/profile.js';
 import uploadRoute from "./src/routes/uploadRoute.js";
 import dotenv from 'dotenv';
+import holidayRoutes from './src/routes/holidayRoutes.js';
 dotenv.config();
 
 const app = express();
@@ -20,6 +21,7 @@ app.use(cookieParser());
 app.use('/api/employee', profileRoutes);
 app.use("/api/upload", uploadRoute);
 app.use("/uploads", express.static("uploads"));
+app.use('/api/holidays', holidayRoutes);
 
 // ✅ Test route
 app.get('/', (req, res) => {
@@ -33,9 +35,10 @@ app.post('/api/login', async (req, res) => {
 
   try {
     const result = await pool.query(
-      'SELECT staff_id, full_name, email, password, role FROM profiles WHERE email = $1',
+      'SELECT staff_id, full_name, email, password, role, photourl FROM profiles WHERE email = $1',
       [email]
     );
+
 
     if (result.rows.length === 0) {
       return res.status(400).json({ error: 'Invalid email or password' });
@@ -57,7 +60,8 @@ app.post('/api/login', async (req, res) => {
         email: user.email,
         name: user.full_name,
         staffId: user.staff_id,
-        role: user.role
+        role: user.role,
+        photoUrl: user.photourl
       }),
       {
         httpOnly: false, // true kalau production
@@ -74,7 +78,8 @@ app.post('/api/login', async (req, res) => {
       email: user.email,
       name: user.full_name,
       staffId: user.staff_id,
-      role: user.role
+      role: user.role,
+      photoUrl: user.photourl
     });
   } catch (err) {
     console.error('DB error:', err);
@@ -83,7 +88,9 @@ app.post('/api/login', async (req, res) => {
 });
 
 // ✅ NEW: Get user from cookie
-app.get('/api/me', (req, res) => {console.log('🍪 Cookies received at /api/me:', req.cookies);
+// ✅ NEW: Get user photo separately (does not replace /api/me)
+app.get('/api/me/photo', async (req, res) => {
+  console.log('🍪 Cookies received at /api/me/photo:', req.cookies);
   const token = req.cookies['auth_token'];
 
   if (!token) {
@@ -92,13 +99,27 @@ app.get('/api/me', (req, res) => {console.log('🍪 Cookies received at /api/me:
 
   try {
     const user = JSON.parse(token);
-    res.json(user);
+
+    // Fetch photourl from database
+    const result = await pool.query(
+      'SELECT photourl FROM profiles WHERE staff_id = $1',
+      [user.staffId]
+    );
+
+    res.json({
+      name: user.name,
+      role: user.role,
+      staffId: user.staffId,
+      photoUrl: result.rows[0]?.photourl || null
+    });
   } catch (err) {
-    console.error('Invalid cookie:', err);
-    res.status(400).json({ error: 'Invalid cookie' });
+    console.error('Failed to fetch user photo:', err);
+    res.status(500).json({ error: 'Failed to fetch user photo' });
   }
 });
 
+// ✅ Backend listener 
 app.listen(5000, () => {
   console.log('✅ Backend running on http://localhost:5000');
 });
+

@@ -109,5 +109,112 @@ router.get("/employees", async (req, res) => {
   }
 });
 
+// ✅ Update employee (Edit)
+router.put("/:staff_id", async (req, res) => {
+  const staffId = req.params.staff_id;
+  const {
+    full_name,
+    email,
+    role,
+    department,
+    employment_date,
+    confirmation_date,
+    termination_date,
+    gender,
+    leave_entitlement_annual,
+    leave_entitlement_medical,
+    notes
+  } = req.body;
+
+  try {
+    const query = `
+      UPDATE profiles
+      SET full_name = $1,
+          email = $2,
+          role = $3,
+          department = $4,
+          employment_date = $5,
+          confirmation_date = $6,
+          termination_date = $7,
+          gender = $8,
+          leave_entitlement_annual = $9,
+          leave_entitlement_medical = $10,
+          notes = $11
+      WHERE staff_id = $12
+      RETURNING *;
+    `;
+
+    const result = await pool.query(query, [
+      full_name,
+      email,
+      role,
+      department,
+      employment_date || null,
+      confirmation_date || null,
+      termination_date || null,
+      gender,
+      leave_entitlement_annual,
+      leave_entitlement_medical,
+      notes,
+      staffId
+    ]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "Employee not found." });
+    }
+
+    res.json({ success: true, employee: result.rows[0] });
+  } catch (err) {
+    console.error("Error updating employee:", err);
+    res.status(500).json({ error: "Failed to update employee." });
+  }
+});
+
+
+// ✅ Delete employee
+router.delete("/:staff_id", async (req, res) => {
+  const staffId = req.params.staff_id;
+
+  try {
+    const result = await pool.query("DELETE FROM profiles WHERE staff_id = $1", [staffId]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "Employee not found." });
+    }
+
+    res.json({ success: true, message: "Employee deleted successfully." });
+  } catch (err) {
+    console.error("Error deleting employee:", err);
+    res.status(500).json({ error: "Failed to delete employee." });
+  }
+});
+
+// ------------------- Get current logged-in user -------------------
+router.get('/me', async (req, res) => {
+  try {
+    const token = req.cookies['auth_token'];
+    if (!token) return res.status(401).json({ error: 'Not authenticated' });
+
+    const user = JSON.parse(token);
+
+    const result = await pool.query(
+      'SELECT staff_id, full_name, email, role, photourl FROM profiles WHERE staff_id = $1',
+      [user.staffId]
+    );
+
+    if (!result.rows[0]) return res.status(404).json({ error: 'User not found' });
+
+    res.json({
+      staffId: result.rows[0].staff_id,
+      name: result.rows[0].full_name,
+      email: result.rows[0].email,
+      role: result.rows[0].role,
+      photoUrl: result.rows[0].photourl,
+    });
+  } catch (err) {
+    console.error('Failed to fetch current user:', err);
+    res.status(500).json({ error: 'Failed to fetch user data' });
+  }
+});
 
 export default router;

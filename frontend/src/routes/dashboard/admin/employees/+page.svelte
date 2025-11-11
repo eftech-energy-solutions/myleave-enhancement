@@ -384,36 +384,61 @@ async function submitNewEmployee(e) {
     alert("⚠️ Server error while adding employee.");
   }
 }
-  // =======================
-  // 8) DETAILS MODAL (UPDATE)
-  // =======================
-  let detailsOpen = false;
-  let selectedEmp = null;
-  let editMode = false;
-  let detailsForm = null; // working copy
-  let showDeleteConfirm = false;
-  let employeeToDelete = null;
+// =======================
+// 8) DETAILS MODAL (UPDATE)
+// =======================
+let detailsOpen = false;
+let selectedEmp = null;
+let editMode = false;
+let detailsForm = null; // working copy
+let showDeleteConfirm = false;
+let employeeToDelete = null;
 
-  function openDetails(empId) {
-    const base = detailsById[empId] ?? null;
-    selectedEmp = base ? structuredClone(base) : null;
-    detailsForm  = base ? structuredClone(base) : null; // buffer
-    editMode = false;
-    detailsOpen = !!selectedEmp;
-  }
+function openDetails(empId) {
+  const base = detailsById[empId] ?? null;
+  selectedEmp = base ? structuredClone(base) : null;
+  detailsForm = base ? structuredClone(base) : null; // buffer
+  editMode = false;
+  detailsOpen = !!selectedEmp;
+}
 
-  const safe = (v) => (v && String(v).trim().length ? v : "-");
+const safe = (v) => (v && String(v).trim().length ? v : "-");
 
-  function toggleEditSave() {
-    if (!selectedEmp) return;
+// ✅ EDIT & SAVE EMPLOYEE
+async function toggleEditSave() {
+  if (!selectedEmp) return;
 
-    if (editMode) {
-      if (!detailsForm.name || !detailsForm.role) {
-        alert("Name and Position are required.");
-        return;
-      }
-      // keep original photoUrl (no editing here)
-      detailsForm.photoUrl = selectedEmp.photoUrl;
+  if (editMode) {
+    if (!detailsForm.name || !detailsForm.role) {
+      alert("Name and Role are required.");
+      return;
+    }
+
+    try {
+      const res = await fetch(`http://localhost:5000/api/employee/${selectedEmp.empId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          full_name: detailsForm.name,
+          email: detailsForm.email,
+          role: detailsForm.role,
+          department: detailsForm.department,
+          employment_date: detailsForm.employmentDate,
+          confirmation_date: detailsForm.confirmationDate,
+          termination_date: detailsForm.terminationDate,
+          gender: detailsForm.gender,
+          leave_entitlement_annual: detailsForm.annualLeave,
+          leave_entitlement_medical: detailsForm.medicalLeave,
+          notes: detailsForm.notes
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update employee");
+
+      alert("✅ Employee updated successfully!");
+
+      // update frontend state
       detailsById[selectedEmp.empId] = structuredClone(detailsForm);
       selectedEmp = structuredClone(detailsForm);
 
@@ -422,38 +447,58 @@ async function submitNewEmployee(e) {
         employees[idx] = {
           ...employees[idx],
           name: detailsForm.name,
-          role: detailsForm.position,
+          role: detailsForm.role,
           department: detailsForm.department
         };
         employees = [...employees];
       }
+
       editMode = false;
-      return;
+    } catch (err) {
+      console.error("❌ Error updating employee:", err);
+      alert("Failed to update employee.");
     }
-    editMode = true;
-  }
-  
-  function openDeleteConfirm() {
-    if (!selectedEmp) return;
-    employeeToDelete = selectedEmp;
-    showDeleteConfirm = true;
+    return;
   }
 
-  function deleteEmployee() {
-    if (!employeeToDelete) return;
-    const empId = employeeToDelete.id || employeeToDelete.empId;
-    
-    // Remove from the main grid
+  editMode = true;
+}
+
+// ✅ SHOW DELETE CONFIRMATION
+function openDeleteConfirm() {
+  if (!selectedEmp) return;
+  employeeToDelete = selectedEmp;
+  showDeleteConfirm = true;
+}
+
+// ✅ DELETE EMPLOYEE
+async function deleteEmployee() {
+  if (!employeeToDelete) return;
+  const empId = employeeToDelete.empId || employeeToDelete.id;
+
+  // if (!confirm("Are you sure you want to delete this employee?")) return;
+
+  try {
+    const res = await fetch(`http://localhost:5000/api/employee/${empId}`, {
+      method: "DELETE"
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Failed to delete employee");
+
+    // alert("✅ Employee deleted successfully!");
+
     employees = employees.filter(e => e.id !== empId);
-    
-    // Remove from details object
     delete detailsById[empId];
 
-    // Clean up and close modals
     showDeleteConfirm = false;
     detailsOpen = false;
     employeeToDelete = null;
+  } catch (err) {
+    console.error("❌ Error deleting employee:", err);
+    // alert("Failed to delete employee.");
   }
+}
 
 </script>
 

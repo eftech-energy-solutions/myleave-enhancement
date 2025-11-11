@@ -3,7 +3,7 @@ import { error } from '@sveltejs/kit';
 
 export const load = async ({ locals }) => {
   try {
-    const user = locals.user ?? { name: 'admin', role: 'admin', id: 'U001', staffId: 'E8505' };
+    const user = locals.user ?? { name: 'admin', role: 'admin', id: 'U001', staffId: 'E8505', photoUrl:null };
 
     // Keep ONLY manager/admin-specific data here (e.g., donuts, stats, approvals)
     const carryForwardAnnual = 5;

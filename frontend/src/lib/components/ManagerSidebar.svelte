@@ -1,8 +1,40 @@
 <script>
   import { page } from '$app/stores';
-  export let data; // contains { user }
+  import { onMount } from 'svelte';
+  let selectedFile = null;
 
-  const user = data?.user ?? { name: 'admin', role: 'Human Resources', staffId: 'E8505' };
+  // Fallback user info (before fetching from server)
+  let safeUser = { 
+    name: '', 
+    role: '', 
+    staffId: '', 
+    photoUrl: null 
+  };
+
+  $: headerAvatarUrl = safeUser.photoUrl 
+    ? `http://localhost:5000${safeUser.photoUrl}` 
+    : '/images/icontest1.png';
+
+  // --- Fetch current user on mount ---
+  onMount(async () => {
+    try {
+      const res = await fetch('http://localhost:5000/api/me/photo', {
+        credentials: 'include'
+      });
+      if (res.ok) {
+        const data = await res.json();
+        // merge backend data (photoUrl, staffId, etc.) into safeUser
+        safeUser = { ...safeUser, ...data };
+        profilePhotoUrl = safeUser.photoUrl 
+          ? `http://localhost:5000${safeUser.photoUrl}` 
+          : '';
+        console.log('safeUser updated on mount:', safeUser);
+      }
+    } catch (err) {
+      console.error('Error fetching user:', err);
+    }
+  });
+
   let profileMenuOpen = false;
 
   // Avatar state (updates when user changes picture)
@@ -38,19 +70,19 @@
     profileModalOpen = false;
   }
 
-  function handlePhotoFile(e) {
-    const file = e.currentTarget.files?.[0];
-    if (!file) return;
-    if (!/^image\/(png|jpeg)$/i.test(file.type)) {
-      alert('Please choose a PNG or JPG image.');
-      e.currentTarget.value = '';
-      return;
-    }
-    profilePhotoUrl = URL.createObjectURL(file);
-  }
+  // function handlePhotoFile(e) {
+  //   const file = e.currentTarget.files?.[0];
+  //   if (!file) return;
+  //   if (!/^image\/(png|jpeg)$/i.test(file.type)) {
+  //     alert('Please choose a PNG or JPG image.');
+  //     e.currentTarget.value = '';
+  //     return;
+  //   }
+  //   profilePhotoUrl = URL.createObjectURL(file);
+  // }
 
   // Save profile update
-  function saveProfile(e) {
+  async function saveProfile(e) {
     e.preventDefault();
 
     if (activeProfilePane === 'password') {
@@ -61,14 +93,65 @@
       if (pwd1.length < 8) { alert('Password must be at least 8 characters.'); return; }
       alert('Password updated (demo).');
     } else {
-      if (!profilePhotoUrl) { alert('Please select a profile picture.'); return; }
-      // Update header avatar immediately
-      headerAvatarUrl = profilePhotoUrl;
-      alert('Profile picture updated (demo).');
+      // if (!profilePhotoUrl) { alert('Please select a profile picture.'); return; }
+      // // Update header avatar immediately
+      // headerAvatarUrl = profilePhotoUrl;
+      // alert('Profile picture updated (demo).');
+    if (activeProfilePane === 'picture') {
+    if (!selectedFile) return alert('Please select a photo');
+    try {
+      const formData = new FormData();
+      formData.append('photo', selectedFile);
+
+      const res = await fetch('http://localhost:5000/api/upload/profile', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include', // important for cookie auth
+      });
+
+      const data = await res.json();
+       console.log('📤 Server response:', data);
+
+      if (data.success) {
+        // ✅ Update sidebar photo immediately
+        const newPhotoUrl = `http://localhost:5000${data.photoUrl}`;
+        profilePhotoUrl = newPhotoUrl;
+        safeUser.photoUrl = newPhotoUrl; // so sidebar updates too
+        // ✅ Update sidebar and modal preview
+        safeUser.photoUrl = data.photoUrl;
+        profilePhotoUrl = `http://localhost:5000${data.photoUrl}`;
+        selectedFile = null;
+        alert('Profile photo updated!');
+      } else {
+        alert(data.error || 'Upload failed');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Upload failed.');
+    }
+  } else if (activeProfilePane === 'password') {
+    // your existing password update logic here
+  }
+
     }
 
     closeProfileModal();
   }
+
+  function handlePhotoFile(e) {
+    const file = e.currentTarget.files?.[0];
+    console.log('📁 File selected:', file);
+    if (!file) return;
+    if (!/^image\/(png|jpeg)$/i.test(file.type)) {
+      alert('Please choose a PNG or JPG image.');
+      e.currentTarget.value = '';
+      return;
+    }
+    selectedFile = file;
+    profilePhotoUrl = URL.createObjectURL(file);
+  }
+
+
 </script>
 
 <div class="container">
@@ -136,7 +219,7 @@
   <main class="main dash-main">
     <header class="topbar">
       <div class="title-wrap">
-        <div class="hello">Welcome back, {user?.name || 'admin'}!</div>
+        <div class="hello">Welcome back, {safeUser?.name || 'admin'}!</div>
 
         {#if $page.url.pathname.startsWith('/dashboard/manager/main')}
           <h1 class="page-title">Dashboard</h1>
@@ -157,16 +240,19 @@
 
       <div class="profile" use:clickOutside>
         <div class="profile-info">
-          <img
-            src={headerAvatarUrl}
-            alt="avatar"
-            class="avatar-img"
-            on:error={(e)=> e.currentTarget.style.display='none'}
-          />
+          {#if safeUser?.photoUrl}
+            {console.log('Rendering sidebar image URL:', safeUser.photoUrl)}
+            <img
+              src={`http://localhost:5000${safeUser.photoUrl}`}
+              alt="profile"
+              class="avatar-img"
+              on:error={(e) => (e.currentTarget.style.display = 'none')}
+            />
+          {/if}
           <div class="who">
-            <div class="name">{user?.name || 'Afiq Mikail'}</div>
-            <div class="sub">{user?.role || 'Human Resources'}</div>
-            <div class="sub">#{user?.staffId || 'E8505'}</div>
+            <div class="name">{safeUser?.name}</div>
+            <div class="sub">{safeUser?.role}</div>
+            <div class="sub">Staff ID : {safeUser?.staffId}</div>
           </div>
         </div>
 

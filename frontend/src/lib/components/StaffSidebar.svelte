@@ -1,9 +1,7 @@
 <script>
   import { page } from '$app/stores';
-
-  // Props
-  export let user = null;
-
+  import { onMount } from 'svelte';
+  let selectedFile = null;
   // ---- NAV (staff role) ----
   const roleBase = '/dashboard/staff';
   
@@ -16,10 +14,39 @@
     return current.startsWith(href);
   };
 
-  // ---- Header state ----
-  const safeUser = user ?? { name: 'staff', role: 'Staff', staffId: 'S0001' };
-  let profileMenuOpen = false;
+// Fallback user info (before fetching from server)
+  let safeUser = { 
+    name: '', 
+    role: '', 
+    staffId: '', 
+    photoUrl: null 
+  };
 
+  $: headerAvatarUrl = safeUser.photoUrl 
+    ? `http://localhost:5000${safeUser.photoUrl}` 
+    : '/images/icontest1.png';
+
+  // --- Fetch current user on mount ---
+  onMount(async () => {
+    try {
+      const res = await fetch('http://localhost:5000/api/me/photo', {
+        credentials: 'include'
+      });
+      if (res.ok) {
+        const data = await res.json();
+        // merge backend data (photoUrl, staffId, etc.) into safeUser
+        safeUser = { ...safeUser, ...data };
+        profilePhotoUrl = safeUser.photoUrl 
+          ? `http://localhost:5000${safeUser.photoUrl}` 
+          : '';
+        console.log('safeUser updated on mount:', safeUser);
+      }
+    } catch (err) {
+      console.error('Error fetching user:', err);
+    }
+  });
+
+  let profileMenuOpen = false;
   // Avatar header preview
   let headerAvatarUrl = '/images/icontest1.png';
 
@@ -45,18 +72,18 @@
   }
   function closeProfileModal() { profileModalOpen = false; }
 
-  function handlePhotoFile(e) {
-    const file = e.currentTarget.files?.[0];
-    if (!file) return;
-    if (!/^image\/(png|jpeg)$/i.test(file.type)) {
-      alert('Please choose a PNG or JPG image.');
-      e.currentTarget.value = '';
-      return;
-    }
-    profilePhotoUrl = URL.createObjectURL(file);
-  }
+  // function handlePhotoFile(e) {
+  //   const file = e.currentTarget.files?.[0];
+  //   if (!file) return;
+  //   if (!/^image\/(png|jpeg)$/i.test(file.type)) {
+  //     alert('Please choose a PNG or JPG image.');
+  //     e.currentTarget.value = '';
+  //     return;
+  //   }
+  //   profilePhotoUrl = URL.createObjectURL(file);
+  // }
 
-  function saveProfile(e) {
+  async function saveProfile(e) {
     e.preventDefault();
     if (activeProfilePane === 'password') {
       const pwd1 = e.currentTarget.querySelector('input[name="pwd1"]').value;
@@ -66,11 +93,62 @@
       if (pwd1.length < 8) return alert('Password must be at least 8 characters.');
       alert('Password updated (demo).');
     } else {
-      if (!profilePhotoUrl) return alert('Please select a profile picture.');
-      headerAvatarUrl = profilePhotoUrl; // live update
-      alert('Profile picture updated (demo).');
+      // if (!profilePhotoUrl) return alert('Please select a profile picture.');
+      // headerAvatarUrl = profilePhotoUrl; // live update
+      // alert('Profile picture updated (demo).');
+
+    if (activeProfilePane === 'picture') {
+    if (!selectedFile) return alert('Please select a photo');
+
+    try {
+      const formData = new FormData();
+      formData.append('photo', selectedFile);
+
+      const res = await fetch('http://localhost:5000/api/upload/profile', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include', // important for cookie auth
+      });
+
+      const data = await res.json();
+       console.log('📤 Server response:', data);
+
+      if (data.success) {
+        // ✅ Update sidebar photo immediately
+        const newPhotoUrl = `http://localhost:5000${data.photoUrl}`;
+        profilePhotoUrl = newPhotoUrl;
+        safeUser.photoUrl = newPhotoUrl; // so sidebar updates too
+        // ✅ Update sidebar and modal preview
+        safeUser.photoUrl = data.photoUrl;
+        profilePhotoUrl = `http://localhost:5000${data.photoUrl}`;
+        selectedFile = null;
+        alert('Profile photo updated!');
+      } else {
+        alert(data.error || 'Upload failed');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Upload failed.');
+    }
+  } else if (activeProfilePane === 'password') {
+    // your existing password update logic here
+  }
+
     }
     closeProfileModal();
+  }
+
+function handlePhotoFile(e) {
+    const file = e.currentTarget.files?.[0];
+    console.log('📁 File selected:', file);
+    if (!file) return;
+    if (!/^image\/(png|jpeg)$/i.test(file.type)) {
+      alert('Please choose a PNG or JPG image.');
+      e.currentTarget.value = '';
+      return;
+    }
+    selectedFile = file;
+    profilePhotoUrl = URL.createObjectURL(file);
   }
 
   // ---- Page title (staff paths) ----
@@ -123,22 +201,25 @@
   <div class="right">
     <header class="topbar">
       <div class="title-wrap">
-        <div class="hello">Welcome back, {safeUser?.name || 'staff'}!</div>
+        <div class="hello">Welcome back, {safeUser?.name}!</div>
         <h1 class="page-title">{pageTitle}</h1>
-      </div>
+      </div>  
 
       <div class="profile" use:clickOutside>
         <div class="profile-info">
-          <img
-            src={headerAvatarUrl}
-            alt="avatar"
-            class="avatar-img"
-            on:error={(e)=> e.currentTarget.style.display='none'}
-          />
+          {#if safeUser?.photoUrl}
+            {console.log('Rendering sidebar image URL:', safeUser.photoUrl)}
+            <img
+              src={`http://localhost:5000${safeUser.photoUrl}`}
+              alt="profile"
+              class="avatar-img"
+              on:error={(e) => (e.currentTarget.style.display = 'none')}
+            />
+          {/if}
             <div class="who">
-              <div class="name">{safeUser?.name || 'Staff'}</div>
-              <div class="sub">{safeUser?.role || 'Staff'}</div>
-              <div class="sub">#{safeUser?.staffId || 'S0001'}</div>
+              <div class="name">{safeUser?.name}</div>
+              <div class="sub">{safeUser?.role}</div>
+              <div class="sub">Staff ID : {safeUser?.staffId}</div>
             </div>
         </div>
 

@@ -1,33 +1,41 @@
 <script>
-  import { onMount, tick } from 'svelte';
-  export let data; // expects: { user, holidaysByYear, employeesOverview? }
+ import { onMount, tick } from 'svelte';
+  // export let data; // REMOVED: Will fetch its own holidays
 
   // ===================================
   // 1. COMPONENT STATE & PROPS
   // ===================================
-  const user = data?.user ?? { name: 'admin', role: 'Human Resources', staffId: 'E8505' };
-  const holidaysByYear = data.holidaysByYear;
-  let canvasEl; // For Chart.js
-  let addModal; // For the dialog element
+  const user = { name: 'admin', role: 'Human Resources', staffId: 'E8505' };
+  let holidaysByYear = {}; 
+  let loading = true;
+  let error = "";
 
-  // ===================================
-  // 2. UI DATA (CHARTS, OVERVIEW)
-  // ===================================
+  let canvasEl;
+  let addModal;
+
+  let holidayDatesByYear = {};
+  let holidayNamesByYear = {};
+  let holidayDescsByYear = {}; 
+  let holidayIdsByISO = new Map();
+  let holidaySourcesByISO = new Map(); 
+  let holidayUIDsByISO = new Map(); 
+  let editingId = null;
+  let editDate = "";
+  let editTitle = "";
+  let editDescription = "";
+
+  // 🟢 helper untuk Svelte binding (fix ternary bind:value)
+
   const dataByDept = [
-    { name: "Director",                     count:  3, color: "#FFD9CC" },
-    { name: "Administrator",                count: 12, color: "#FCF9BE" },
-    { name: "Operations",                   count: 18, color: "#C6DEF1" },
-    { name: "Operations Support",           count: 35, color: "#F2C6DE" },
+    { name: "Director", count:  3, color: "#FFD9CC" },
+    { name: "Administrator", count: 12, color: "#FCF9BE" },
+    { name: "Operations", count: 18, color: "#C6DEF1" },
+    { name: "Operations Support", count: 35, color: "#F2C6DE" },
     { name: "Sales & Technical Excellence", count: 27, color: "#C9E4DE" },
-    { name: "Technical Data",               count: 22, color: "#DBCDF0" }
+    { name: "Technical Data", count: 22, color: "#DBCDF0" }
   ];
   $: totalEmployees = dataByDept.reduce((a,b)=>a+b.count, 0);
 
-  // ===================================
-  // 3. CALENDAR LOGIC
-  // ===================================
-
-  // --- Date Helpers ---
   const atStartOfDay = (d) => { const x = new Date(d); x.setHours(0,0,0,0); return x; };
   const isoLocal = (d) => {
     const y = d.getFullYear();
@@ -38,24 +46,26 @@
   let today = atStartOfDay(new Date());
   const todayISO = isoLocal(today);
 
-  // --- Calendar View & Navigation ---
-  const years = data?.holidaysByYear ? Object.keys(data.holidaysByYear).map(Number) : [new Date().getFullYear()];
-  const minYear = Math.min(...years);
-  const maxYear = Math.max(...years);
-  const minDate = new Date(minYear, 0, 1);
-  const maxDate = new Date(maxYear, 11, 31);
+  let minDate = new Date(new Date().getFullYear(), 0, 1);
+  let maxDate = new Date(new Date().getFullYear(), 11, 31);
   const monthStart = (d) => new Date(d.getFullYear(), d.getMonth(), 1);
-  const minMonthStart = monthStart(minDate);
-  const maxMonthStart = monthStart(maxDate);
+  let minMonthStart = monthStart(minDate);
+  let maxMonthStart = monthStart(maxDate);
 
   let viewBase = clampToWindowMonth(atStartOfDay(new Date()));
-  let monthLabel = '';
   let days = [];
 
   const canGoPrev = () => monthStart(viewBase) > minMonthStart;
   const canGoNext = () => monthStart(viewBase) < maxMonthStart;
   
   function clampToWindowMonth(d) {
+    if (!d || !minMonthStart || !maxMonthStart || !minMonthStart.getTime() || !maxMonthStart.getTime()) {
+      const fallbackYear = new Date().getFullYear();
+      minMonthStart = new Date(fallbackYear, 0, 1);
+      maxMonthStart = new Date(fallbackYear + 3, 11, 31);
+      if (!d) d = new Date();
+    }
+    
     const ms = monthStart(d).getTime();
     if (ms < minMonthStart.getTime()) return new Date(minMonthStart);
     if (ms > maxMonthStart.getTime()) return new Date(maxMonthStart);
@@ -68,31 +78,66 @@
   function nextYear() { if (canGoNext()) { const d = new Date(viewBase); d.setFullYear(d.getFullYear() + 1); viewBase = clampToWindowMonth(d); buildMonth(viewBase); } }
   function goToday() { viewBase = clampToWindowMonth(atStartOfDay(new Date())); buildMonth(viewBase); }
 
-  // --- Holiday Data Management ---
-  const holidayDatesByYear = {};
-  const holidayNamesByYear = {};
-  if (data?.holidaysByYear) {
-    for (const y in data.holidaysByYear) {
-      const arr = data.holidaysByYear[y] ?? [];
-      holidayDatesByYear[y] = new Set(arr.map(h => h.date));
-      holidayNamesByYear[y] = new Map(arr.map(h => [h.date, h.name || 'Public Holiday']));
-    }
-  }
   const isHoliday = (d) => holidayDatesByYear[d.getFullYear()]?.has(isoLocal(d)) ?? false;
-
-  // --- Additional Leave Data Management ---
-  const additionalMeta = new Map(); // ISO -> { name, desc }
-  const isAdditional = (d) => additionalMeta.has(isoLocal(d));
   
-  function addOrUpdateAdditional(iso, { name, desc }) {
-    additionalMeta.set(iso, { name, desc });
+  function startEdit(h) {
+    if (h.source === "official") {
+      alert("Official holidays can’t be edited (you can hide them instead).");
+      return;
+    }
+    editingId = h.id;
+    editDate = h.date;
+    editTitle = h.title;
+    editDescription = h.description || "";
   }
-  function removeAdditional(iso) {
-    additionalMeta.delete(iso);
+
+  function cancelEdit() {
+    editingId = null;
+    editDate = "";
+    editTitle = "";
+    editDescription = "";
+    modalMode = 'viewPublic';
   }
+
+  async function saveEdit() {
+  if (!editingId) return;
+  if (!editDate || !editTitle) return alert("Please fill date & title");
+
+  const res = await fetch(`/api/holidays/${editingId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({
+      date: editDate,
+      title: editTitle,
+      description: editDescription
+    })
+  });
+
+  if (!res.ok) {
+    const j = await res.json().catch(()=>({}));
+    return alert(j.error || "Failed to update holiday");
+  }
+
+  await loadHolidays();     // refresh data dari server
+  addModal?.close();        // ⬅️ tutup modal supaya tak “nampak” state lama
+  cancelEdit();             // reset field edit
+}
+
+  async function handleSubmit(e) {
+  const form = e.currentTarget;
+  if (!form.reportValidity()) return;
+
+  if (modalMode === 'add') {
+    await addHolidayAPI();
+  } else if (modalMode === 'edit') {
+    await saveEdit();
+  }
+}
 
   // --- Month Builder ---
   function buildMonth(base = new Date()) {
+    if (!base) return;
     const y = base.getFullYear(), m = base.getMonth();
     const first = new Date(y, m, 1);
     const start = new Date(first);
@@ -106,8 +151,13 @@
       const y2 = d.getFullYear();
 
       const isHol = isHoliday(d);
-      const addName = additionalMeta.get(iso)?.name || null;
       const phName  = holidayNamesByYear[y2]?.get(iso) || null;
+      const phDesc = holidayDescsByYear[y2]?.get(iso) || null; // Ambil desc
+      
+      let title = phName;
+      if (phName && phDesc) {
+        title = `${phName} - ${phDesc}`; // Gabung untuk title hover
+      }
 
       arr.push({
         key: iso,
@@ -115,37 +165,196 @@
         date: d,
         muted: d.getMonth() !== m,
         today: iso === todayISO,
-        holiday: isHol || isAdditional(d),
+        holiday: isHol,
         outOfWindow: d < minDate || d > maxDate,
-        title: phName || addName || null
+        title: title || (isHol ? 'Public Holiday' : null) // Guna title gabungan
       });
     }
-    monthLabel = new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(first);
+    // monthLabel = new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(first); // DIBUANG
     days = arr;
   }
 
+  // --- BARU: State untuk Dropdown Berasingan ---
+  const monthNames = [
+      "January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December"
+  ];
+  const staticMonthOptions = monthNames.map((label, index) => ({ value: index, label }));
+
+  $: dynamicYearOptions = ((min, max) => {
+      const years = [];
+      if (!min || !max) return [new Date().getFullYear()]; // Fallback
+      for (let y = min; y <= max; y++) {
+          years.push(y);
+      }
+      return years;
+  })(minDate.getFullYear(), maxDate.getFullYear());
+
+  // Dapatkan state semasa dari viewBase
+  $: selectedYear = viewBase ? viewBase.getFullYear() : new Date().getFullYear();
+  $: selectedMonth = viewBase ? viewBase.getMonth() : new Date().getMonth();
+
+  // Handler apabila dropdown berubah
+  function onYearSelect(event) {
+      const newYear = parseInt(event.target.value, 10);
+      const newDate = new Date(newYear, selectedMonth, 1);
+      viewBase = clampToWindowMonth(newDate);
+      buildMonth(viewBase);
+  }
+
+  function onMonthSelect(event) {
+      const newMonth = parseInt(event.target.value, 10);
+      const newDate = new Date(selectedYear, newMonth, 1);
+      viewBase = clampToWindowMonth(newDate);
+      buildMonth(viewBase);
+  }
+  // --- Tamat State Dropdown ---
+
   // ===================================
-  // 4. MODAL LOGIC (ADD/EDIT/VIEW)
+  // 4. API & DATA LOGIC (NEW SECTION)
+  // ===================================
+
+  /**
+   * Fetches all holidays, processes them, and rebuilds the calendar.
+   */
+  async function loadHolidays() {
+    loading = true;
+    error = "";
+    try {
+      // Guna { credentials: "include" } dari kod sedia ada
+      const res = await fetch("/api/holidays", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load holidays");
+      const flatHolidays = await res.json(); 
+      
+      // Transform flat array into the by-year object structure
+      const byYear = {};
+      for (const hol of flatHolidays) {
+        const year = hol.date.slice(0, 4);
+        if (!byYear[year]) byYear[year] = [];
+        byYear[year].push({
+            id: hol.id,
+            date: hol.date,
+            name: hol.title,
+            description: hol.description || '',
+            source: hol.source, // BARU
+            uid: hol.uid       // BARU
+        });
+      }
+      holidaysByYear = byYear;
+      
+      processHolidayData();
+      
+      if (!viewBase) {
+        viewBase = clampToWindowMonth(atStartOfDay(new Date()));
+      }
+      buildMonth(viewBase);
+
+    } catch (e) {
+      error = e.message || "Error";
+    } finally {
+      loading = false;
+    }
+  }
+
+  /**
+   * Processes the `holidaysByYear` object to build fast-lookup maps.
+   */
+  function processHolidayData() {
+    const newHolidayDatesByYear = {};
+    const newHolidayNamesByYear = {};
+    const newHolidayDescsByYear = {};
+    const newHolidayIdsByISO = new Map();
+    const newHolidaySourcesByISO = new Map(); // BARU
+    const newHolidayUIDsByISO = new Map(); // BARU
+    
+    // ⬇️ LOGIK BARU: TAHUN SEMASA + 3 TAHUN 
+    const currentYear = new Date().getFullYear();
+    const minYear = currentYear;
+    const maxYear = currentYear + 3;
+    
+    minDate = new Date(minYear, 0, 1);
+    maxDate = new Date(maxYear, 11, 31);
+    minMonthStart = monthStart(minDate);
+    maxMonthStart = monthStart(maxDate);
+    // ⬆️ TAMAT LOGIK BARU
+
+    for (const y in holidaysByYear) {
+      // Hanya proses data dalam julat tahun kita
+      if (parseInt(y, 10) < minYear || parseInt(y, 10) > maxYear) {
+        continue;
+      }
+      
+      const arr = holidaysByYear[y] ?? [];
+      newHolidayDatesByYear[y] = new Set(arr.map(h => h.date));
+      newHolidayNamesByYear[y] = new Map(arr.map(h => [h.date, h.name || 'Public Holiday']));
+      newHolidayDescsByYear[y] = new Map(arr.map(h => [h.date, h.description || '']));
+      
+      // Dipecahkan untuk populasikan semua data
+      arr.forEach(h => {
+  newHolidayIdsByISO.set(h.date, h.id);
+  newHolidaySourcesByISO.set(h.date, h.source);
+  newHolidayUIDsByISO.set(h.date, h.uid);
+});
+
+    }
+    
+    holidayDatesByYear = newHolidayDatesByYear;
+    holidayNamesByYear = newHolidayNamesByYear;
+    holidayDescsByYear = newHolidayDescsByYear;
+    holidayIdsByISO = newHolidayIdsByISO;
+    holidaySourcesByISO = newHolidaySourcesByISO; // BARU
+    holidayUIDsByISO = newHolidayUIDsByISO; // BARU
+  }
+
+  /**
+   * ADDS a public holiday via API call.
+   * Ini adalah fungsi 'addHoliday' dari skrip baru, digabungkan ke sini.
+   */
+  async function addHolidayAPI() {
+    // 'addDateISO', 'addName', 'addDesc' digunakan dari skop komponen
+    const res = await fetch("/api/holidays", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include", // Kekalkan 'credentials'
+      body: JSON.stringify({ date: addDateISO, title: addName, description: addDesc })
+    });
+
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      alert(j.error || "Failed to add holiday"); // Guna alert() seperti dalam skrip baru
+      return;
+    }
+
+    addModal?.close();
+    await loadHolidays();
+  }
+
+
+  // ===================================
+  // 5. MODAL LOGIC (ADD/EDIT/VIEW)
   // ===================================
   let addDateISO = '';
   let addName = '';
   let addDesc = '';
-  let modalMode = 'add'; // 'add', 'edit', 'viewPublic'
+  let modalMode = 'add'; // 'add', 'viewPublic'
+  let selectedHolidayId = null;
+  let selectedHolidaySource = null; // BARU
+  let selectedHolidayUID = null; // BARU
 
   async function openFormForDate(date) {
     const iso = isoLocal(atStartOfDay(date));
     addDateISO = iso;
     const y = date.getFullYear();
+    
+    // Ambil SEMUA data berkaitan tarikh ini
+    selectedHolidayId = holidayIdsByISO.get(iso) || null;
+    selectedHolidaySource = holidaySourcesByISO.get(iso) || 'custom'; // Anggap 'custom' jika tiada
+    selectedHolidayUID = holidayUIDsByISO.get(iso) || null;
 
     if (holidayDatesByYear[y]?.has(iso)) {
       modalMode = 'viewPublic';
       addName = holidayNamesByYear[y]?.get(iso) || 'Public Holiday';
-      addDesc = 'This is a pre-defined public holiday.';
-    } else if (additionalMeta.has(iso)) {
-      modalMode = 'edit';
-      const existing = additionalMeta.get(iso);
-      addName = existing.name || '';
-      addDesc = existing.desc || '';
+      addDesc = holidayDescsByYear[y]?.get(iso) || ''; 
     } else {
       modalMode = 'add';
       addName = '';
@@ -155,36 +364,57 @@
     await tick();
   }
 
-  function submitAdditional(e) {
-    const form = e.currentTarget;
-    if (!form.reportValidity()) return;
-    addOrUpdateAdditional(addDateISO, { name: addName.trim(), desc: addDesc.trim() });
-    addModal?.close();
-    buildMonth(viewBase);
-  }
+  // FUNGSI INI DIKEMASKINI SEPENUHNYA DENGAN LOGIK 'deleteItem' BARU
+  async function deletePublicHoliday() {
+    // Dapatkan data yang disimpan semasa 'openFormForDate'
+    const source = selectedHolidaySource;
+    const uid = selectedHolidayUID;
+    const date = addDateISO;
+    const id = selectedHolidayId;
+    
+    // Logik 'confirm' dikekalkan dari kod sedia ada
+    if (!confirm("Are you sure you want to delete/hide this holiday?")) return;
 
-  function deleteAdditional() {
-    removeAdditional(addDateISO);
-    addModal?.close();
-    buildMonth(viewBase);
-  }
-  
-  function deletePublicHoliday() {
-    const y = Number(addDateISO.slice(0,4));
-    if (holidayDatesByYear[y]) {
-      holidayDatesByYear[y].delete(addDateISO);
-      holidayNamesByYear[y].delete(addDateISO);
+    try {
+      if (source === "official") {
+        const res = await fetch("/api/holidays/official/hide", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include", // Kekalkan 'credentials'
+          body: JSON.stringify({ uid: uid, date: date, reason: "Hidden by admin" })
+        });
+        if (!res.ok) {
+          const j = await res.json().catch(()=>({}));
+          throw new Error(j.error || "Failed to hide official holiday");
+        }
+      } else { // 'custom' atau lain-lain
+        if (!id) throw new Error("No holiday id found (custom)");
+        
+        const res = await fetch(`/api/holidays/${id}`, { 
+          method: "DELETE",
+          credentials: "include" // Kekalkan 'credentials'
+        });
+        if (!res.ok) {
+          const j = await res.json().catch(()=>({}));
+          throw new Error(j.error || "Failed to delete custom holiday");
+        }
+      }
+      
+      // Jika berjaya
+      addModal?.close();
+      await loadHolidays();
+
+    } catch (err) {
+      alert(err.message); // Guna alert() seperti dalam skrip baru
     }
-    addModal?.close();
-    buildMonth(viewBase);
   }
 
   // ===================================
-  // 5. LIFECYCLE & INITIALIZATION
+  // 6. LIFECYCLE & INITIALIZATION
   // ===================================
   onMount(async () => {
     // Build initial calendar view
-    buildMonth(viewBase);
+    await loadHolidays(); // NEW: Fetch data on mount
 
     // Initialize Chart.js
     const Chart = (await import('chart.js/auto')).default;
@@ -215,7 +445,7 @@
 </script>
 
 <!-- ======================= -->
-<!--      HTML / MARKUP      -->
+<!--       HTML / MARKUP       -->
 <!-- ======================= -->
 <main class="main">
   <!-- Top Bar -->
@@ -244,14 +474,38 @@
 
     <!-- Calendar Card -->
     <div class="card" style="grid-column: span 5;">
-      <h3>Calendar (Public & Additional Leave)</h3>
+      <h3>Calendar (Public Holidays)</h3>
       <div class="calendar calendar-wide">
         <div class="month">
           <div class="nav">
             <button class="nav-btn" on:click={prevYear} aria-label="Previous year" disabled={!canGoPrev()}>«</button>
             <button class="nav-btn" on:click={prevMonth} aria-label="Previous month" disabled={!canGoPrev()}>‹</button>
           </div>
-          <span aria-live="polite">{monthLabel}</span>
+          
+          <!-- BARU: Wrapper untuk dua dropdown -->
+          <div class="month-select-wrapper">
+            <select
+              class="month-select"
+              aria-label="Select month"
+              value={selectedMonth}
+              on:change={onMonthSelect}
+            >
+              {#each staticMonthOptions as opt (opt.value)}
+                <option value={opt.value}>{opt.label}</option>
+              {/each}
+            </select>
+            <select
+              class="month-select year-select"
+              aria-label="Select year"
+              value={selectedYear}
+              on:change={onYearSelect}
+            >
+              {#each dynamicYearOptions as year (year)}
+                <option value={year}>{year}</option>
+              {/each}
+            </select>
+          </div>
+
           <div class="nav">
             <button class="nav-btn" on:click={goToday} aria-label="Go to current month">Today</button>
             <button class="nav-btn" on:click={nextMonth} aria-label="Next month" disabled={!canGoNext()}>›</button>
@@ -269,17 +523,17 @@
               class:today={d.today}
               class:holiday={d.holiday}
               class:out={d.outOfWindow}
-              disabled={d.outOfWindow || (d.date < today && !d.today)}
+              disabled={d.outOfWindow || (!d.holiday && d.date < today && !d.today)}
               on:click={() => openFormForDate(d.date)}
               aria-label={`Select ${d.date.toDateString()}`}
-              title={d.title || (d.holiday ? 'Public/Additional Holiday' : '')}
+              title={d.title || (d.holiday ? 'Public Holiday' : '')}
             >
               {d.label}
             </button>
           {/each}
         </div>
         <div class="legend small">
-          <span><i class="swatch sw-blue"></i> Public / Additional leave</span>
+          <span><i class="swatch sw-blue"></i> Public Holiday</span>
           <span><i class="swatch sw-today"></i> Today</span>
         </div>
       </div>
@@ -297,8 +551,9 @@
 
 <!-- Add/Edit/View Holiday Modal -->
 <dialog bind:this={addModal} class="leave-modal" aria-labelledby="add-title">
-  <form method="dialog" class="leave-form" on:submit|preventDefault={submitAdditional}>
+  <form method="dialog" class="leave-form" on:submit|preventDefault={handleSubmit}>
     <button type="button" class="close-btn" on:click={() => addModal.close()} aria-label="Close">✕</button>
+
     <h2 id="add-title" class="title">
       {#if modalMode === 'viewPublic'}
         Public Holiday Details
@@ -308,34 +563,83 @@
         Add Additional Leave
       {/if}
     </h2>
-    <label>
-      <span>Date</span>
-      <input type="text" value={addDateISO} readonly />
-    </label>
-    <label>
-      <span>Leave Name</span>
-      <input type="text" name="name" bind:value={addName} readonly={modalMode === 'viewPublic'} />
-    </label>
-    <label>
-      <span>Description</span>
-      <textarea name="desc" rows="3" bind:value={addDesc} readonly={modalMode === 'viewPublic'} />
-    </label>
+
+   <label>
+  <span>Date</span>
+  {#if modalMode === 'edit'}
+    <input type="date" bind:value={editDate} required />
+  {:else}
+    <input type="text" value={addDateISO} readonly />
+  {/if}
+</label>
+
+<label>
+  <span>Leave Name</span>
+  {#if modalMode === 'edit'}
+    <!-- Edit mode: bind to editTitle -->
+    <input type="text" name="name" bind:value={editTitle} required />
+  {:else}
+    <!-- Add / View mode: bind to addName (readonly only when viewing public) -->
+    <input type="text" name="name" bind:value={addName} readonly={modalMode === 'viewPublic'} required />
+  {/if}
+</label>
+
+<label>
+  <span>Description</span>
+  {#if modalMode === 'edit'}
+    <textarea name="desc" rows="3" bind:value={editDescription}></textarea>
+  {:else}
+    <textarea name="desc" rows="3" bind:value={addDesc} readonly={modalMode === 'viewPublic'}></textarea>
+  {/if}
+</label>
+
+
     <div class="row-actions">
-      {#if modalMode !== 'viewPublic'}
-        <button type="submit" class="submit-btn">{modalMode === 'edit' ? 'Save' : 'Add'}</button>
+      {#if modalMode === 'add'}
+        <button type="submit" class="submit-btn">Add</button>
       {/if}
-      {#if modalMode === 'edit' || modalMode === 'viewPublic'}
+
+      {#if modalMode === 'viewPublic'}
+        {#if selectedHolidaySource !== 'official'}
+         <button
+      type="button"
+      class="edit-btn"
+      on:click={() => {
+        editingId = selectedHolidayId;
+        editDate = addDateISO;
+        editTitle = addName;
+        editDescription = addDesc || "";
+        modalMode = 'edit';
+      }}>
+      Edit
+    </button>
+        {/if}
+
         <button 
           type="button" 
           class="danger-btn" 
-          on:click={modalMode === 'viewPublic' ? deletePublicHoliday : deleteAdditional}>
+          on:click={deletePublicHoliday}>
           Delete
+        </button>
+      {/if}
+
+      {#if modalMode === 'edit'}
+        <button
+          type="button"
+          class="submit-btn"
+          on:click={saveEdit}>
+          Save
+        </button>
+        <button
+          type="button"
+          class="cancel-btn"
+          on:click={cancelEdit}>
+          Cancel
         </button>
       {/if}
     </div>
   </form>
 </dialog>
-
 <!-- ======================= -->
 <!--         STYLES          -->
 <!-- ======================= -->
@@ -360,7 +664,47 @@
   .calendar-wide { max-width: 400px; margin: 0 auto; }
   .calendar-wide .days button{ padding:10px; }
   .calendar .month{ display:flex; align-items:center; justify-content:space-between; font-weight:700; margin-bottom:6px; gap:6px; }
-  .calendar .month > span { text-align:center; min-width:160px; font-size:16px; }
+  
+  /* --- BARU: Style untuk Dropdown Bulan/Tahun --- */
+  .month-select-wrapper {
+    display: flex;
+    gap: 6px;
+    flex-grow: 1; /* Benarkan wrapper membesar */
+    justify-content: center; /* Pusatkan dropdowns */
+    min-width: 170px; /* Pastikan ia ada ruang */
+  }
+  .month-select {
+    border: none;
+    background: #eef2ff;
+    padding: 5px 9px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 700;
+    line-height: 1.4; /* Selaraskan ketinggian */
+    font-size: 12px;
+    
+    /* Overrides khusus untuk <select> */
+    padding-right: 28px; /* Ruang untuk arrow */
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236B7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.5rem center;
+    background-size: 1.25em 1.25em;
+    
+    text-align: center;
+    flex-grow: 1; /* Bulan ambil baki ruang */
+  }
+  .month-select:hover {
+    background: #e5e7eb;
+  }
+  .month-select.year-select {
+    flex-grow: 0; /* Tahun tidak perlu membesar */
+    min-width: 80px; /* Lebar tetap untuk tahun */
+    padding-left: 9px;
+    text-align: left;
+  }
+  /* --- Tamat Style Dropdown --- */
+  
   .calendar .month .nav{ display:flex; gap:6px; flex-wrap:wrap; }
   .calendar .month .nav-btn{ border:none; background:#eef2ff; padding:5px 9px; border-radius:8px; cursor:pointer; font-weight:700; line-height:1; font-size:12px; }
   .calendar .month .nav-btn:hover{ background:#e5e7eb; }
@@ -385,13 +729,40 @@
 
   /* --- Modal Styles --- */
   .leave-modal .title{ margin-bottom:8px; }
+   .leave-modal {
+    border: 1px solid var(--ring);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    padding: 0;
+    max-width: 500px;
+    width: 90%;
+  }
+  .leave-modal::backdrop {
+    background: rgba(0,0,0,0.2);
+    backdrop-filter: blur(2px);
+  }
+  .edit-btn, .cancel-btn {
+  padding: 9px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 700;
+  background: #fff; /* White background */
+  color: #0c4a6e; /* Same text color as submit button */
+  border: 1px solid #e5e7eb; /* Same border color */
+  transition: all 0.2s ease; /* Smooth hover effect */
+}
+
+.edit-btn:hover, .cancel-btn:hover {
+  background: #f3f4f6;
+}
+
   .leave-form label{ display:grid; gap:6px; margin:8px 0; }
   .leave-form input[readonly], .leave-form textarea[readonly]{ background:#f3f4f6; color:#6b7280; cursor:not-allowed; }
+  .leave-form input[required]:invalid { border-color: #ef4444; }
   .row-actions{ display:flex; gap:8px; align-items:center; margin-top:8px; }
   .submit-btn{ background:#49bdb3; color:#fff; border:none; border-radius:8px; padding:9px 12px; cursor:pointer; font-weight:700; }
   .submit-btn:hover{ opacity:.9; }
-  .danger-btn{ background:#fff; color:#000; border:1px solid #e5e7eb; border-radius:8px; padding:9px 12px; cursor:pointer; font-weight:700; }
-  .danger-btn:hover{ opacity:.92; }
+  .danger-btn{ background:#dc2626; color:#fff; border:1px solid #fecaca; border-radius:8px; padding:9px 12px; cursor:pointer; font-weight:700; }
+  .danger-btn:hover{ background:#b91c1c; }
   .close-btn{ position:absolute; right:10px; top:8px; border:none; background:transparent; font-size:16px; cursor:pointer; }
 </style>
-
