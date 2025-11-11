@@ -1,9 +1,14 @@
 <script>
   import { onMount, tick } from 'svelte';
-  export let data; // { user, donuts?, holidaysByYear }
+  // export let data; // DIBUANG: Komponen ini akan memuatkan data sendiri.
+
+  // ----- state -----
+  let loading = true;
+  let error = "";
 
   // ----- user/profile -----
-  const user = data?.user ?? { name: 'manager', role: 'Manager', staffId: 'E1234' };
+  // 'data' telah dibuang, jadi kita guna nilai lalai secara terus.
+  const user = { name: 'manager', role: 'Manager', staffId: 'E1234' };
   const initials = (name) => (name || 'A B').split(' ').map(x => x[0]).slice(0,2).join('').toUpperCase();
   let profileMenuOpen = false;
   function clickOutside(node) {
@@ -12,26 +17,20 @@
     return { destroy: () => document.removeEventListener('click', onClick) };
   }
 
-  // ----- donuts (demo or from server) -----
-  const donuts = data?.donuts ?? [
-    { title: 'Team Annual Leave',          spent: 12, total: 60, carryForward: 5 }, // ← added carryForward (dummy)
+  // ----- donuts (demo) -----
+  // 'data' telah dibuang, jadi kita guna nilai lalai secara terus.
+  const donuts = [
+    { title: 'Team Annual Leave',        spent: 12, total: 60, carryForward: 5 },
     { title: 'Team Medical Leave',         spent:  4, total: 60 },
     { title: 'Team Hospitalization Leave', spent:  0, total: 300 }
   ];
   const pct = (s, t) => Math.min(100, Math.max(0, Math.round((s / t) * 100)));
 
-  // ======= Single source of truth: shared Public Holidays from +layout.server.js
-  const holidaysByYear = data?.holidaysByYear ?? {};
-
-  // Build quick lookups (per-year Set for fast flag, and Map for names)
-  const holidayDatesByYear = {};
-  const holidayNamesByYear = {};
-  for (const yStr of Object.keys(holidaysByYear)) {
-    const y = Number(yStr);
-    const list = holidaysByYear[y] ?? [];
-    holidayDatesByYear[y] = new Set(list.map(h => h.date));                       // 'YYYY-MM-DD'
-    holidayNamesByYear[y] = new Map(list.map(h => [h.date, h.name || 'Public Holiday']));
-  }
+  // ======= Pengurusan Cuti (Digabung dari API)
+  let holidaysByYear = {}; // Akan diisi oleh loadHolidays
+  let holidayDatesByYear = {};
+  let holidayNamesByYear = {};
+  let holidayDescsByYear = {}; // BARU: Untuk simpan description
 
   // Helpers: date math & local ISO (prevents UTC off-by-one)
   const atStartOfDay = (d) => { const x = new Date(d); x.setHours(0,0,0,0); return x; };
@@ -54,6 +53,7 @@
 
   // Count inclusive days excluding public holidays
   function countDaysExcludingPH(fromISO, untilISO) {
+    // ... (Fungsi sedia ada dikekalkan) ...
     const start = parseLocalISO(fromISO);
     const end   = parseLocalISO(untilISO || fromISO);
     if (!start || !end) return 0;
@@ -80,23 +80,34 @@
     const iso = localISO(d);
     return holidayNamesByYear[y]?.get(iso) || null;
   }
+  // BARU: Fungsi untuk mendapatkan description
+  function holidayDescription(d) {
+    const y = d.getFullYear();
+    const iso = localISO(d);
+    return holidayDescsByYear[y]?.get(iso) || null;
+  }
 
-  // ======= Calendar window follows the years provided by the shared holidays
-  const yearsFromData = Object.keys(holidaysByYear).map(Number);
-  const fallbackYear = new Date().getFullYear();
-  const minYear = yearsFromData.length ? Math.min(...yearsFromData) : fallbackYear;
-  const maxYear = yearsFromData.length ? Math.max(...yearsFromData) : fallbackYear;
-  const minDate = new Date(minYear, 0, 1);
-  const maxDate = new Date(maxYear, 11, 31);
+  // ======= Logik Kalendar
+  let minDate = new Date(new Date().getFullYear(), 0, 1);
+  let maxDate = new Date(new Date().getFullYear(), 11, 31);
   const monthStart = (d) => new Date(d.getFullYear(), d.getMonth(), 1);
-  const minMonthStart = monthStart(minDate);
-  const maxMonthStart = monthStart(maxDate);
+  let minMonthStart = monthStart(minDate);
+  let maxMonthStart = monthStart(maxDate);
 
   let today = atStartOfDay(new Date());
   const todayISO = localISO(today);
 
   let viewBase = atStartOfDay(new Date());
   function clampToWindowMonth(d) {
+    // ⬇️ DIUBAHSUAI: Logik fallback ditambah untuk pastikan ia sentiasa ada nilai
+    if (!d || !minMonthStart || !maxMonthStart || !minMonthStart.getTime() || !maxMonthStart.getTime()) {
+      const fallbackYear = new Date().getFullYear();
+      minMonthStart = new Date(fallbackYear, 0, 1);
+      maxMonthStart = new Date(fallbackYear + 3, 11, 31);
+      if (!d) d = new Date();
+    }
+    // ⬆️ TAMAT UBAHSUAI
+
     const ms = monthStart(d).getTime();
     if (ms < minMonthStart.getTime()) return new Date(minMonthStart);
     if (ms > maxMonthStart.getTime()) return new Date(maxMonthStart);
@@ -107,7 +118,7 @@
   const canGoPrev = () => monthStart(viewBase) > minMonthStart;
   const canGoNext = () => monthStart(viewBase) < maxMonthStart;
 
-  let monthLabel = '';
+  // let monthLabel = ''; // DIBUANG
   let days = [];
   let modal;
 
@@ -123,27 +134,156 @@
     for (let i = 0; i < 42; i++) {
       const d = new Date(start);
       d.setDate(start.getDate() + i);
+      const iso = localISO(d);
 
-      // out-of-window flag (keep consistency with Admin styles)
+      // out-of-window flag
       const outOfWindow = d < minDate || d > maxDate;
 
       const hol = isHoliday(d);
+      const holName = hol ? holidayTitle(d) : null;
+      const holDesc = hol ? holidayDescription(d) : null; // BARU
+      
+      let title = undefined;
+      if (hol) {
+        title = holName;
+        if (holDesc) title += ` - ${holDesc}`; // Gabung title dan desc
+      }
+
       arr.push({
-        key: localISO(d),
+        key: iso,
         label: d.getDate(),
         date: d,
         muted: d.getMonth() !== m,
         today: sameDay(d, today),
         holiday: hol,
-        holidayName: hol ? holidayTitle(d) : null,
+        holidayName: holName,
+        holidayDescription: holDesc,
+        title: title, // Title attribute untuk hover
         outOfWindow
       });
     }
-    monthLabel = new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(first);
+    // monthLabel = new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(first); // DIBUANG
     days = arr;
   }
 
-  onMount(() => buildMonth(viewBase));
+  // --- BARU: State untuk Dropdown Berasingan (Sama seperti admin) ---
+  const monthNames = [
+      "January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December"
+  ];
+  const staticMonthOptions = monthNames.map((label, index) => ({ value: index, label }));
+
+  $: dynamicYearOptions = ((min, max) => {
+      const years = [];
+      if (!min || !max) return [new Date().getFullYear()]; // Fallback
+      for (let y = min; y <= max; y++) {
+          years.push(y);
+      }
+      return years;
+  })(minDate.getFullYear(), maxDate.getFullYear());
+
+  // Dapatkan state semasa dari viewBase
+  $: selectedYear = viewBase ? viewBase.getFullYear() : new Date().getFullYear();
+  $: selectedMonth = viewBase ? viewBase.getMonth() : new Date().getMonth();
+
+  // Handler apabila dropdown berubah
+  function onYearSelect(event) {
+      const newYear = parseInt(event.target.value, 10);
+      const newDate = new Date(newYear, selectedMonth, 1);
+      viewBase = clampToWindowMonth(newDate);
+      buildMonth(viewBase);
+  }
+
+  function onMonthSelect(event) {
+      const newMonth = parseInt(event.target.value, 10);
+      const newDate = new Date(selectedYear, newMonth, 1);
+      viewBase = clampToWindowMonth(newDate);
+      buildMonth(viewBase);
+  }
+  // --- Tamat State Dropdown ---
+
+  // ======= FUNGSI BARU: Muat turun data dari API
+  /**
+   * Fetches all holidays, processes them, and rebuilds the calendar.
+   */
+  async function loadHolidays() {
+    loading = true;
+    error = "";
+    try {
+      const res = await fetch("/api/holidays", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load holidays");
+      const flatHolidays = await res.json(); // e.g., [{ id, date, title, description }]
+
+      // Transform flat array into the by-year object structure
+      const byYear = {};
+      for (const hol of flatHolidays) {
+        const year = hol.date.slice(0, 4);
+        if (!byYear[year]) byYear[year] = [];
+        byYear[year].push({
+            id: hol.id,
+            date: hol.date,
+            name: hol.title,
+            description: hol.description || '' // Ambil description
+        });
+      }
+      holidaysByYear = byYear;
+      
+      // Process the new data
+      processHolidayData();
+      
+      // Re-build the calendar view
+      if (!viewBase) {
+        viewBase = clampToWindowMonth(atStartOfDay(new Date()));
+      }
+      buildMonth(viewBase);
+
+    } catch (e) {
+      error = e.message || "Error";
+    } finally {
+      loading = false;
+    }
+  }
+
+  /**
+   * Processes the `holidaysByYear` object to build fast-lookup maps.
+   */
+  function processHolidayData() {
+    const newHolidayDatesByYear = {};
+    const newHolidayNamesByYear = {};
+    const newHolidayDescsByYear = {}; // BARU
+    
+    // ⬇️ LOGIK BARU: TAHUN SEMASA + 3 TAHUN (Sama seperti admin)
+    const currentYear = new Date().getFullYear();
+    const minYear = currentYear;
+    const maxYear = currentYear + 3;
+    
+    // Kemaskini pembolehubah global
+    minDate = new Date(minYear, 0, 1);
+    maxDate = new Date(maxYear, 11, 31);
+    minMonthStart = monthStart(minDate);
+    maxMonthStart = monthStart(maxDate);
+    // ⬆️ TAMAT LOGIK BARU
+
+    for (const y in holidaysByYear) {
+      // Hanya proses data dalam julat tahun kita
+      if (parseInt(y, 10) < minYear || parseInt(y, 10) > maxYear) {
+        continue;
+      }
+        
+      const arr = holidaysByYear[y] ?? [];
+      newHolidayDatesByYear[y] = new Set(arr.map(h => h.date));
+      newHolidayNamesByYear[y] = new Map(arr.map(h => [h.date, h.name || 'Public Holiday']));
+      newHolidayDescsByYear[y] = new Map(arr.map(h => [h.date, h.description || ''])); // BARU
+    }
+    
+    holidayDatesByYear = newHolidayDatesByYear;
+    holidayNamesByYear = newHolidayNamesByYear;
+    holidayDescsByYear = newHolidayDescsByYear; // BARU
+  }
+
+  onMount(async () => {
+    await loadHolidays(); // Ganti 'buildMonth' dengan 'loadHolidays'
+  });
 
   // Nav
   function prevMonth() {
@@ -180,7 +320,7 @@
   }
 
   // ===== Leave form (demo)
-  let duration = 'Full';     // 'Full' | 'Half'
+  let duration = 'Full';      // 'Full' | 'Half'
   let dateFrom = '';
   let dateUntil = '';
   let totalDays = 1;
@@ -209,12 +349,12 @@
     return Math.max(1, Math.floor((b - a) / dayMs) + 1); // inclusive
   };
   const addDaysISO = (iso, days) => {
-    const d = new Date(iso);
-    d.setDate(d.getDate() + days);
+    const d = parseLocalISO(iso); // Guna parseLocalISO
+    d.setDate(d.getDate() + (days - 1)); // -1 sebab 'inclusive'
     return localISO(d);
   };
 
-  $: if (dateFrom && dateUntil && atStartOfDay(dateUntil) < atStartOfDay(dateFrom)) {
+  $: if (dateFrom && dateUntil && parseLocalISO(dateUntil) < parseLocalISO(dateFrom)) {
     dateUntil = dateFrom;
   }
   $: {
@@ -231,7 +371,7 @@
     } else if (endLocked) {
       totalDays = dateFrom ? fixedDurations[leaveType] : 0;
     } else {
-      totalDays = dateFrom ? diffDays(dateFrom, dateUntil || dateFrom) : 0;
+      totalDays = dateFrom ? diffDays(parseLocalISO(dateFrom), parseLocalISO(dateUntil || dateFrom)) : 0;
     }
   }
 
@@ -265,10 +405,11 @@
     { id: 101, from: '2025-09-10', to: '2025-09-11', totalDays: 2,   type: 'Annual', status: 'Approved' },
     { id: 102, from: '2025-09-18', to: '2025-09-18', totalDays: 1.0, type: 'Medical', status: 'Pending' }
   ];
-  const fmt = (iso) => new Date(iso).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
+  const fmt = (iso) => parseLocalISO(iso).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
 </script>
 
 <main class="main">
+  <!-- POKOK 'if loading' DIBUANG DARI SINI UNTUK MEMASTIKAN UI SENTIASA KELIHATAN -->
   <div class="grid">
     {#each donuts as d, i}
       <div class="card" style="grid-column: span 4;">
@@ -298,6 +439,11 @@
     <!-- Calendar -->
     <div class="card" style="grid-column: span 4;">
       <h3>Leave Application</h3>
+      {#if loading}
+        <p>Loading holidays...</p>
+      {:else if error}
+        <p class="text-red-600">{error}</p>
+      {:else}
       <div class="calendar calendar-small">
         <div class="month">
           <div class="nav">
@@ -305,7 +451,30 @@
             <button class="nav-btn" on:click={prevMonth} aria-label="Previous month" disabled={!canGoPrev()}>‹</button>
           </div>
 
-          <span aria-live="polite">{monthLabel}</span>
+          <!-- ⬇️ BARU: Wrapper untuk dua dropdown (Sama seperti admin) -->
+          <div class="month-select-wrapper">
+            <select
+              class="month-select"
+              aria-label="Select month"
+              value={selectedMonth}
+              on:change={onMonthSelect}
+            >
+              {#each staticMonthOptions as opt (opt.value)}
+                <option value={opt.value}>{opt.label}</option>
+              {/each}
+            </select>
+            <select
+              class="month-select year-select"
+              aria-label="Select year"
+              value={selectedYear}
+              on:change={onYearSelect}
+            >
+              {#each dynamicYearOptions as year (year)}
+                <option value={year}>{year}</option>
+              {/each}
+            </select>
+          </div>
+          <!-- ⬆️ TAMAT Wrapper -->
 
           <div class="nav">
             <button class="nav-btn" on:click={goToday} aria-label="Go to current month">Today</button>
@@ -329,7 +498,7 @@
               disabled={d.outOfWindow || d.holiday || (!d.today && atStartOfDay(d.date) < today)}
               on:click={() => openLeaveForm(d.date)}
               aria-label={`Select ${d.date.toDateString()}`}
-              title={d.holiday ? d.holidayName : undefined}
+              title={d.title}
             >
               {d.label}
             </button>
@@ -340,6 +509,7 @@
           <span><i class="swatch sw-today"></i> Today</span>
         </div>
       </div>
+      {/if}
     </div>
 
     <!-- Recent -->
@@ -459,6 +629,7 @@
 
   :global(:root){ --spentRed:#ef4444; --restBlue:#3b82f6; --ring:#e5e7eb; --shadow:0 2px 12px rgba(0,0,0,.06); }
   .card{ border:1px solid var(--ring); border-radius:12px; padding:12px; background:#fff; box-shadow:var(--shadow); }
+  .text-red-600 { color: #dc2626; }
 
   .donut.fancy{
     height: var(--size, 110px); width: var(--size, 110px);
@@ -484,7 +655,7 @@
   }
   .info-btn {
   border: none;
-  background: none;       /* remove blue background */
+  background: none;      /* remove blue background */
   border-radius: 999px;
   width: 18px;
   height: 18px;
@@ -495,12 +666,12 @@
   padding: 0;
   display: inline-grid;
   place-items: center;
-  color: #374151;          /* dark gray for text/icon */
+  color: #374151;        /* dark gray for text/icon */
   transition: background 0.2s ease;
 }
 
 .info-btn:hover {
-  background: #e5e7eb;     /* light gray only when hovered */
+  background: #e5e7eb;    /* light gray only when hovered */
 }
 
   .tooltip{
@@ -521,6 +692,48 @@
     font-weight:700; margin-bottom:6px; gap:8px;
   }
   .calendar .month > span { text-align:center; min-width:160px; }
+
+  /* --- BARU: Style untuk Dropdown Bulan/Tahun --- */
+  /* (Rupa ini disesuaikan agar sepadan dengan .nav-btn manager) */
+  .month-select-wrapper {
+    display: flex;
+    gap: 6px;
+    flex-grow: 1; /* Benarkan wrapper membesar */
+    justify-content: center; /* Pusatkan dropdowns */
+    min-width: 170px; /* Pastikan ia ada ruang */
+  }
+  .month-select {
+    border: none;
+    background: #eef2ff;
+    padding: 6px 10px; /* Sesuai dengan .nav-btn manager */
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 700;
+    line-height: 1.4; /* Ketinggian lebih baik untuk <select> */
+    /* font-size: 12px; */ /* Biar default, sama seperti .nav-btn */
+    
+    /* Overrides khusus untuk <select> */
+    padding-right: 28px; /* Ruang untuk arrow */
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236B7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.5rem center;
+    background-size: 1.25em 1.25em;
+    
+    text-align: center;
+    flex-grow: 1; /* Bulan ambil baki ruang */
+  }
+  .month-select:hover {
+    background: #e5e7eb;
+  }
+  .month-select.year-select {
+    flex-grow: 0; /* Tahun tidak perlu membesar */
+    min-width: 80px; /* Lebar tetap untuk tahun */
+    padding-left: 10px;
+    text-align: left;
+  }
+  /* --- Tamat Style Dropdown --- */
+
   .calendar .month .nav{ display:flex; gap:6px; flex-wrap:wrap; }
   .calendar .month .nav-btn{
     border:none; background:#eef2ff; padding:6px 10px; border-radius:8px; cursor:pointer;
@@ -541,8 +754,8 @@
   .days button:disabled{ background:#f3f4f6; color:#9ca3af; cursor:not-allowed; }
 
   /* Public holiday highlight — SAME as Admin */
-  .days button.holiday { background: #71c0f5; border-color: #71c0f5; }
-  .days button.today.holiday { background: #FFF7CC; }
+  .days button.holiday { background: #71c0f5; border-color: #71c0f5; color: #fff; }
+  .days button.today.holiday { background: #71c0f5; }
 
   /* Out-of-window dates */
   .days button.out {
@@ -556,12 +769,81 @@
   .recent-item .cols{ display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; font-size:12px; }
   .recent-item .muted{ color:#6b7280; }
 
+  .link { 
+    font-size: 12px; 
+    color: #2563eb; 
+    text-decoration: none; 
+    font-weight: 600;
+    justify-self: start;
+  }
+  .link:hover { text-decoration: underline; }
+
+  /* Modal Styles */
+  .leave-modal {
+    border: 1px solid var(--ring);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    padding: 0;
+    max-width: 500px;
+    width: 90%;
+  }
+  .leave-modal::backdrop {
+    background: rgba(0,0,0,0.2);
+    backdrop-filter: blur(2px);
+  }
+  .leave-form {
+    padding: 18px 22px 22px;
+    display: grid;
+    gap: 12px;
+  }
+  .leave-form .title { margin: 0 0 4px; }
+  .leave-form label {
+    display: grid;
+    gap: 6px;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .leave-form input, .leave-form select, .leave-form textarea {
+    font-size: 14px;
+    font-weight: 400;
+    border: 1px solid var(--ring);
+    border-radius: 8px;
+    padding: 8px 10px;
+  }
+  .leave-form input[required]:invalid, .leave-form textarea[required]:invalid {
+    border-color: #ef4444;
+  }
+  
   .leave-form .duration { display:flex; flex-direction:column; gap:.5rem; align-items:flex-start; }
-  .leave-form .duration label{ display:inline-flex; flex-direction:row; align-items:center; gap:.5rem; cursor:pointer; text-align:left; }
+  .leave-form .duration label{ display:inline-flex; flex-direction:row; align-items:center; gap:.5rem; cursor:pointer; text-align:left; font-weight: 400; }
   .leave-form .duration input[type="radio"]{ accent-color:#3FADA4; width:16px; height:16px; margin:0; }
   .leave-form input[readonly], .leave-form input:disabled{ background:#f3f4f6; color:#6b7280; cursor:not-allowed; }
+  
+  .dates { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
   /* helper text */
-  .help { color:#6b7280; font-size:12px; display:block; margin-top:4px; }
+  .help { color:#6b7280; font-size:12px; display:block; margin-top:4px; font-weight: 400; }
   .help.warn { color:#b45309; }
+
+  .submit-btn {
+    background: #3FADA4;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 14px;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 14px;
+    margin-top: 8px;
+  }
+  .submit-btn:hover { opacity: .9; }
+  
+  .close-btn{ 
+    position:absolute; 
+    right:10px; top:8px; 
+    border:none; background:transparent; 
+    font-size:20px; 
+    cursor:pointer; 
+    padding: 4px;
+  }
 </style>

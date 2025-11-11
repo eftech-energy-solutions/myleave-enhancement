@@ -6,6 +6,8 @@ import cors from 'cors';
 import profileRoutes from './src/routes/profile.js';
 import uploadRoute from "./src/routes/uploadRoute.js";
 import dotenv from 'dotenv';
+import holidayRoutes from './src/routes/holidayRoutes.js';
+
 dotenv.config();
 
 const app = express();
@@ -20,6 +22,7 @@ app.use(cookieParser());
 app.use('/api/employee', profileRoutes);
 app.use("/api/upload", uploadRoute);
 app.use("/uploads", express.static("uploads"));
+app.use('/api/holidays', holidayRoutes);
 
 // ✅ Test route
 app.get('/', (req, res) => {
