@@ -57,6 +57,7 @@
 
   // Show/hide new password
   let showPwd1 = false;
+  let showPwdCurrent = false; // <— add this
 
   // clickOutside action
   function clickOutside(node) {
@@ -86,13 +87,76 @@
   async function saveProfile(e) {
     e.preventDefault();
     if (activeProfilePane === 'password') {
-      const pwd1 = e.currentTarget.querySelector('input[name="pwd1"]').value;
-      const pwd2 = e.currentTarget.querySelector('input[name="pwd2"]').value;
-      if (!pwd1 || !pwd2) return alert('Please fill both password fields.');
-      if (pwd1 !== pwd2) return alert('Passwords do not match.');
-      if (pwd1.length < 8) return alert('Password must be at least 8 characters.');
-      alert('Password updated (demo).');
-    } else {
+  const form = e.currentTarget;
+  const pwdCurrent = form.querySelector('input[name="pwdCurrent"]').value || '';
+  const pwd1 = form.querySelector('input[name="pwd1"]').value || '';
+  const pwd2 = form.querySelector('input[name="pwd2"]').value || '';
+
+  if (!pwdCurrent || !pwd1 || !pwd2) return alert('Please fill all password fields.');
+  if (pwd1 !== pwd2) return alert('Passwords do not match.');
+  if (pwd1.length < 8) return alert('Password must be at least 8 characters.');
+
+  try {
+    // cuba guna email kalau ada
+    const email = (safeUser?.email || '').trim().toLowerCase();
+
+    let res, data;
+
+    if (email) {
+      res = await fetch('http://localhost:5000/api/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          email,
+          currentPassword: pwdCurrent,
+          newPassword: pwd1,
+        }),
+      });
+
+      data = await res.json();
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.error || 'Failed to change password.');
+      }
+
+      alert('Password updated successfully!');
+      closeProfileModal();
+      return;
+    }
+
+    // fallback: guna staffId
+    if (!safeUser.staffId) {
+      throw new Error('Missing Staff ID or Email. Please re-login.');
+    }
+
+    res = await fetch(
+      `http://localhost:5000/api/employee/${encodeURIComponent(safeUser.staffId)}/password`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          currentPassword: pwdCurrent,
+          newPassword: pwd1,
+        }),
+      }
+    );
+
+    data = await res.json();
+    if (!res.ok || !data?.success) {
+      throw new Error(data?.error || 'Failed to change password.');
+    }
+
+    alert('Password updated successfully!');
+    closeProfileModal();
+  } catch (err) {
+    console.error(err);
+    alert(err.message || 'Server error.');
+  }
+
+  return;
+}
+else {
       // if (!profilePhotoUrl) return alert('Please select a profile picture.');
       // headerAvatarUrl = profilePhotoUrl; // live update
       // alert('Profile picture updated (demo).');
@@ -288,6 +352,40 @@ function handlePhotoFile(e) {
             <div class="muted">PNG/JPG up to ~5 MB. Square images (1:1) look best.</div>
           </div>
         {:else}
+        <div class="row">
+  <label>Current Password</label>
+  <div class="input-wrap-lg">
+    <input
+      class="input-lg"
+      type={showPwdCurrent ? 'text' : 'password'}
+      name="pwdCurrent"
+      placeholder="Enter your current password"
+      required
+    />
+    <button
+      class="eye-btn"
+      type="button"
+      on:click={() => (showPwdCurrent = !showPwdCurrent)}
+      aria-label={showPwdCurrent ? 'Hide current password' : 'Show current password'}
+      title={showPwdCurrent ? 'Hide' : 'Show'}
+    >
+      {#if showPwdCurrent}
+        <!-- eye-off icon -->
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-5 0-9.27-3.11-11-8 1.04-2.84 3.05-5.2 5.66-6.6"></path>
+          <path d="M9.9 4.24A10.94 10.94 0 0 1 12 4c5 0 9.27 3.11 11 8a10.95 10.95 0 0 1-4.06 5.06"></path>
+          <line x1="1" y1="1" x2="23" y2="23"></line>
+        </svg>
+      {:else}
+        <!-- eye icon -->
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+          <circle cx="12" cy="12" r="3"></circle>
+        </svg>
+      {/if}
+    </button>
+  </div>
+</div>
           <div class="row">
             <label>New Password</label>
             <div class="input-wrap-lg">

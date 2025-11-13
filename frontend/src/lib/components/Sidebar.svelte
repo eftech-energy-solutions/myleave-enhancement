@@ -1,14 +1,21 @@
 <script>
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
+
+  // --- STATE (unchanged + cleaned) ---
   let profileMenuOpen = false;
   let selectedFile = null;
   let profilePhotoUrl = '';
+  let showPwd1 = false; // keep single declaration
+
+  // we’ll use staffId from /api/employee/me
+  let staffId = "";
+  let error = "";
+  let msg = "";
 
   // ---- NAV (do.not change role) ----
   const roleBase = '/dashboard/admin';
 
-  // Updated logic (unchanged)
   const isActive = (href) => {
     const current = $page.url.pathname;
     if (href === roleBase) {
@@ -29,7 +36,7 @@
     ? `http://localhost:5000${safeUser.photoUrl}` 
     : '/images/icontest1.png';
 
-  // --- Fetch current user on mount ---
+  // --- Fetch current user + staffId on mount (unchanged behavior) ---
   onMount(async () => {
     try {
       const res = await fetch('http://localhost:5000/api/me/photo', {
@@ -37,7 +44,6 @@
       });
       if (res.ok) {
         const data = await res.json();
-        // merge backend data (photoUrl, staffId, etc.) into safeUser
         safeUser = { ...safeUser, ...data };
         profilePhotoUrl = safeUser.photoUrl 
           ? `http://localhost:5000${safeUser.photoUrl}` 
@@ -47,17 +53,27 @@
     } catch (err) {
       console.error('Error fetching user:', err);
     }
+
+    try {
+      const res2 = await fetch("http://localhost:5000/api/employee/me", { credentials: "include" });
+      if (res2.ok) {
+        const user = await res2.json();
+        staffId = user.staffId;
+      }
+    } catch (err) {
+      console.error('Error fetching /api/employee/me:', err);
+    }
   });
 
   // ---- Profile Modal State (unchanged) ----
   let profileModalOpen = false;
   let activeProfilePane = 'picture'; // 'picture' | 'password'
-  let showPwd1 = false;
 
   // ---- Settings Modal State (unchanged) ----
   let settingsModalOpen = false;
   let settingsModalView = 'list'; // 'list' | 'form'
   let roleToEdit = null; // Track role being edited
+  let showPwdCurrent = false; // <— add this
 
   // Senarai semua 'functions' (unchanged)
   const allPermissions = [
@@ -184,7 +200,7 @@
     roleToEdit = null;
   }
 
-  // NEW: Delete role handler
+  // NEW: Delete role handler (unchanged)
   function deleteRole(roleId) {
     const target = roles.find(r => r.id === roleId);
     if (!target) return;
@@ -192,7 +208,6 @@
 
     roles = roles.filter(r => r.id !== roleId);
 
-    // If currently editing the deleted role, go back to list
     if (roleToEdit && roleToEdit.id === roleId) {
       goBackToList();
     }
@@ -204,7 +219,7 @@
     if (newRolePermissions.length === 0) return alert('Please select at least one function.');
 
     const staffFromEmails = newRoleStaffEmails.map((email, i) => ({
-      id: `P${Date.now()}-${i + 1}`, // placeholder id
+      id: `P${Date.now()}-${i + 1}`,
       email
     }));
 
@@ -235,63 +250,88 @@
     goBackToList();
   }
   
-  // --- Simpan Profile (unchanged) ---
+  // --- SAVE PROFILE (only wiring password + keep picture branch exactly as you had) ---
   async function saveProfile(e) {
     e.preventDefault();
-      console.log('💾 saveProfile called. activeProfilePane =', activeProfilePane);
-      console.log('selectedFile =', selectedFile);
+    console.log('💾 saveProfile called. activeProfilePane =', activeProfilePane);
+    console.log('selectedFile =', selectedFile);
+
     if (activeProfilePane === 'password') {
-      const pwd1 = e.currentTarget.querySelector('input[name="pwd1"]').value;
-      const pwd2 = e.currentTarget.querySelector('input[name="pwd2"]').value;
-      if (!pwd1 || !pwd2) return alert('Please fill both password fields.');
-      if (pwd1 !== pwd2) return alert('Passwords do not match.');
-      if (pwd1.length < 8) return alert('Password must be at least 8 characters.');
-      alert('Password updated (demo).');
-    } else {
-      // if (!profilePhotoUrl) return alert('Please select a profile picture.');
-      // headerAvatarUrl = profilePhotoUrl;
-      // alert('Profile picture updated (demo).');
-    if (activeProfilePane === 'picture') {
-    if (!selectedFile) return alert('Please select a photo');
+  const pwdCurrent = e.currentTarget.querySelector('input[name="pwdCurrent"]')?.value || '';
+  const pwd1 = e.currentTarget.querySelector('input[name="pwd1"]')?.value || '';
+  const pwd2 = e.currentTarget.querySelector('input[name="pwd2"]')?.value || '';
 
-    try {
-      const formData = new FormData();
-      formData.append('photo', selectedFile);
+  if (!pwdCurrent || !pwd1 || !pwd2) return alert('Please fill all password fields.');
+  if (pwd1 !== pwd2) return alert('Passwords do not match.');
+  if (pwd1.length < 8) return alert('Password must be at least 8 characters.');
 
-      const res = await fetch('http://localhost:5000/api/upload/profile', {
-        method: 'POST',
-        body: formData,
-        credentials: 'include', // important for cookie auth
-      });
+  try {
+    // use the email already in your sidebar data
+    const email = (safeUser?.email || '').trim().toLowerCase();
+    if (!email) return alert('Missing email in session. Please re-login.');
 
-      const data = await res.json();
-       console.log('📤 Server response:', data);
+    const res = await fetch('http://localhost:5000/api/auth/change-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        email,
+        currentPassword: pwdCurrent,
+        newPassword: pwd1
+      })
+    });
 
-      if (data.success) {
-        // ✅ Update sidebar photo immediately
-        const newPhotoUrl = `http://localhost:5000${data.photoUrl}`;
-        profilePhotoUrl = newPhotoUrl;
-        safeUser.photoUrl = newPhotoUrl; // so sidebar updates too
-        // ✅ Update sidebar and modal preview
-        safeUser.photoUrl = data.photoUrl;
-        profilePhotoUrl = `http://localhost:5000${data.photoUrl}`;
-        selectedFile = null;
-        alert('Profile photo updated!');
-      } else {
-        alert(data.error || 'Upload failed');
-      }
-    } catch (err) {
-      console.error(err);
-      alert('Upload failed.');
+    const data = await res.json();
+    if (!res.ok || !data?.success) {
+      throw new Error(data?.error || 'Failed to change password.');
     }
-  } else if (activeProfilePane === 'password') {
-    // your existing password update logic here
+
+    alert('Password updated successfully.');
+    closeProfileModal();
+  } catch (err) {
+    console.error(err);
+    alert(err.message || 'Server error.');
   }
+  return; // stop so picture branch won't run
+}
 
+
+    // --- your existing picture branch (unchanged) ---
+    if (activeProfilePane === 'picture') {
+      if (!selectedFile) return alert('Please select a photo');
+
+      try {
+        const formData = new FormData();
+        formData.append('photo', selectedFile);
+
+        const res = await fetch('http://localhost:5000/api/upload/profile', {
+          method: 'POST',
+          body: formData,
+          credentials: 'include',
+        });
+
+        const data = await res.json();
+        console.log('📤 Server response:', data);
+
+        if (data.success) {
+          const newPhotoUrl = `http://localhost:5000${data.photoUrl}`;
+          profilePhotoUrl = newPhotoUrl;
+          safeUser.photoUrl = data.photoUrl;
+          profilePhotoUrl = `http://localhost:5000${data.photoUrl}`;
+          selectedFile = null;
+          alert('Profile photo updated!');
+        } else {
+          alert(data.error || 'Upload failed');
+        }
+      } catch (err) {
+        console.error(err);
+        alert('Upload failed.');
+      }
     }
+
     closeProfileModal();
   }
-  
+
   // --- Lain (unchanged) ---
   function handlePhotoFile(e) {
     const file = e.currentTarget.files?.[0];
@@ -322,6 +362,7 @@
       ? 'Role Access Permission' 
       : (roleToEdit ? 'Edit Role' : 'Add New Role');
 </script>
+
 
 <div class="layout">
   <aside class="aside">
@@ -440,8 +481,8 @@
         >Password</button>
       </div>
       <form class="modal-bd" on:submit|preventDefault={saveProfile}>
-        {#if activeProfilePane === 'picture'}
-          <div class="pic-wrap">
+  {#if activeProfilePane === 'picture'}
+    <div class="pic-wrap">
             {#if profilePhotoUrl}
               <img src={profilePhotoUrl} alt="Preview" class="preview" />
             {:else}
@@ -451,6 +492,41 @@
             <div class="muted">PNG/JPG up to ~5 MB. Square images (1:1) look best.</div>
           </div>
         {:else}
+
+ <div class="row">
+  <label>Current Password</label>
+  <div class="input-wrap-lg">
+    <input
+      class="input-lg"
+      type={showPwdCurrent ? 'text' : 'password'}
+      name="pwdCurrent"
+      placeholder="Enter your current password"
+      required
+    />
+    <button
+      class="eye-btn"
+      type="button"
+      on:click={() => (showPwdCurrent = !showPwdCurrent)}
+      aria-label={showPwdCurrent ? 'Hide current password' : 'Show current password'}
+      title={showPwdCurrent ? 'Hide' : 'Show'}
+    >
+      {#if showPwdCurrent}
+        <!-- eye-off icon -->
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-5 0-9.27-3.11-11-8 1.04-2.84 3.05-5.2 5.66-6.6"></path>
+          <path d="M9.9 4.24A10.94 10.94 0 0 1 12 4c5 0 9.27 3.11 11 8a10.95 10.95 0 0 1-4.06 5.06"></path>
+          <line x1="1" y1="1" x2="23" y2="23"></line>
+        </svg>
+      {:else}
+        <!-- eye icon -->
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+          <circle cx="12" cy="12" r="3"></circle>
+        </svg>
+      {/if}
+    </button>
+  </div>
+</div>
           <div class="row">
             <label>New Password</label>
             <div class="input-wrap-lg">
@@ -701,7 +777,12 @@
   .tabs{ display:flex; border-bottom:1px solid #e5e7eb; }
   .tabs button{ flex:1; padding:10px; background:#f9fafb; border:none; cursor:pointer; font-weight:600; color:#000; }
   .tabs button.selected{ background:#fff; border-bottom:2px solid #49bdb3; color:#000; }
-  .modal-bd{ padding:18px; display:flex; flex-direction:column; gap:14px; }
+  .modal-bd {
+    padding: 18px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
   .pic-wrap{ display:flex; flex-direction:column; gap:10px; }
   .preview{ max-width:100%; border-radius:10px; }
   .placeholder{ padding:40px; text-align:center; color:#6b7280; border:1px dashed #d1d5db; border-radius:10px; }
@@ -713,10 +794,28 @@
   .btn-primary{ background:#49bdb3; color:#fff; border:none; border-radius:8px; padding:.6rem 1rem; font-weight:700; cursor:pointer; }
   .btn-primary:hover{ filter:brightness(.95); }
   .muted{ color:#64748b; font-size:12px; }
-  .input-lg{ font-size:16px; padding:12px 14px; border:1px solid #d1d5db; border-radius:10px; outline:none; width:100%; box-sizing:border-box; }
-  .input-lg:focus{ border-color:#49bdb3; box-shadow:0 0 0 3px rgba(73,189,179,.15); }
-  .input-wrap-lg{ position:relative; display:flex; align-items:center; }
-  .input-wrap-lg .input-lg{ width:100%; padding-right:44px; }
+  .input-lg {
+    font-size: 16px;
+    padding: 12px 14px;
+    border: 1px solid #d1d5db;
+    border-radius: 10px;
+    outline: none;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .input-lg:focus {
+    border-color: #49bdb3;
+    box-shadow: 0 0 0 3px rgba(73, 189, 179, 0.15);
+  }
+  .input-wrap-lg {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+  .input-wrap-lg .input-lg {
+    width: 100%;
+    padding-right: 48px; /* space for eye icon */
+  }
   .eye-btn{ position:absolute; right:10px; height:32px; min-width:32px; display:grid; place-items:center; border:none; background:transparent; cursor:pointer; border-radius:8px; color:#0c4a6e; }
   .eye-btn:hover{ background:#f3f4f6; }
 

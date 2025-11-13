@@ -383,8 +383,8 @@
           style="--size:110px; --spent:{pct(d.spent,d.total)}; --spent-color: var(--spentRed); --rest-color: var(--restBlue);"
         ></div>
         <div class="legend-row">
-          <div class="legend-item"><span class="chip spent"></span><span>Spent Leave</span></div>
-          <div class="legend-item"><span class="chip unspent"></span><span>Unspent Leave</span></div>
+          <div class="legend-item"><span class="chip spent"></span><span>Taken Leave</span></div>
+          <div class="legend-item"><span class="chip unspent"></span><span>Remaining Leave</span></div>
         </div>
         <div class="total-line">Total spent: {d.spent}/{d.total}</div>
 

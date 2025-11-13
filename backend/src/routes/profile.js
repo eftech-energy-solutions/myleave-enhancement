@@ -170,6 +170,73 @@ router.put("/:staff_id", async (req, res) => {
   }
 });
 
+// ✅ Update employee (Edit)
+router.put("/:staff_id", async (req, res) => {
+  const staffId = req.params.staff_id;
+  const {
+    full_name,
+    email,
+    role,
+    department,
+    employment_date,
+    confirmation_date,
+    termination_date,
+    gender,
+    leave_entitlement_annual,
+    leave_entitlement_medical,
+    notes,
+    newPassword,
+    currentPassword
+  } = req.body;
+
+  try {
+    // If user provides a new password, verify current one first
+    if (newPassword && currentPassword) {
+      const user = await pool.query("SELECT password FROM profiles WHERE staff_id=$1", [staffId]);
+      if (!user.rows.length)
+        return res.status(404).json({ error: "User not found." });
+
+      // ✅ match old password (plain or hashed)
+      if (user.rows[0].password !== currentPassword)
+        return res.status(400).json({ error: "Current password is incorrect." });
+
+      await pool.query("UPDATE profiles SET password=$1 WHERE staff_id=$2", [newPassword, staffId]);
+    }
+
+    // ✅ Update other profile fields
+    const result = await pool.query(
+      `
+      UPDATE profiles
+      SET full_name=$1, email=$2, role=$3, department=$4,
+          employment_date=$5, confirmation_date=$6, termination_date=$7,
+          gender=$8, leave_entitlement_annual=$9, leave_entitlement_medical=$10, notes=$11
+      WHERE staff_id=$12
+      RETURNING *;
+      `,
+      [
+        full_name,
+        email,
+        role,
+        department,
+        employment_date || null,
+        confirmation_date || null,
+        termination_date || null,
+        gender,
+        leave_entitlement_annual,
+        leave_entitlement_medical,
+        notes,
+        staffId
+      ]
+    );
+
+    if (result.rowCount === 0) return res.status(404).json({ error: "Employee not found." });
+
+    res.json({ success: true, employee: result.rows[0] });
+  } catch (err) {
+    console.error("Error updating employee:", err);
+    res.status(500).json({ error: "Failed to update employee." });
+  }
+});
 
 // ✅ Delete employee
 router.delete("/:staff_id", async (req, res) => {
@@ -216,5 +283,67 @@ router.get('/me', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch user data' });
   }
 });
+router.put('/:staffId/password', async (req, res) => {
+  try {
+    const { staffId } = req.params;
+    const { currentPassword, newPassword } = req.body || {};
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'currentPassword and newPassword are required' });
+    }
+    if (String(newPassword).length < 8) {
+      return res.status(400).json({ error: 'New password must be at least 8 characters' });
+    }
+
+    // Adjust table/columns to match your DB (this uses "profiles")
+    const q = await pool.query(
+      `SELECT id, staff_id, email, role, photourl,
+              TRIM(CAST(password AS TEXT)) AS password
+         FROM profiles
+        WHERE staff_id = $1
+        LIMIT 1`,
+      [staffId]
+    );
+
+    if (!q.rows.length) {
+      return res.status(404).json({ error: 'Staff not found' });
+    }
+
+    const user = q.rows[0];
+    const stored = String(user.password ?? '').trim();
+    const input = String(currentPassword);
+
+    // Support bcrypt + legacy plaintext
+    let ok = false;
+    try {
+      if (stored.startsWith('$2')) {
+        ok = await bcrypt.compare(input, stored);
+      } else {
+        ok = stored === input;
+      }
+    } catch {
+      ok = stored === input;
+    }
+
+    if (!ok) {
+      return res.status(400).json({ error: 'Current password is incorrect' });
+    }
+
+    const hash = await bcrypt.hash(String(newPassword), 12);
+
+    await pool.query(
+      `UPDATE profiles
+          SET password = $1, updated_at = NOW()
+        WHERE staff_id = $2`,
+      [hash, staffId]
+    );
+
+    return res.json({ success: true, message: 'Password updated' });
+  } catch (e) {
+    console.error('PUT /api/employee/:staffId/password error:', e);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
 
 export default router;
