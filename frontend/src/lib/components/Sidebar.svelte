@@ -1,17 +1,27 @@
 <script>
-  import { page } from '$app/stores';
-  import { onMount } from 'svelte';
+import { page } from '$app/stores';
+import { onMount } from 'svelte';
 
-  // --- STATE (unchanged + cleaned) ---
-  let profileMenuOpen = false;
-  let selectedFile = null;
-  let profilePhotoUrl = '';
-  let showPwd1 = false; // keep single declaration
+// --- STATE ---
+let profileMenuOpen = false;
+let selectedFile = null;
+let profilePhotoUrl = '';
 
-  // we’ll use staffId from /api/employee/me
-  let staffId = "";
-  let error = "";
-  let msg = "";
+let showPwd1 = false;
+
+let loadingUser = true;
+
+// SAFE USER — declare ONCE only
+let safeUser = {
+  name: '',
+  role: '',
+  staffId: '',
+  photoUrl: null
+};
+
+let staffId = "";
+let error = "";
+let msg = "";
 
   // ---- NAV (do.not change role) ----
   const roleBase = '/dashboard/admin';
@@ -24,14 +34,6 @@
     return current.startsWith(href); // Partial match for other pages
   };
 
-  // Fallback user info (before fetching from server)
-  let safeUser = { 
-    name: '', 
-    role: '', 
-    staffId: '', 
-    photoUrl: null 
-  };
-
   $: headerAvatarUrl = safeUser.photoUrl 
     ? `http://localhost:5000${safeUser.photoUrl}` 
     : '/images/icontest1.png';
@@ -42,14 +44,16 @@
     const res = await fetch('http://localhost:5000/api/employee/me', {
       credentials: 'include'
     });
+
     if (res.ok) {
       const data = await res.json();
       safeUser = { ...safeUser, ...data };
+
       profilePhotoUrl = safeUser.photoUrl
         ? `http://localhost:5000${safeUser.photoUrl}`
         : '';
-      console.log('safeUser updated:', safeUser);
     }
+
   } catch (err) {
     console.error('Error fetching user:', err);
   }
@@ -58,13 +62,17 @@
     const res2 = await fetch("http://localhost:5000/api/employee/me", {
       credentials: "include"
     });
+
     if (res2.ok) {
       const user = await res2.json();
       staffId = user.staffId;
     }
+
   } catch (err) {
-    console.error('Error fetching /api/employee/me:', err);
+    console.error('Error fetching info:', err);
   }
+
+  loadingUser = false;
 });
 
 
@@ -456,21 +464,30 @@ async function updatePhoto() {
       </div>
       <div class="profile" use:clickOutside>
         <div class="profile-info">
-          {#if safeUser?.photoUrl}
-            {console.log('Rendering sidebar image URL:', safeUser.photoUrl)}
-            <img
-              src={`http://localhost:5000${safeUser.photoUrl}`}
-              alt="profile"
-              class="avatar-img"
-              on:error={(e) => (e.currentTarget.style.display = 'none')}
-            />
-          {/if}
-          <div class="who">
-            <div class="name">{safeUser?.name}</div>
-            <div class="sub">{safeUser?.role}</div>
-            <!-- <div class="sub">Staff ID:{safeUser?.staffId}</div> -->
-          </div>
-        </div>
+    {#if safeUser?.photoUrl}
+  <img
+    src={`http://localhost:5000${safeUser.photoUrl}`}
+    alt="profile"
+    class="avatar-img"
+    on:error={(e) => {
+      // fallback bila image fail load
+      e.currentTarget.style.display = "none";
+    }}
+  />
+{:else}
+  <div class="avatar-fallback" style="width:38px; height:38px; border-radius:9999px; display:grid; place-items:center; background:#e5e7eb;">
+    <svg viewBox="0 0 24 24" width="26" height="26" fill="#9ca3af">
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 20c0-4.2 4.2-6.5 8-6.5s8 2.3 8 6.5" />
+    </svg>
+  </div>
+{/if}
+
+<div class="who">
+  <div class="name">{safeUser?.name}</div>
+  <div class="sub">{safeUser?.role}</div>
+</div>
+
         <button
           class="icon-btn caret"
           aria-haspopup="menu"
@@ -791,7 +808,21 @@ async function updatePhoto() {
   .icon-btn:hover{ background:rgba(255,255,255,.12); }
   .caret{ font-size:16px; }
   .profile-info{ display:flex; align-items:center; gap:10px; color:#fff; }
-  .avatar-img{ height:70px; width:70px; border-radius:9999px; object-fit:cover; box-shadow:0 0 0 2px rgba(255,255,255,.25); }
+  .avatar-img {
+    height: 70px;
+    width: 70px;
+    border-radius: 9999px;
+    object-fit: cover;
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25);
+  }
+.avatar-fallback {
+  width: 38px;
+  height: 38px;
+  border-radius: 9999px;
+  display: grid;
+  place-items: center;
+  background: #e5e7eb;
+}
   .who .name{ font-size:14px; font-weight:700; }
   .who .sub{ font-size:12px; opacity:.95; }
 

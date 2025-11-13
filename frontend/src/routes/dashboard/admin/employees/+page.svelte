@@ -76,7 +76,8 @@ function formatDate(dbDate) {
         id: emp.staff_id || makeId(IDS[i % IDS.length], i),
         name: emp.full_name,
         role: emp.role,
-        department: emp.department
+        department: emp.department,
+        photoUrl: emp.photourl
       }));
 
       // Fill detailed data for modal/view
@@ -400,13 +401,21 @@ let showDeleteConfirm = false;
 let employeeToDelete = null;
 
 function openDetails(empId) {
-  const base = detailsById[empId] ?? null;
-  selectedEmp = base ? structuredClone(base) : null;
-  detailsForm = base ? structuredClone(base) : null; // buffer
-  editMode = false;
-  showDeleteConfirm = false; // Pastikan delete confirm tertutup
-  detailsOpen = !!selectedEmp;
+  const base = detailsById[empId] ?? null;
+
+  if (!base) return;
+
+  // Pastikan empId wujud
+  selectedEmp = {
+    ...structuredClone(base),
+    empId: base.empId || base.id
+  };
+
+  detailsForm = structuredClone(selectedEmp);
+  editMode = false;
+  detailsOpen = true;
 }
+
 
 const safe = (v) => (v && String(v).trim().length ? v : "-");
 
@@ -422,14 +431,22 @@ async function handleEditPhotoFile(e) {
   // 2. Cipta 'preview' URL untuk paparan segera dalam modal
   detailsForm.photoUrl = URL.createObjectURL(file);
 }
+// Helper utk bersihkan tarikh
+const cleanDate = (d) => (d && d.trim() !== "" ? d : null);
 
-// ✅ EDIT & SAVE EMPLOYEE (FUNGSI YANG TELAH DIBAIKI)
+// Helper utk bersihkan leave number
+const cleanNum = (v) => (v === "" || v == null ? null : Number(v));
+
+
+// ==============================================
+// FIXED - EDIT & SAVE EMPLOYEE
+// ==============================================
 async function toggleEditSave() {
   if (!selectedEmp || !detailsForm) return;
 
-  // ---------------------------------------------------
-  // KES 1: Pengguna klik "SAVE" (sedang dalam Edit Mode)
-  // ---------------------------------------------------
+  // ============================
+  // CASE 1 — USER CLICK SAVE
+  // ============================
   if (editMode) {
     if (!detailsForm.name || !detailsForm.role) {
       alert("Name and Role are required.");
@@ -437,102 +454,96 @@ async function toggleEditSave() {
     }
 
     try {
-      // Mulakan dengan URL sedia ada.
       let finalRelativePhotoUrl = detailsForm.photoUrl || "";
 
-      // ---------------------------------------------------
-      // A: PERIKSA JIKA ADA FAIL BARU UNTUK DI UPLOAD
-      // ---------------------------------------------------
-      // 'detailsForm.photoFile' hanya wujud jika pengguna pilih fail baru
+      // -------------------------------------------
+      // A) UPLOAD PHOTO JIKA ADA FILE BARU
+      // -------------------------------------------
       if (detailsForm.photoFile) {
         console.log("Uploading new photo...");
         const formData = new FormData();
         formData.append("photo", detailsForm.photoFile);
 
-        // Hantar fail ke endpoint 'upload'
-        const uploadRes = await fetch("http://localhost:5000/api/upload/profile", {
-          method: "POST",
-          body: formData,
-        });
+        const uploadRes = await fetch(
+          "http://localhost:5000/api/upload/profile",
+          {
+            method: "POST",
+            body: formData
+          }
+        );
 
         const uploadData = await uploadRes.json();
 
         if (uploadData.success && uploadData.photoUrl) {
-          // Upload berjaya. Dapatkan path relatif baru (cth: /uploads/new-pic.jpg)
           finalRelativePhotoUrl = uploadData.photoUrl;
-          console.log("New photo uploaded, relative path:", finalRelativePhotoUrl);
+          console.log("New photo uploaded:", finalRelativePhotoUrl);
         } else {
-          // Upload gagal, hentikan proses save
-          alert("❌ Failed to upload new photo. Changes not saved.");
-          console.error("Photo upload failed:", uploadData);
+          alert("❌ Failed to upload new photo.");
           return;
         }
       }
 
-      // ---------------------------------------------------
-      // B: BERSIHKAN URL SEBELUM HANTAR KE DATABASE
-      // ---------------------------------------------------
-      // Jika tiada fail baru di-upload, 'finalRelativePhotoUrl' mungkin
-      // masih URL penuh (cth: http://localhost:5000/uploads/pic.jpg)
-      // Kita perlu buang prefix domain.
+      // -------------------------------------------
+      // B) REMOVE DOMAIN PREFIX
+      // -------------------------------------------
       const prefix = "http://localhost:5000";
       if (finalRelativePhotoUrl.startsWith(prefix)) {
-        finalRelativePhotoUrl = finalRelativePhotoUrl.substring(prefix.length);
+        finalRelativePhotoUrl = finalRelativePhotoUrl.replace(prefix, "");
       }
 
-      // ---------------------------------------------------
-      // C: HANTAR 'PUT' REQUEST UNTUK UPDATE DATA
-      // ---------------------------------------------------
-      const res = await fetch(`http://localhost:5000/api/employee/${selectedEmp.empId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          
-          // 🔽 INILAH PEMBETULAN UTAMA 🔽
-          photo_url: finalRelativePhotoUrl, 
-          
-          // --- Hantar field-field lain (pastikan guna snake_case) ---
-          full_name: detailsForm.name,
-          email: detailsForm.email,
-          role: detailsForm.role,
-          department: detailsForm.department,
-          employment_date: detailsForm.employmentDate,
-          confirmation_date: detailsForm.confirmationDate,
-          termination_date: detailsForm.terminationDate,
-          gender: detailsForm.gender,
-          leave_entitlement_annual: detailsForm.annualLeave,
-          leave_entitlement_medical: detailsForm.medicalLeave,
-          notes: detailsForm.notes
-        })
-      });
+      // -------------------------------------------
+      // C) HANTAR PUT REQUEST KE BACKEND
+      // -------------------------------------------
+      const res = await fetch(
+        `http://localhost:5000/api/employee/${selectedEmp.empId}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            photo_url: finalRelativePhotoUrl,
+
+            full_name: detailsForm.name,
+            email: detailsForm.email,
+            role: detailsForm.role,
+            department: detailsForm.department,
+
+            employment_date: cleanDate(detailsForm.employmentDate),
+            confirmation_date: cleanDate(detailsForm.confirmationDate),
+            termination_date: cleanDate(detailsForm.terminationDate),
+
+            gender: detailsForm.gender,
+
+            leave_entitlement_annual: cleanNum(detailsForm.annualLeave),
+            leave_entitlement_medical: cleanNum(detailsForm.medicalLeave),
+
+            notes: detailsForm.notes
+          })
+        }
+      );
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to update employee");
+      if (!res.ok) {
+        console.error(data);
+        throw new Error(data.error || "Failed to update employee");
+      }
 
       alert("✅ Employee updated successfully!");
 
-      // ---------------------------------------------------
-      // D: KEMAS KINI FRONTEND STATE
-      // ---------------------------------------------------
+      // -------------------------------------------
+      // D) UPDATE FRONTEND STATE
+      // -------------------------------------------
 
-      // Pastikan frontend state (detailsById) guna URL penuh untuk paparan
-      const fullPhotoUrlForFrontend = finalRelativePhotoUrl
-        ? (finalRelativePhotoUrl.startsWith("http")
-            ? finalRelativePhotoUrl
-            : `http://localhost:5000${finalRelativePhotoUrl}`)
+      const fullPhoto = finalRelativePhotoUrl
+        ? `http://localhost:5000${finalRelativePhotoUrl}`
         : "";
 
-      // Kemas kini 'working copy'
-      detailsForm.photoUrl = fullPhotoUrlForFrontend;
-      detailsForm.photoFile = null; // Kosongkan fail selepas upload
+      detailsForm.photoUrl = fullPhoto;
+      detailsForm.photoFile = null;
 
-      // Kemas kini 'master list'
       detailsById[selectedEmp.empId] = structuredClone(detailsForm);
-      // Kemas kini 'read-only' view
       selectedEmp = structuredClone(detailsForm);
 
-      // Kemas kini kad pada grid utama
-      const idx = employees.findIndex(e => e.id === selectedEmp.empId);
+      const idx = employees.findIndex((e) => e.id === selectedEmp.empId);
       if (idx !== -1) {
         employees[idx] = {
           ...employees[idx],
@@ -543,23 +554,23 @@ async function toggleEditSave() {
         employees = [...employees];
       }
 
-      editMode = false; // Keluar dari edit mode
+      editMode = false;
+
     } catch (err) {
       console.error("❌ Error updating employee:", err);
       alert("Failed to update employee.");
     }
+
     return;
   }
 
-  // ---------------------------------------------------
-  // KES 2: Pengguna klik "EDIT" (Baru nak masuk Edit Mode)
-  // ---------------------------------------------------
+  // ============================
+  // CASE 2 — USER CLICK EDIT
+  // ============================
   editMode = true;
-  // Pastikan tiada fail lama 'tergantung' dari sesi edit sebelumnya
-  if (detailsForm) {
-    detailsForm.photoFile = null;
-  }
+  if (detailsForm) detailsForm.photoFile = null;
 }
+
 
 // ✅ SHOW DELETE CONFIRMATION
 function openDeleteConfirm() {

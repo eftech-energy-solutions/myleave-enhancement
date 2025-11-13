@@ -102,19 +102,38 @@ router.get("/", async (req, res) => {
          FROM profiles
          ORDER BY id DESC`
     );
-    res.json(result.rows);
+
+    const defaultAvatar = "/uploads/default-avatar.png";
+    const rows = result.rows.map(r => ({
+      ...r,
+      photourl: r.photourl || defaultAvatar
+    }));
+
+    res.json(rows);
+
   } catch (err) {
     console.error("Error fetching employees:", err);
     res.status(500).json({ error: "Failed to fetch employees" });
   }
 });
 
+
 // Additional direct full-table GET
 router.get("/employees", async (req, res) => {
   try {
     const result = await pool.query("SELECT * FROM profiles ORDER BY id DESC");
-    res.json(result.rows);
+
+    const defaultAvatar = "/uploads/icontest1.png";
+
+    const rows = result.rows.map(r => ({
+      ...r,
+      photourl: r.photourl || defaultAvatar
+    }));
+
+    res.json(rows);
+
   } catch (err) {
+    console.error("Error fetching employees:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -126,21 +145,23 @@ router.get("/employees", async (req, res) => {
 router.put("/:staff_id", async (req, res) => {
   const staffId = req.params.staff_id;
 
-  const {
-    full_name,
-    email,
-    role,
-    department,
-    employment_date,
-    confirmation_date,
-    termination_date,
-    gender,
-    leave_entitlement_annual,
-    leave_entitlement_medical,
-    notes,
-    currentPassword,
-    newPassword
-  } = req.body;
+ const {
+  full_name,
+  email,
+  role,
+  department,
+  employment_date,
+  confirmation_date,
+  termination_date,
+  gender,
+  leave_entitlement_annual,
+  leave_entitlement_medical,
+  notes,
+  currentPassword,
+  newPassword,
+  photo_url
+} = req.body;
+
 
   try {
     /* ------------------------------
@@ -188,39 +209,46 @@ router.put("/:staff_id", async (req, res) => {
     /* ------------------------------
        2) PROFILE UPDATE
     ------------------------------ */
-    const result = await pool.query(
-      `
-      UPDATE profiles
-         SET full_name = $1,
-             email = $2,
-             role = $3,
-             department = $4,
-             employment_date = $5,
-             confirmation_date = $6,
-             termination_date = $7,
-             gender = $8,
-             leave_entitlement_annual = $9,
-             leave_entitlement_medical = $10,
-             notes = $11,
-             updated_at = NOW()
-       WHERE staff_id = $12
-       RETURNING *;
-      `,
-      [
-        full_name,
-        email,
-        role,
-        department,
-        employment_date || null,
-        confirmation_date || null,
-        termination_date || null,
-        gender,
-        leave_entitlement_annual,
-        leave_entitlement_medical,
-        notes,
-        staffId
-      ]
-    );
+ const result = await pool.query(
+  `
+  UPDATE profiles
+     SET full_name = $1,
+         email = $2,
+         role = $3,
+         department = $4,
+         employment_date = $5,
+         confirmation_date = $6,
+         termination_date = $7,
+         gender = $8,
+         leave_entitlement_annual = $9,
+         leave_entitlement_medical = $10,
+         notes = $11,
+         photourl = $12,
+         updated_at = NOW()
+   WHERE staff_id = $13
+   RETURNING *;
+  `,
+  [
+    full_name,
+    email,
+    role,
+    department,
+    employment_date || null,
+    confirmation_date || null,
+    termination_date || null,
+    gender,
+    leave_entitlement_annual,
+    leave_entitlement_medical,
+    notes,
+
+    // 🔥 THIS IS THE NEW LINE
+    req.body.photo_url || null,
+
+    staffId
+  ]
+);
+
+
 
     if (!result.rowCount) {
       return res.status(404).json({ error: "Employee not found." });
@@ -284,12 +312,13 @@ router.get('/me', async (req, res) => {
     if (!result.rows[0])
       return res.status(404).json({ error: 'User not found' });
 
+    const defaultAvatar = "/uploads/default-avatar.svg";
     res.json({
       staffId: result.rows[0].staff_id,
       name: result.rows[0].full_name,
       email: result.rows[0].email,
       role: result.rows[0].role,
-      photoUrl: result.rows[0].photourl
+      photoUrl: result.rows[0].photourl || "/uploads/default-avatar.png"
     });
 
   } catch (err) {
