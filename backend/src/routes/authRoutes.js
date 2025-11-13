@@ -29,87 +29,6 @@ transporter.verify((error, success) => {
     console.log('✅ SMTP server is ready to send emails');
   }
 });
-const otpStore = new Map(); // key: email, value: { codeHash, expiresAt, tries, resetToken, tokenExp }
-
-// Helper
-function gen6() {
-  return String(Math.floor(100000 + Math.random() * 900000)); // 6 digits
-}
-
-// ========== 1) Request OTP ==========
-router.post("/auth/request-otp", async (req, res) => {
-  try {
-    const { email } = req.body;
-    if (!email) return res.status(400).json({ success: false, error: "Email required" });
-
-    const code = gen6();
-    const codeHash = await bcrypt.hash(code, 10);
-    const expiresAt = Date.now() + 5 * 60 * 1000; // 5 min
-    otpStore.set(email.toLowerCase(), { codeHash, expiresAt, tries: 0 });
-
-    // TODO: hantar email/SMS di sini. Untuk dev, return code.
-    return res.json({ success: true, message: "OTP sent", devCode: code });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ success: false, error: "Server error" });
-  }
-});
-
-// ========== 2) Verify OTP (beri resetToken jika betul) ==========
-router.post("/auth/verify-otp", async (req, res) => {
-  try {
-    const { email, otp } = req.body;
-    const rec = otpStore.get((email || "").toLowerCase());
-    if (!rec) return res.status(400).json({ success: false, error: "OTP not requested" });
-    if (Date.now() > rec.expiresAt) {
-      otpStore.delete(email.toLowerCase());
-      return res.status(400).json({ success: false, error: "OTP expired" });
-    }
-    rec.tries++;
-    if (rec.tries > 5) {
-      otpStore.delete(email.toLowerCase());
-      return res.status(429).json({ success: false, error: "Too many attempts" });
-    }
-    const ok = await bcrypt.compare(String(otp || ""), rec.codeHash);
-    if (!ok) return res.status(400).json({ success: false, error: "Wrong OTP number" });
-
-    // Success → issue short-lived reset token
-    const resetToken = crypto.randomBytes(24).toString("hex");
-    rec.resetToken = resetToken;
-    rec.tokenExp = Date.now() + 10 * 60 * 1000; // 10 min
-    return res.json({ success: true, resetToken });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ success: false, error: "Server error" });
-  }
-});
-
-// ========== 3) Reset password dengan resetToken ==========
-router.post("/auth/reset-password-with-otp", async (req, res) => {
-  try {
-    const { email, resetToken, newPassword } = req.body;
-    if (!email || !resetToken || !newPassword)
-      return res.status(400).json({ success: false, error: "Missing fields" });
-
-    const rec = otpStore.get(email.toLowerCase());
-    if (!rec || rec.resetToken !== resetToken || Date.now() > rec.tokenExp) {
-      return res.status(400).json({ success: false, error: "Invalid or expired token" });
-    }
-
-    // === UPDATE PASSWORD DALAM DB ===
-    const hash = await bcrypt.hash(newPassword, 10);
-    // Contoh table users by email — adjust ikut schema kau:
-    await pool.query("UPDATE users SET password=$1 WHERE email=$2", [hash, email.toLowerCase()]);
-
-    // clear token
-    otpStore.delete(email.toLowerCase());
-
-    return res.json({ success: true, message: "Password updated" });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ success: false, error: "Server error" });
-  }
-});
 
 // ---------- CHANGE PASSWORD (email + current + new) ----------
 router.post('/change-password', async (req, res) => {
@@ -184,6 +103,51 @@ router.post('/forgot', async (req, res) => {
   } catch (err) {
     console.error('Forgot password error:', err);
     res.status(500).json({ error: 'Failed to send OTP' });
+  }
+});
+// ---------- VERIFY OTP (step 1 sebelum set password) ----------
+router.post('/verify-otp', async (req, res) => {
+  try {
+    const { email: emailRaw, otp: otpRaw } = req.body || {};
+    const email = String(emailRaw || '').trim().toLowerCase();
+    const otp = String(otpRaw || '').trim();
+
+    if (!email || !otp) {
+      return res.status(400).json({ error: 'Missing email or OTP' });
+    }
+
+    // Ambil latest, unused OTP untuk email ni
+    const resets = await pool.query(
+      `SELECT id, otp_hash, expires_at, used
+         FROM password_resets
+        WHERE user_email=$1 AND used=false
+        ORDER BY created_at DESC
+        LIMIT 1`,
+      [email]
+    );
+
+    if (!resets.rows.length) {
+      return res.status(400).json({ error: 'OTP not found' });
+    }
+
+    const record = resets.rows[0];
+
+    // Expired?
+    if (record.used || new Date() > record.expires_at) {
+      return res.status(400).json({ error: 'OTP expired' });
+    }
+
+    // Check OTP
+    const valid = await bcrypt.compare(otp, record.otp_hash);
+    if (!valid) {
+      return res.status(400).json({ error: 'Wrong OTP number.' });
+    }
+
+    // ✅ OTP sah – jangan mark used dulu, bagi chance dia reset password
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('Verify OTP error:', err);
+    return res.status(500).json({ error: 'Server error while verifying OTP.' });
   }
 });
 
