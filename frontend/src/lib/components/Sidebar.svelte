@@ -319,31 +319,41 @@
       if (!data.success || !data.photoUrl) {
         return alert(data.error || 'Upload failed');
       }
+async function updatePhoto() {
+  try {
+    const formData = new FormData();
+    formData.append('photo', selectedFile);
 
-      // ⛔ DB TAK SIMPAN localhost
-      // data.photoUrl sepatutnya RELATIVE, contoh: "/uploads/profile/abc.jpg"
+    // STEP 1: upload ke server + update DB
+    const res = await fetch('http://localhost:5000/api/upload/profile', {
+      method: 'POST',
+      body: formData,
+      credentials: 'include'
+    });
 
-      // 2️⃣ Simpan URL tu ke DB (table profiles.photourl)
-      const saveRes = await fetch(
-        `http://localhost:5000/api/employee/${staffId}/photo`,
-        {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({
-            // HANTAR RELATIVE PATH JE, BUKAN "http://localhost..."
-            photoUrl: data.photoUrl
-          })
-        }
-      );
+    const data = await res.json();
+    console.log('📤 /api/upload/profile response:', data);
 
-      const saveData = await saveRes.json();
-      console.log('📥 Response from /api/employee/:staffId/photo:', saveData);
+    if (!data.success) {
+      return alert(data.error || 'Upload failed.');
+    }
 
-      if (!saveRes.ok || saveData?.error) {
-        return alert(saveData.error || 'Failed to save photo in database.');
-      }
+    // STEP 2: Update UI
+    const fullUrl = data.photoUrl.startsWith('http')
+      ? data.photoUrl
+      : `http://localhost:5000${data.photoUrl}`;
 
+    profilePhotoUrl = fullUrl;
+    safeUser.photoUrl = data.photoUrl;
+
+    alert('Profile photo updated!');
+    selectedFile = null;
+
+  } catch (err) {
+    console.error(err);
+    alert('Upload failed.');
+  }
+}
       // 3️⃣ Update UI – sini tak apa kalau kita tambah localhost
       const fullUrl = data.photoUrl.startsWith('http')
         ? data.photoUrl
