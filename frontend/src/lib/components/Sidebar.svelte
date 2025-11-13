@@ -37,33 +37,36 @@
     : '/images/icontest1.png';
 
   // --- Fetch current user + staffId on mount (unchanged behavior) ---
-  onMount(async () => {
-    try {
-      const res = await fetch('http://localhost:5000/api/me/photo', {
-        credentials: 'include'
-      });
-      if (res.ok) {
-        const data = await res.json();
-        safeUser = { ...safeUser, ...data };
-        profilePhotoUrl = safeUser.photoUrl 
-          ? `http://localhost:5000${safeUser.photoUrl}` 
-          : '';
-        console.log('safeUser updated on mount:', safeUser);
-      }
-    } catch (err) {
-      console.error('Error fetching user:', err);
+ onMount(async () => {
+  try {
+    const res = await fetch('http://localhost:5000/api/employee/me', {
+      credentials: 'include'
+    });
+    if (res.ok) {
+      const data = await res.json();
+      safeUser = { ...safeUser, ...data };
+      profilePhotoUrl = safeUser.photoUrl
+        ? `http://localhost:5000${safeUser.photoUrl}`
+        : '';
+      console.log('safeUser updated:', safeUser);
     }
+  } catch (err) {
+    console.error('Error fetching user:', err);
+  }
 
-    try {
-      const res2 = await fetch("http://localhost:5000/api/employee/me", { credentials: "include" });
-      if (res2.ok) {
-        const user = await res2.json();
-        staffId = user.staffId;
-      }
-    } catch (err) {
-      console.error('Error fetching /api/employee/me:', err);
+  try {
+    const res2 = await fetch("http://localhost:5000/api/employee/me", {
+      credentials: "include"
+    });
+    if (res2.ok) {
+      const user = await res2.json();
+      staffId = user.staffId;
     }
-  });
+  } catch (err) {
+    console.error('Error fetching /api/employee/me:', err);
+  }
+});
+
 
   // ---- Profile Modal State (unchanged) ----
   let profileModalOpen = false;
@@ -295,43 +298,67 @@
   return; // stop so picture branch won't run
 }
 
-
     // --- your existing picture branch (unchanged) ---
-    if (activeProfilePane === 'picture') {
-      if (!selectedFile) return alert('Please select a photo');
+   if (activeProfilePane === 'picture') {
+    if (!selectedFile) return alert('Please select a photo');
 
-      try {
-        const formData = new FormData();
-        formData.append('photo', selectedFile);
+    try {
+      const formData = new FormData();
+      formData.append('photo', selectedFile);
 
-        const res = await fetch('http://localhost:5000/api/upload/profile', {
-          method: 'POST',
-          body: formData,
-          credentials: 'include',
-        });
+      // 1️⃣ Upload file ke server (masuk folder /uploads, etc.)
+      const res = await fetch('http://localhost:5000/api/upload/profile', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      });
 
-        const data = await res.json();
-        console.log('📤 Server response:', data);
+      const data = await res.json();
+      console.log('📤 Server response from /api/upload/profile:', data);
 
-        if (data.success) {
-          const newPhotoUrl = `http://localhost:5000${data.photoUrl}`;
-          profilePhotoUrl = newPhotoUrl;
-          safeUser.photoUrl = data.photoUrl;
-          profilePhotoUrl = `http://localhost:5000${data.photoUrl}`;
-          selectedFile = null;
-          alert('Profile photo updated!');
-        } else {
-          alert(data.error || 'Upload failed');
-        }
-      } catch (err) {
-        console.error(err);
-        alert('Upload failed.');
+      if (!data.success || !data.photoUrl) {
+        return alert(data.error || 'Upload failed');
       }
+
+      // ⛔ DB TAK SIMPAN localhost
+      // data.photoUrl sepatutnya RELATIVE, contoh: "/uploads/profile/abc.jpg"
+
+      // 2️⃣ Simpan URL tu ke DB (table profiles.photourl)
+      const saveRes = await fetch(
+        `http://localhost:5000/api/employee/${staffId}/photo`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            // HANTAR RELATIVE PATH JE, BUKAN "http://localhost..."
+            photoUrl: data.photoUrl
+          })
+        }
+      );
+
+      const saveData = await saveRes.json();
+      console.log('📥 Response from /api/employee/:staffId/photo:', saveData);
+
+      if (!saveRes.ok || saveData?.error) {
+        return alert(saveData.error || 'Failed to save photo in database.');
+      }
+
+      // 3️⃣ Update UI – sini tak apa kalau kita tambah localhost
+      const fullUrl = data.photoUrl.startsWith('http')
+        ? data.photoUrl
+        : `http://localhost:5000${data.photoUrl}`;
+
+      profilePhotoUrl = fullUrl;
+      safeUser.photoUrl = data.photoUrl; // simpan RELATIVE je dalam user state
+      selectedFile = null;
+      alert('Profile photo updated!');
+    } catch (err) {
+      console.error(err);
+      alert('Upload failed.');
     }
-
-    closeProfileModal();
   }
-
+  }
   // --- Lain (unchanged) ---
   function handlePhotoFile(e) {
     const file = e.currentTarget.files?.[0];
@@ -362,7 +389,6 @@
       ? 'Role Access Permission' 
       : (roleToEdit ? 'Edit Role' : 'Add New Role');
 </script>
-
 
 <div class="layout">
   <aside class="aside">

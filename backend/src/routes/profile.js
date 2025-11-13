@@ -2,9 +2,13 @@ import express from 'express';
 import pool from '../db.js';
 import nodemailer from 'nodemailer';
 import crypto from 'crypto';
+import bcrypt from 'bcryptjs';
+
 const router = express.Router();
 
-// Add new employee
+/* ============================================================
+   1) ADD NEW EMPLOYEE
+============================================================ */
 router.post('/', async (req, res) => {
   const {
     empId,
@@ -23,22 +27,20 @@ router.post('/', async (req, res) => {
   } = req.body;
 
   try {
-    // 1️⃣ Generate random password
     const randomPassword = crypto.randomBytes(6).toString('hex');
 
-    // 2️⃣ Insert new employee into DB
     await pool.query(
       `INSERT INTO profiles (
         staff_id, full_name, email, password, role, department,
         employment_date, confirmation_date, termination_date, gender,
-        leave_entitlement_annual, leave_entitlement_medical, notes, photoUrl
+        leave_entitlement_annual, leave_entitlement_medical, notes, photourl
       )
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
-      [ 
+      [
         empId,
         name,
         email,
-        randomPassword, // nanti boleh encrypt
+        randomPassword,
         role,
         department,
         employmentDate || null,
@@ -52,18 +54,17 @@ router.post('/', async (req, res) => {
       ]
     );
 
-    // 3️⃣ Setup transporter untuk email (guna mail eftech)
     const transporter = nodemailer.createTransport({
       host: "mail.eftech.com.my",
       port: 465,
-      secure: true, // true for port 465, false for 587
+      secure: true,
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS
       }
     });
 
-    // 4️⃣ Send email ke employee
+    // Email to employee
     await transporter.sendMail({
       from: '"Eftech HR" <no-reply@eftech.com.my>',
       to: email,
@@ -71,26 +72,35 @@ router.post('/', async (req, res) => {
       text: `Hi ${name},\n\nYour MyLeave account has been created.\n\nEmail: ${email}\nPassword: ${randomPassword}\n\nPlease log in and change your password.`,
     });
 
-    // 5️⃣ Send email ke admin
+    // Email admin
     await transporter.sendMail({
       from: '"Eftech HR" <no-reply@eftech.com.my>',
       to: "aziraazman0105@gmail.com",
       subject: `New employee added: ${name}`,
-      text: `New employee added:\n\nName: ${name}\nEmail: ${email}\nPosition: ${role}\nPassword: ${randomPassword}`,
+      text: `New employee added:\n\nName: ${name}\nEmail: ${email}\nRole: ${role}\nPassword: ${randomPassword}`,
     });
 
     res.json({ success: true, message: 'Employee added and emails sent.' });
+
   } catch (err) {
     console.error('Error adding employee:', err);
     res.status(500).json({ error: 'Database or email error' });
   }
 });
 
-// ✅ Fetch all employees
+
+/* ============================================================
+   2) GET ALL EMPLOYEES
+============================================================ */
 router.get("/", async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT id, staff_id, full_name, role, department, email, employment_date, confirmation_date, termination_date, gender, leave_entitlement_annual, leave_entitlement_medical, photourl, notes FROM profiles ORDER BY id DESC"
+      `SELECT id, staff_id, full_name, role, department, email,
+              employment_date, confirmation_date, termination_date,
+              gender, leave_entitlement_annual, leave_entitlement_medical,
+              photourl, notes
+         FROM profiles
+         ORDER BY id DESC`
     );
     res.json(result.rows);
   } catch (err) {
@@ -99,7 +109,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-// GET /api/employees
+// Additional direct full-table GET
 router.get("/employees", async (req, res) => {
   try {
     const result = await pool.query("SELECT * FROM profiles ORDER BY id DESC");
@@ -109,70 +119,13 @@ router.get("/employees", async (req, res) => {
   }
 });
 
-// ✅ Update employee (Edit)
+
+/* ============================================================
+   3) MERGED UPDATE EMPLOYEE (Profile + Optional Password)
+============================================================ */
 router.put("/:staff_id", async (req, res) => {
   const staffId = req.params.staff_id;
-  const {
-    full_name,
-    email,
-    role,
-    department,
-    employment_date,
-    confirmation_date,
-    termination_date,
-    gender,
-    leave_entitlement_annual,
-    leave_entitlement_medical,
-    notes
-  } = req.body;
 
-  try {
-    const query = `
-      UPDATE profiles
-      SET full_name = $1,
-          email = $2,
-          role = $3,
-          department = $4,
-          employment_date = $5,
-          confirmation_date = $6,
-          termination_date = $7,
-          gender = $8,
-          leave_entitlement_annual = $9,
-          leave_entitlement_medical = $10,
-          notes = $11
-      WHERE staff_id = $12
-      RETURNING *;
-    `;
-
-    const result = await pool.query(query, [
-      full_name,
-      email,
-      role,
-      department,
-      employment_date || null,
-      confirmation_date || null,
-      termination_date || null,
-      gender,
-      leave_entitlement_annual,
-      leave_entitlement_medical,
-      notes,
-      staffId
-    ]);
-
-    if (result.rowCount === 0) {
-      return res.status(404).json({ error: "Employee not found." });
-    }
-
-    res.json({ success: true, employee: result.rows[0] });
-  } catch (err) {
-    console.error("Error updating employee:", err);
-    res.status(500).json({ error: "Failed to update employee." });
-  }
-});
-
-// ✅ Update employee (Edit)
-router.put("/:staff_id", async (req, res) => {
-  const staffId = req.params.staff_id;
   const {
     full_name,
     email,
@@ -185,33 +138,73 @@ router.put("/:staff_id", async (req, res) => {
     leave_entitlement_annual,
     leave_entitlement_medical,
     notes,
-    newPassword,
-    currentPassword
+    currentPassword,
+    newPassword
   } = req.body;
 
   try {
-    // If user provides a new password, verify current one first
-    if (newPassword && currentPassword) {
-      const user = await pool.query("SELECT password FROM profiles WHERE staff_id=$1", [staffId]);
-      if (!user.rows.length)
+    /* ------------------------------
+       1) PASSWORD CHANGE (Optional)
+    ------------------------------ */
+      if (currentPassword && newPassword) {
+
+      if (newPassword.length < 8) {
+        return res.status(400).json({ error: "New password must be at least 8 characters" });
+      }
+
+      const q = await pool.query(
+        `SELECT password FROM profiles WHERE staff_id = $1 LIMIT 1`,
+        [staffId]
+      );
+
+      if (!q.rows.length)
         return res.status(404).json({ error: "User not found." });
 
-      // ✅ match old password (plain or hashed)
-      if (user.rows[0].password !== currentPassword)
-        return res.status(400).json({ error: "Current password is incorrect." });
+      const stored = String(q.rows[0].password ?? "").trim();
+      const input = String(currentPassword);
 
-      await pool.query("UPDATE profiles SET password=$1 WHERE staff_id=$2", [newPassword, staffId]);
+      let isMatch = false;
+
+      if (stored.startsWith("$2")) {
+        isMatch = await bcrypt.compare(input, stored);
+      } else {
+        isMatch = stored === input;
+      }
+
+      if (!isMatch) {
+        return res.status(400).json({ error: "Current password is incorrect." });
+      }
+
+      const hash = await bcrypt.hash(String(newPassword), 12);
+
+      await pool.query(
+        `UPDATE profiles
+            SET password = $1, updated_at = NOW()
+          WHERE staff_id = $2`,
+        [hash, staffId]
+      );
     }
 
-    // ✅ Update other profile fields
+    /* ------------------------------
+       2) PROFILE UPDATE
+    ------------------------------ */
     const result = await pool.query(
       `
       UPDATE profiles
-      SET full_name=$1, email=$2, role=$3, department=$4,
-          employment_date=$5, confirmation_date=$6, termination_date=$7,
-          gender=$8, leave_entitlement_annual=$9, leave_entitlement_medical=$10, notes=$11
-      WHERE staff_id=$12
-      RETURNING *;
+         SET full_name = $1,
+             email = $2,
+             role = $3,
+             department = $4,
+             employment_date = $5,
+             confirmation_date = $6,
+             termination_date = $7,
+             gender = $8,
+             leave_entitlement_annual = $9,
+             leave_entitlement_medical = $10,
+             notes = $11,
+             updated_at = NOW()
+       WHERE staff_id = $12
+       RETURNING *;
       `,
       [
         full_name,
@@ -229,34 +222,51 @@ router.put("/:staff_id", async (req, res) => {
       ]
     );
 
-    if (result.rowCount === 0) return res.status(404).json({ error: "Employee not found." });
+    if (!result.rowCount) {
+      return res.status(404).json({ error: "Employee not found." });
+    }
 
-    res.json({ success: true, employee: result.rows[0] });
+    res.json({
+      success: true,
+      message: "Profile updated successfully",
+      employee: result.rows[0]
+    });
+
   } catch (err) {
     console.error("Error updating employee:", err);
     res.status(500).json({ error: "Failed to update employee." });
   }
 });
 
-// ✅ Delete employee
+
+/* ============================================================
+   4) DELETE EMPLOYEE
+============================================================ */
 router.delete("/:staff_id", async (req, res) => {
-  const staffId = req.params.staff_id;
-
   try {
-    const result = await pool.query("DELETE FROM profiles WHERE staff_id = $1", [staffId]);
+    const staffId = req.params.staff_id;
 
-    if (result.rowCount === 0) {
+    const result = await pool.query(
+      "DELETE FROM profiles WHERE staff_id = $1",
+      [staffId]
+    );
+
+    if (!result.rowCount) {
       return res.status(404).json({ error: "Employee not found." });
     }
 
     res.json({ success: true, message: "Employee deleted successfully." });
+
   } catch (err) {
     console.error("Error deleting employee:", err);
     res.status(500).json({ error: "Failed to delete employee." });
   }
 });
 
-// ------------------- Get current logged-in user -------------------
+
+/* ============================================================
+   5) GET CURRENT LOGGED-IN USER
+============================================================ */
 router.get('/me', async (req, res) => {
   try {
     const token = req.cookies['auth_token'];
@@ -265,85 +275,67 @@ router.get('/me', async (req, res) => {
     const user = JSON.parse(token);
 
     const result = await pool.query(
-      'SELECT staff_id, full_name, email, role, photourl FROM profiles WHERE staff_id = $1',
+      `SELECT staff_id, full_name, email, role, photourl
+         FROM profiles
+        WHERE staff_id = $1`,
       [user.staffId]
     );
 
-    if (!result.rows[0]) return res.status(404).json({ error: 'User not found' });
+    if (!result.rows[0])
+      return res.status(404).json({ error: 'User not found' });
 
     res.json({
       staffId: result.rows[0].staff_id,
       name: result.rows[0].full_name,
       email: result.rows[0].email,
       role: result.rows[0].role,
-      photoUrl: result.rows[0].photourl,
+      photoUrl: result.rows[0].photourl
     });
+
   } catch (err) {
     console.error('Failed to fetch current user:', err);
     res.status(500).json({ error: 'Failed to fetch user data' });
   }
 });
-router.put('/:staffId/password', async (req, res) => {
+
+
+/* ============================================================
+   6) UPDATE PROFILE PHOTO (DB only)
+============================================================ */
+router.put('/:staffId/photo', async (req, res) => {
   try {
     const { staffId } = req.params;
-    const { currentPassword, newPassword } = req.body || {};
+    const { photoUrl } = req.body;
 
-    if (!currentPassword || !newPassword) {
-      return res.status(400).json({ error: 'currentPassword and newPassword are required' });
-    }
-    if (String(newPassword).length < 8) {
-      return res.status(400).json({ error: 'New password must be at least 8 characters' });
+    if (!photoUrl) {
+      return res.status(400).json({ error: 'photoUrl is required' });
     }
 
-    // Adjust table/columns to match your DB (this uses "profiles")
-    const q = await pool.query(
-      `SELECT id, staff_id, email, role, photourl,
-              TRIM(CAST(password AS TEXT)) AS password
-         FROM profiles
-        WHERE staff_id = $1
-        LIMIT 1`,
-      [staffId]
+    const result = await pool.query(
+      `
+      UPDATE profiles
+         SET photourl = $1,
+             updated_at = NOW()
+       WHERE staff_id = $2
+       RETURNING photourl;
+      `,
+      [photoUrl, staffId]
     );
 
-    if (!q.rows.length) {
-      return res.status(404).json({ error: 'Staff not found' });
+    if (!result.rowCount) {
+      return res.status(404).json({ error: 'Employee not found' });
     }
 
-    const user = q.rows[0];
-    const stored = String(user.password ?? '').trim();
-    const input = String(currentPassword);
+    res.json({
+      success: true,
+      message: 'Profile picture updated',
+      photoUrl: result.rows[0].photourl
+    });
 
-    // Support bcrypt + legacy plaintext
-    let ok = false;
-    try {
-      if (stored.startsWith('$2')) {
-        ok = await bcrypt.compare(input, stored);
-      } else {
-        ok = stored === input;
-      }
-    } catch {
-      ok = stored === input;
-    }
-
-    if (!ok) {
-      return res.status(400).json({ error: 'Current password is incorrect' });
-    }
-
-    const hash = await bcrypt.hash(String(newPassword), 12);
-
-    await pool.query(
-      `UPDATE profiles
-          SET password = $1, updated_at = NOW()
-        WHERE staff_id = $2`,
-      [hash, staffId]
-    );
-
-    return res.json({ success: true, message: 'Password updated' });
-  } catch (e) {
-    console.error('PUT /api/employee/:staffId/password error:', e);
-    return res.status(500).json({ error: 'Server error' });
+  } catch (err) {
+    console.error('Update photo error:', err);
+    res.status(500).json({ error: 'Failed to update profile picture' });
   }
 });
-
 
 export default router;

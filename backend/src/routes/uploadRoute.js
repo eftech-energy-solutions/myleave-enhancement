@@ -5,7 +5,9 @@ import pool from "../db.js"; // your PostgreSQL pool
 
 const router = express.Router();
 
-// Multer setup
+// =========================
+//  Multer Setup (Uploads)
+// =========================
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, "uploads/"),
   filename: (req, file, cb) => {
@@ -13,15 +15,29 @@ const storage = multer.diskStorage({
     cb(null, uniqueName);
   },
 });
+
 const upload = multer({ storage });
 
-// -------- Admin adds new employee (unchanged) --------
+// ============================================================
+// 1) ADMIN UPLOAD PHOTO (USED BY ADD NEW EMPLOYEE)
+// ============================================================
 router.post("/", upload.single("photo"), (req, res) => {
-  if (!req.file) return res.status(400).json({ error: "No file uploaded" });
-  res.json({ filePath: `/uploads/${req.file.filename}` });
+  if (!req.file) {
+    return res.status(400).json({ success: false, error: "No file uploaded" });
+  }
+
+  // FIXED: Return photoUrl instead of filePath
+  const photoUrl = `/uploads/${req.file.filename}`;
+
+  return res.json({
+    success: true,
+    photoUrl: photoUrl
+  });
 });
 
-// -------- Employee updates own profile photo --------
+// ============================================================
+// 2) EMPLOYEE UPDATES OWN PROFILE PHOTO
+// ============================================================
 router.post("/profile", upload.single("photo"), async (req, res) => {
   try {
     const token = req.cookies["auth_token"];
@@ -30,15 +46,19 @@ router.post("/profile", upload.single("photo"), async (req, res) => {
     const user = JSON.parse(token);
     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
-    const photourl = `/uploads/${req.file.filename}`;
+    const photoUrl = `/uploads/${req.file.filename}`;
 
-    // Update DB
+    // Update DB photourl column
     await pool.query(
       "UPDATE profiles SET photourl = $1 WHERE staff_id = $2",
-      [photourl, user.staffId]
+      [photoUrl, user.staffId]
     );
 
-    res.json({ success: true, photoUrl: photourl });
+    res.json({
+      success: true,
+      photoUrl: photoUrl
+    });
+
   } catch (err) {
     console.error("Upload error:", err);
     res.status(500).json({ error: "Failed to upload photo" });
