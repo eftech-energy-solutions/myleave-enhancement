@@ -10,7 +10,7 @@ import profileRoutes from './src/routes/profile.js';
 import uploadRoute from './src/routes/uploadRoute.js';
 import holidayRoutes from './src/routes/holidayRoutes.js';
 import authRoutes from './src/routes/authRoutes.js';
-
+import dashboardRoutes from './src/routes/dashboardRoutes.js';
 
 dotenv.config();
 
@@ -38,7 +38,7 @@ app.use('/api/holidays', holidayRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/employee', profileRoutes); // singular 'employee'
 app.use('/uploads', express.static('uploads'));
-
+app.use("/api/employee", profileRoutes);
 
 // ============================
 // HELPER

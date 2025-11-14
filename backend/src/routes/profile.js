@@ -366,5 +366,32 @@ router.put('/:staffId/photo', async (req, res) => {
     res.status(500).json({ error: 'Failed to update profile picture' });
   }
 });
+/* ============================================================
+   DEPARTMENT SUMMARY (Dashboard)
+============================================================ */
+router.get("/department-summary", async (req, res) => {
+  console.log("📌 Department summary route loaded");
+  try {
+    const result = await pool.query(`
+      SELECT 
+        department AS name,
+        COUNT(*)::int AS count
+      FROM profiles
+      WHERE department IS NOT NULL
+        AND department <> ''
+        AND termination_date IS NULL
+      GROUP BY department
+      ORDER BY department ASC
+    `);
+
+    const filtered = result.rows.filter(r => r.name !== "Administrator");
+
+    res.json({ departments: filtered });
+
+  } catch (err) {
+    console.error("Error loading dept summary:", err);
+    res.status(500).json({ error: "Failed to load department summary" });
+  }
+});
 
 export default router;

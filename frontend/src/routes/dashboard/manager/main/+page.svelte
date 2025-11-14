@@ -2,8 +2,9 @@
   export let data;
   const user = data?.user;
   import { onMount } from 'svelte';
+  import { tick } from "svelte";
+  import Chart from "chart.js/auto";
 
-  // header expects these
   let profileMenuOpen = false;
 
   function clickOutside(node) {
@@ -12,52 +13,79 @@
     return { destroy: () => document.removeEventListener('click', onClick) };
   }
 
-  // donuts
+  // donuts — keep
   const donuts = [
-    { title: 'Annual Leave Summary',          spent: 1,  total: 14 },
-    { title: 'Medical Leave Summary',         spent: 0,  total: 14 },
-    { title: 'Hospitalization Leave Summary', spent: 0,  total: 60 }
+    { title: 'Annual Leave Summary', spent: 1, total: 14 },
+    { title: 'Medical Leave Summary', spent: 0, total: 14 },
+    { title: 'Hospitalization Leave Summary', spent: 0, total: 60 }
   ];
-  const pct = (s, t) => (t > 0 && isFinite(s/t)) ? Math.min(100, Math.max(0, Math.round((s/t)*100))) : 0;
+  const pct = (s, t) => (t > 0 ? Math.round((s/t)*100) : 0);
 
-  // employees (chart + numbers)
-  const dataByDept = [
-  
-    { name: "Director",                     count:  3, color: "#FFD9CC" },
-    { name: "Administrator",                count: 12, color: "#FCF9BE" },
-    { name: "Operations",            count: 18, color: "#C6DEF1" },
-    { name: "Operations Support",           count: 35, color: "#F2C6DE" },
-    { name: "Sales & Technical Excellence", count: 27, color: "#C9E4DE" },
-    { name: "Technical Data",               count: 22, color: "#DBCDF0" }
-  ];
-  $: totalEmployees = dataByDept.reduce((a,b)=>a+b.count, 0);
-
+  // ======= Employees Overview State =======
+  let loading = true;
+  let error = "";
+  let dataByDept = [];
+  let totalEmployees = 0;
   let canvasEl;
+
+  const palette = [
+    "#FFD9CC", "#C6DEF1", "#F2C6DE",
+    "#C9E4DE", "#DBCDF0", "#E2F0CB"
+  ];
+
+  // ===== FETCH DEPT DATA + RENDER CHART =====
   onMount(async () => {
-    const Chart = (await import('chart.js/auto')).default;
-    if (!canvasEl) return;
-    new Chart(canvasEl, {
-      type: 'bar',
-      data: {
-        labels: dataByDept.map(d=>d.name),
-        datasets: [{
-          label: 'Active Employees',
-          data: dataByDept.map(d=>d.count),
-          backgroundColor: dataByDept.map(d=>d.color),
-          borderColor: dataByDept.map(d=>d.color),
-          borderWidth: 1,
-          borderRadius: 8
-        }]
-      },
-      options: {
-        responsive:true, maintainAspectRatio:false,
-        plugins:{ legend:{ display:false }},
-        scales:{
-          x:{ ticks:{ autoSkip:false, maxRotation:40, minRotation:0 }},
-          y:{ beginAtZero:true, precision:0 }
-        }
+    try {
+      const res = await fetch("http://localhost:5000/api/employee/department-summary");
+      if (!res.ok) throw new Error("Failed to load");
+
+      const json = await res.json();
+
+      // fill your array (same as admin)
+      dataByDept = json.departments.map((d, i) => ({
+        name: d.name,
+        count: d.count,
+        color: palette[i % palette.length]
+      }));
+
+      // calculate totals
+      totalEmployees = dataByDept.reduce((a,b)=>a+b.count, 0);
+
+      // now draw chart
+      await tick();
+      if (canvasEl) {
+        new Chart(canvasEl, {
+          type: 'bar',
+          data: {
+            labels: dataByDept.map(d=>d.name),
+            datasets: [{
+              label: 'Active Employees',
+              data: dataByDept.map(d=>d.count),
+              backgroundColor: dataByDept.map(d=>d.color),
+              borderColor: dataByDept.map(d=>d.color),
+              borderWidth: 1,
+              borderRadius: 8
+            }]
+          },
+          options: {
+            responsive:true,
+            maintainAspectRatio:false,
+            plugins:{ legend:{ display:false }},
+            scales:{
+              x:{ ticks:{ autoSkip:false, maxRotation:40, minRotation:0 }},
+              y:{ beginAtZero:true }
+            }
+          }
+        });
       }
-    });
+
+      loading = false;
+
+    } catch (err) {
+      console.error(err);
+      error = "Failed to load employee overview";
+      loading = false;
+    }
   });
 </script>
 
@@ -137,7 +165,7 @@
   .total-line{ text-align:center; font-size:12px; color:#6b7280; margin-top:4px; }
 
   /* numbers panel */
-  .stats{ display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:12px; margin-top:8px; }
+  .stats{ display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:10px; margin-top:8px; }
   @media (max-width:980px){ .stats{ grid-template-columns: repeat(2, minmax(0,1fr)); } }
   @media (max-width:580px){ .stats{ grid-template-columns: 1fr; } }
   .stat{ background:#f9fafb; border:1px solid var(--ring); border-radius:12px; padding:14px; display:grid; gap:4px; }

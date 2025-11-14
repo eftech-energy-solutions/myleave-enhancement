@@ -23,17 +23,40 @@
   let editDate = "";
   let editTitle = "";
   let editDescription = "";
-
+  let dataByDept = [];
+  let totalEmployees = 0;
   // 🟢 helper untuk Svelte binding (fix ternary bind:value)
 
-  const dataByDept = [
-    { name: "Director", count:  3, color: "#FFD9CC" },
-    { name: "Administrator", count: 12, color: "#FCF9BE" },
-    { name: "Operations", count: 18, color: "#C6DEF1" },
-    { name: "Operations Support", count: 35, color: "#F2C6DE" },
-    { name: "Sales & Technical Excellence", count: 27, color: "#C9E4DE" },
-    { name: "Technical Data", count: 22, color: "#DBCDF0" }
+
+  const palette = [
+    "#FFD9CC", "#C6DEF1", "#F2C6DE",
+    "#C9E4DE", "#DBCDF0", "#E2F0CB"
   ];
+
+  onMount(async () => {
+  try {
+    const res = await fetch("http://localhost:5000/api/employee/department-summary");
+      console.log("📌 HIT DEPARTMENT SUMMARY ROUTE");
+
+    if (!res.ok) throw new Error("Failed to load");
+
+    const json = await res.json();
+
+    dataByDept = json.departments.map((d, i) => ({
+      name: d.name,
+      count: d.count,
+      color: palette[i % palette.length]
+    }));
+
+    totalEmployees = dataByDept.reduce((a,b) => a + b.count, 0);
+    loading = false;
+
+  } catch (err) {
+    console.error(err);
+    error = "Failed to load employee overview";
+    loading = false;
+  }
+});
   $: totalEmployees = dataByDept.reduce((a,b)=>a+b.count, 0);
 
   const atStartOfDay = (d) => { const x = new Date(d); x.setHours(0,0,0,0); return x; };
@@ -654,7 +677,7 @@
 
   /* --- Employees Overview Card --- */
   .overview-wide { max-width: 100%; margin: 0; }
-  .mini-metrics { display: grid; grid-template-columns: repeat(7, 0.5fr); gap: 10px; align-items: stretch; }
+  .mini-metrics { display: grid; grid-template-columns: repeat(6, 0.5fr); gap: 10px; align-items: stretch; }
   .mini { border: 1px solid var(--ring); background: #f9fafb; border-radius: 10px; padding: 8px; text-align: center; height: 75px; display: flex; flex-direction: column; justify-content: center; transition: all 0.2s ease; }
   .mini-val { font-size: 18px; font-weight: 800; color: #0f172a; line-height: 1.1; }
   .mini-label { font-size: 11px; color: #0c4a6e; margin-top: 2px; display: flex; align-items: center; gap: 5px; justify-content: center; }
@@ -724,7 +747,7 @@
   .sw-blue{ background:#71c0f5; border:1px solid #71c0f5; }
 
   /* --- Chart Styles --- */
-  .chart-box { display: flex; justify-content: center; align-items: center; height: 400px; margin-top: 75px; width: 650px; }
+  .chart-box { display: flex; justify-content: center; align-items: center; height: 400px; margin-top: 75px; width: 670px; }
   .chart-box canvas { max-height: 500px; width: 100%; }
 
   /* --- Modal Styles --- */
