@@ -146,7 +146,7 @@ router.put("/:staff_id", async (req, res) => {
   const staffId = req.params.staff_id;
 
  const {
-  full_name,
+  full_name, 
   email,
   role,
   department,
@@ -159,7 +159,8 @@ router.put("/:staff_id", async (req, res) => {
   notes,
   currentPassword,
   newPassword,
-  photo_url
+   staff_id,   // NEW: staff ID baru yg user edit dlm form
+  photo_url  
 } = req.body;
 
 
@@ -212,41 +213,40 @@ router.put("/:staff_id", async (req, res) => {
  const result = await pool.query(
   `
   UPDATE profiles
-     SET full_name = $1,
-         email = $2,
-         role = $3,
-         department = $4,
-         employment_date = $5,
-         confirmation_date = $6,
-         termination_date = $7,
-         gender = $8,
-         leave_entitlement_annual = $9,
-         leave_entitlement_medical = $10,
-         notes = $11,
-         photourl = $12,
-         updated_at = NOW()
-   WHERE staff_id = $13
+     SET staff_id                = $1,
+         full_name              = $2,
+         email                  = $3,
+         role                   = $4,
+         department             = $5,
+         employment_date        = $6,
+         confirmation_date      = $7,
+         termination_date       = $8,
+         gender                 = $9,
+         leave_entitlement_annual  = $10,
+         leave_entitlement_medical = $11,
+         notes                  = $12,
+         photourl               = COALESCE($13, photourl)
+   WHERE staff_id = $14
    RETURNING *;
   `,
   [
-    full_name,
-    email,
-    role,
-    department,
-    employment_date || null,
-    confirmation_date || null,
-    termination_date || null,
-    gender,
-    leave_entitlement_annual,
-    leave_entitlement_medical,
-    notes,
-
-    // 🔥 THIS IS THE NEW LINE
-    req.body.photo_url || null,
-
-    staffId
+    staff_id,                  // $1  – staff_id baru (dari form)
+    full_name,                 // $2
+    email,                     // $3
+    role,                      // $4
+    department,                // $5
+    employment_date || null,   // $6
+    confirmation_date || null, // $7
+    termination_date || null,  // $8
+    gender,                    // $9
+    leave_entitlement_annual,  // $10
+    leave_entitlement_medical, // $11
+    notes,                     // $12
+    photo_url || null,         // $13 (kalau tak hantar, dia kekalkan photourl lama)
+    staffId                    // $14 – staff_id LAMA (dari URL) utk WHERE
   ]
 );
+
 
 
 

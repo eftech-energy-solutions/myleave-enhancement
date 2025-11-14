@@ -494,33 +494,25 @@ async function toggleEditSave() {
       // -------------------------------------------
       // C) HANTAR PUT REQUEST KE BACKEND
       // -------------------------------------------
-      const res = await fetch(
-        `http://localhost:5000/api/employee/${selectedEmp.empId}`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            photo_url: finalRelativePhotoUrl,
-
-            full_name: detailsForm.name,
-            email: detailsForm.email,
-            role: detailsForm.role,
-            department: detailsForm.department,
-
-            employment_date: cleanDate(detailsForm.employmentDate),
-            confirmation_date: cleanDate(detailsForm.confirmationDate),
-            termination_date: cleanDate(detailsForm.terminationDate),
-
-            gender: detailsForm.gender,
-
-            leave_entitlement_annual: cleanNum(detailsForm.annualLeave),
-            leave_entitlement_medical: cleanNum(detailsForm.medicalLeave),
-
-            notes: detailsForm.notes
-          })
-        }
-      );
-
+    const res = await fetch(`http://localhost:5000/api/employee/${selectedEmp.empId}`, {
+  method: "PUT",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    staff_id: detailsForm.empId,            // ✅ HANTAR ID BARU KE BACKEND
+    photo_url: finalRelativePhotoUrl,
+    full_name: detailsForm.name,
+    email: detailsForm.email,
+    role: detailsForm.role,
+    department: detailsForm.department,
+    employment_date: detailsForm.employmentDate,
+    confirmation_date: detailsForm.confirmationDate,
+    termination_date: detailsForm.terminationDate,
+    gender: detailsForm.gender,
+    leave_entitlement_annual: detailsForm.annualLeave,
+    leave_entitlement_medical: detailsForm.medicalLeave,
+    notes: detailsForm.notes
+  })
+});
       const data = await res.json();
       if (!res.ok) {
         console.error(data);
@@ -528,6 +520,32 @@ async function toggleEditSave() {
       }
 
       alert("✅ Employee updated successfully!");
+// --- Handle kalau Staff ID ditukar ---
+const oldId = selectedEmp.empId;
+const newId = detailsForm.empId;
+
+// Kalau user tukar staff ID
+if (newId && newId !== oldId) {
+  // 1) Pindahkan entry dalam detailsById
+  detailsById[newId] = {
+    ...detailsById[oldId],
+    empId: newId
+  };
+  delete detailsById[oldId];
+
+  // 2) Update id dalam employees array (kad grid)
+  const idx = employees.findIndex(e => e.id === oldId);
+  if (idx !== -1) {
+    employees[idx] = {
+      ...employees[idx],
+      id: newId
+    };
+    employees = [...employees]; // trigger reactivity
+  }
+
+  // 3) Update selectedEmp supaya modal guna ID baru
+  selectedEmp.empId = newId;
+}
 
       // -------------------------------------------
       // D) UPDATE FRONTEND STATE
