@@ -153,7 +153,6 @@ router.get("/", async (req, res) => {
   }
 });
 
-<<<<<<< Updated upstream
 
 // Additional direct full-table GET
 router.get("/employees", async (req, res) => {
@@ -174,8 +173,6 @@ router.get("/employees", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-=======
->>>>>>> Stashed changes
 /* ============================================================
    3) MERGED UPDATE EMPLOYEE (Profile + Optional Password)
 ============================================================ */
