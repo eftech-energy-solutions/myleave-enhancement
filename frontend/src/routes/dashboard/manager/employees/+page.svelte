@@ -1,157 +1,89 @@
 <script>
-  // =======================
-  // 1) APP STATE & HELPERS
-  // =======================
-  let profileMenuOpen = false;
-  const user = { name: "Afiq Mikail", role: "Human Resources", staffId: "E8505" };
-
-  function clickOutside(node) {
-    const onClick = (e) => { if (!node.contains(e.target)) profileMenuOpen = false; };
-    document.addEventListener('click', onClick);
-    return { destroy: () => document.removeEventListener('click', onClick) };
-  }
-
-  function handleKey(e) {
-    if (e.key === 'Escape') {
-      if (sidebarOpen) sidebarOpen = false;
-      if (profileMenuOpen) profileMenuOpen = false;
-      if (detailsOpen) detailsOpen = false;
-    }
-  }
-
-  const todayISO = () => new Date().toISOString().slice(0, 10);
-  const fmt = (iso) => (iso ? new Date(iso).toLocaleDateString() : '-');
+  import { onMount } from "svelte";
 
   // =======================
-  // 2) MASTER DATA (DUMMY)
+  // 1) STATE
   // =======================
-  const NAMES = [
-    "Afiq Mikail","Nur Aisyah","Daniel Tan","Sophia Lim","Muhammad Shamsul","Ariana Wong","John Lee","Farah Zahra",
-    "Hafiz Rahman","Amirul Hakim","Nabila Rahman","Jason Ong","Puteri Balqis","Christopher Yap","Mira Izzati","Iqbal Zain",
-    "Syafiqah Noor","Faizal Aziz","Hannah Cho","Kelvin Teo","Rina Hashim","Zara Kamal","Ridzuan Salleh","Mei Yee",
-    "Irfan Danial","Aisyah Humaira","Adam Firdaus","Noraishah Ismail","Kevin Chan","Lydia Goh","Wan Aiman","Diyana Ahmad",
-    "Hakim Roslan","Zul Hilmi","Nurul Auni","Faris Zulkifli","Melissa Chong","Zaid Hakimi"
-  ];
-  const ROLES = ["Human Resources","Manager","Engineer","Executive","Analyst","Technician","Team Lead","Coordinator"];
-  const DEPTS = ["Operations"]; 
-  const IDS   = ["HR","MN","EN","EX","AN","TC","TL","CO"];
+  let manager = null;
+  let managerDept = null;
 
-  const makeId = (prefix, i) => `${prefix}${String(i + 1).padStart(3, "0")}`;
-
-  // =======================
-  // 3) EMPLOYEES + DETAILS
-  // =======================
-  let employees = NAMES.map((name, i) => ({
-    id: makeId(IDS[i % IDS.length], i),
-    name,
-    role: ROLES[i % ROLES.length],
-    department: DEPTS[i % DEPTS.length]
-  }));
-
-  /** @type {Record<string, any>} */
+  let employees = [];
+  let filteredEmployees = [];
   let detailsById = {};
-  for (const e of employees) {
-    detailsById[e.id] = {
-      photoUrl: "",
-      empId: e.id,
-      name: e.name,
-      email: "",
-      position: e.role,
-      department: e.department,
-      employmentDate: "",
-      terminationDate: "",
-      confirmationDate: "",
-      gender: "",
-      annualLeave: "",
-      medicalLeave: "",
-      notes: ""
-    };
-  }
-  
-  // Always show employees sorted by name (case-insensitive)
-$: filteredEmployees = [...employees].sort((a, b) =>
-  a.name.localeCompare(b.name, 'en', { sensitivity: 'base' })
-);
 
-
-  // =======================
-  // 5) PENDING APPROVALS
-  // =======================
-   let pending = [
-    {
-      id: "MN002",
-      name: "Nur Aisyah",
-      role: "Manager",
-      department: "Operations",
-      leaveType: "Annual Leave",
-      dateFrom: todayISO(),
-      dateTo: todayISO(),
-      requestedAt: todayISO(),
-      type: 'new'
-    },
-    {
-      id: "EN003",
-      name: "Daniel Tan",
-      role: "Engineer",
-      department: "Technical Data",
-      leaveType: "Medical Leave",
-      dateFrom: '2025-10-20',
-      dateTo: '2025-10-21',
-      requestedAt: todayISO(),
-      type: 'cancel'
-    }
-  ];
-  
-  $: pendingLeave = pending.filter(p => p.type !== 'cancel');
-  $: pendingCancel = pending.filter(p => p.type === 'cancel');
-
-  employees = employees.filter(e => e.id !== "MN002" && e.id !== "EN003");
-
-  function approveRequest(item) {
-    const idx = pending.findIndex(e => e.id === item.id);
-    if (idx === -1) return;
-    if (!employees.some(e => e.id === item.id)) {
-      employees = [{ id:item.id, name:item.name, role:item.role, department:item.department }, ...employees];
-    }
-    pending = [...pending.slice(0, idx), ...pending.slice(idx + 1)];
-    if (!detailsById[item.id]) {
-      detailsById[item.id] = {
-        photoUrl: "", empId: item.id, name: item.name, email: "", position: item.role,
-        department: item.department, employmentDate: "", terminationDate: "",
-        confirmationDate: "", gender: "", annualLeave: "", medicalLeave: "", notes: ""
-      };
-    }
-  }
-  
-  const rejectRequest = (item) => {
-    const idx = pending.findIndex(e => e.id === item.id);
-    if (idx === -1) return;
-    if (!employees.some(e => e.id === item.id)) {
-      employees = [{ id:item.id, name:item.name, role:item.role, department:item.department }, ...employees];
-    }
-    pending = [...pending.slice(0, idx), ...pending.slice(idx + 1)];
-  };
-
-  // =======================
-  // 6) SIDEBAR
-  // =======================
-  let sidebarOpen = false;
-  const toggleSidebar = () => (sidebarOpen = !sidebarOpen);
-  $: pendingCount = pending.length;
-
-  // =======================
-  // 8) DETAILS MODAL (VIEW ONLY)
-  // =======================
   let detailsOpen = false;
   let selectedEmp = null;
 
-  function openDetails(empId) {
-    selectedEmp = detailsById[empId] ?? null;
+  const fmt = (iso) => (iso ? new Date(iso).toLocaleDateString() : "-");
+
+  // =======================
+  // 2) LOAD MANAGER + EMPLOYEE DATA
+  // =======================
+  onMount(async () => {
+    try {
+      // 2.1 — GET LOGGED-IN USER (MANAGER)
+      const userRes = await fetch("http://localhost:5000/api/me/photo", {
+        credentials: "include",
+      });
+      const userData = await userRes.json();
+
+      console.log("Manager profile loaded:", userData);
+
+      manager = userData;
+      managerDept = userData?.department;
+
+
+      // 2.2 — GET ALL EMPLOYEES
+      const res = await fetch("http://localhost:5000/api/employee", {
+        credentials: "include",
+      });
+
+      const data = await res.json();
+
+      // CONVERT backend keys → frontend keys
+      employees = data.map(e => ({
+        id: e.staff_id,
+        name: e.full_name,
+        role: e.role,
+        department: e.department,
+        email: e.email,
+        photoUrl: e.photourl ? `http://localhost:5000${e.photourl}` : "",
+        employmentDate: e.employment_date,
+        confirmationDate: e.confirmation_date,
+        terminationDate: e.termination_date,
+        gender: e.gender,
+        annualLeave: e.leave_entitlement_annual,
+        medicalLeave: e.leave_entitlement_medical,
+        notes: e.notes
+      }));
+
+      // Build details map for modal
+      detailsById = {};
+      for (const e of employees) {
+        detailsById[e.id] = structuredClone(e);
+      }
+
+    } catch (err) {
+      console.error("❌ Error loading manager or employees:", err);
+    }
+  });
+
+  // =======================
+  // 3) FILTER EMPLOYEES UNDER THIS MANAGER'S DEPT
+  // =======================
+  $: filteredEmployees =
+    managerDept
+      ? employees.filter(e => e.department === managerDept)
+      : [];
+
+  // =======================
+  // 4) OPEN DETAILS MODAL
+  // =======================
+  function openDetails(id) {
+    selectedEmp = detailsById[id] || null;
     detailsOpen = !!selectedEmp;
   }
 </script>
-
-<svelte:window on:keydown={handleKey} />
 
 <style>
   :global(html, body){ height:100%; margin:0; }
@@ -290,10 +222,10 @@ $: filteredEmployees = [...employees].sort((a, b) =>
   </div>
 </div>
 
-<!-- ======================= -->
+<!-- =======================
 <!-- 10) SIDEBAR + TAB       -->
 <!-- ======================= -->
-<div class:show={sidebarOpen} class="overlay" on:click={toggleSidebar}></div>
+<!-- <div class:show={sidebarOpen} class="overlay" on:click={toggleSidebar}></div>
 <div class:open={sidebarOpen} class="sidebar" aria-hidden={!sidebarOpen}>
   <div class="sidebar-header">
     <div class="sidebar-title">Pending Approval{pendingCount > 0 ? ` (${pendingCount})` : ''}</div>
@@ -363,14 +295,14 @@ $: filteredEmployees = [...employees].sort((a, b) =>
   <div class="sidebar-footer">
     <button class="cancel-btn" on:click={() => (sidebarOpen = false)}>Cancel</button>
   </div>
-</div>
+</div> -->
 
-<div class="sidebar-tab" on:click={toggleSidebar}>
+<!-- <div class="sidebar-tab" on:click={toggleSidebar}>
   <span class="label">Pending Approval</span>
   {#if pendingCount > 0}
     <span class="badge">{pendingCount}</span>
   {/if}
-</div>
+</div>  -->
 
 <!-- ======================= -->
 <!-- 12) DETAILS MODAL (VIEW-ONLY) -->

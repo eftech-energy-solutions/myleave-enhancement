@@ -109,14 +109,16 @@ app.post('/api/login', async (req, res) => {
       email: user.email,
       role: user.role,
       name: user.full_name,
+      department: user.department,  
       photoUrl: user.photourl
     };
 
     res.cookie('auth_token', JSON.stringify(payload), {
-      httpOnly: false, // same as before
-      sameSite: 'lax'
-      // secure: true // enable if running HTTPS
+      httpOnly: false,
+      sameSite: 'lax',
+      path: '/',             // IMPORTANT
     });
+
 
     return res.json({
       success: true,
@@ -138,7 +140,7 @@ app.get('/api/me/photo', async (req, res) => {
 
     const me = JSON.parse(token);
     const q = await pool.query(
-      'SELECT staff_id, full_name, email, role, photourl FROM profiles WHERE staff_id = $1 LIMIT 1',
+      'SELECT staff_id, full_name, email, role, department, photourl FROM profiles WHERE staff_id = $1 LIMIT 1',
       [me.staffId]
     );
     if (!q.rows.length) return res.status(404).json({ error: 'User not found' });
@@ -149,6 +151,7 @@ app.get('/api/me/photo', async (req, res) => {
       name: u.full_name,
       email: u.email,
       role: u.role,
+      department: u.department,  
       photoUrl: u.photourl
     });
   } catch (e) {

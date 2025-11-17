@@ -16,6 +16,7 @@ let safeUser = {
   name: '',
   role: '',
   staffId: '',
+  department: '',
   photoUrl: null
 };
 

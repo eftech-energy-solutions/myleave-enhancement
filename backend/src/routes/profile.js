@@ -94,14 +94,50 @@ router.post('/', async (req, res) => {
 ============================================================ */
 router.get("/", async (req, res) => {
   try {
-    const result = await pool.query(
-      `SELECT id, staff_id, full_name, role, department, email,
-              employment_date, confirmation_date, termination_date,
-              gender, leave_entitlement_annual, leave_entitlement_medical,
-              photourl, notes
-         FROM profiles
-         ORDER BY id DESC`
+    const token = req.cookies['auth_token'];
+    if (!token) return res.status(401).json({ error: "Not authenticated" });
+
+    const me = JSON.parse(token);
+
+    // get logged-in user's department + role
+    const meQuery = await pool.query(
+      `SELECT role, department FROM profiles WHERE staff_id = $1 LIMIT 1`,
+      [me.staffId]
     );
+
+    if (!meQuery.rows.length)
+      return res.status(404).json({ error: "User not found" });
+
+    const meData = meQuery.rows[0];
+    let result;
+
+    // ADMIN → see all
+    if (meData.role?.toLowerCase() === "admin") {
+      result = await pool.query(`
+        SELECT id, staff_id, full_name, role, department, email,
+               employment_date, confirmation_date, termination_date,
+               gender, leave_entitlement_annual, leave_entitlement_medical,
+               photourl, notes
+          FROM profiles
+        ORDER BY id DESC
+      `);
+
+    // MANAGER → only same department
+    } else if (meData.role?.toLowerCase() === "manager") {
+      result = await pool.query(`
+        SELECT id, staff_id, full_name, role, department, email,
+               employment_date, confirmation_date, termination_date,
+               gender, leave_entitlement_annual, leave_entitlement_medical,
+               photourl, notes
+          FROM profiles
+         WHERE department = $1
+        ORDER BY id DESC
+      `, [meData.department]);
+
+    // STAFF → cannot see
+    } else {
+      return res.status(403).json({ error: "Unauthorized" });
+    }
 
     const defaultAvatar = "/uploads/default-avatar.png";
     const rows = result.rows.map(r => ({
@@ -117,6 +153,7 @@ router.get("/", async (req, res) => {
   }
 });
 
+<<<<<<< Updated upstream
 
 // Additional direct full-table GET
 router.get("/employees", async (req, res) => {
@@ -137,6 +174,8 @@ router.get("/employees", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+=======
+>>>>>>> Stashed changes
 /* ============================================================
    3) MERGED UPDATE EMPLOYEE (Profile + Optional Password)
 ============================================================ */
@@ -347,7 +386,7 @@ router.get('/me', async (req, res) => {
     const user = JSON.parse(token);
 
     const result = await pool.query(
-      `SELECT staff_id, full_name, email, role, photourl
+      `SELECT staff_id, full_name, email, role, department, photourl
          FROM profiles
         WHERE staff_id = $1`,
       [user.staffId]
@@ -362,6 +401,7 @@ router.get('/me', async (req, res) => {
       name: result.rows[0].full_name,
       email: result.rows[0].email,
       role: result.rows[0].role,
+      department: result.rows[0].department,
       photoUrl: result.rows[0].photourl || "/uploads/default-avatar.png"
     });
 

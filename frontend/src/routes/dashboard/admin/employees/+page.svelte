@@ -62,7 +62,9 @@ function formatDate(dbDate) {
 
   async function loadEmployees() {
     try {
-      const res = await fetch("http://localhost:5000/api/employee"); // adjust port if needed
+      const res = await fetch("http://localhost:5000/api/employee", {
+        credentials: "include"
+      }); // adjust port if needed
       const data = await res.json();
       console.log(data);
 

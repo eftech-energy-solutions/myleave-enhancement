@@ -1,4 +1,13 @@
 <script>
+  // ======================================================
+  // OPTION 2: Prevent pendingCount undefined errors
+  // (Placeholder values until real API is implemented)
+  // ======================================================
+  let pending = [];
+  let pendingLeave = [];
+  let pendingCancel = [];
+  let pendingCount = 0;
+
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
   let selectedFile = null;
@@ -8,7 +17,8 @@
     name: '',
     role: '',
     staffId: '',
-    email: '',          // ensure backend returns this in /api/me/photo
+    email: '',
+    department: '',          // ensure backend returns this in /api/me/photo
     photoUrl: null
   };
 
