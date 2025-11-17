@@ -1046,103 +1046,109 @@ async function deleteEmployee() {
           <div class="details-grid-form">
             <!-- Left form -->
             <div class="form">
-              <div class="row">
-                <div>
-                  <label>Full Name</label>
-                  <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
-                    <input bind:value={detailsForm.name} disabled={!editMode} />
-                  </div>
-                </div>
-                <div>
-                  <label>Staff ID</label>
-                  <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
-                    <input bind:value={detailsForm.empId} disabled={!editMode} />
-                  </div>
-                </div>
-              </div>
+              <!-- FULL NAME + STAFF ID -->
+<div class="row">
+  <div>
+    <label>Full Name</label>
+    <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
+      <input bind:value={detailsForm.name} disabled={!editMode} />
+    </div>
+  </div>
+  <div>
+    <label>Staff ID</label>
+    <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
+      <input bind:value={detailsForm.empId} disabled={!editMode} />
+    </div>
+  </div>
+</div>
 
-              <div class="row">
-                <div>
-                  <label>Position</label>
-                  <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
-                    <input bind:value={detailsForm.role} disabled={!editMode} />
-                  </div>
-                </div>
-                <div>
-                  <label>Department</label>
-                  <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
-                    <input bind:value={detailsForm.department} disabled={!editMode} />
-                  </div>
-                </div>
-              </div>
+<!-- POSITION + DEPARTMENT -->
+<div class="row">
+  <div>
+    <label>Position</label>
+    <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
+      <input bind:value={detailsForm.role} disabled={!editMode} />
+    </div>
+  </div>
+  <div>
+    <label>Department</label>
+    <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
+      <select bind:value={detailsForm.department} disabled={!editMode}>
+        {#each DEPTS as d}
+          <option value={d}>{d}</option>
+        {/each}
+      </select>
+    </div>
+  </div>
+</div>
 
-              <div class="row single">
-                <div>
-                  <label>Email</label>
-                  <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
-                    <input type="email" bind:value={detailsForm.email} disabled={!editMode} />
-                  </div>
-                </div>
-              </div>
+<!-- EMAIL + EMPLOYMENT DATE -->
+<div class="row">
+  <div>
+    <label>Email</label>
+    <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
+      <input type="email" bind:value={detailsForm.email} disabled={!editMode}/>
+    </div>
+  </div>
+  <div>
+    <label>Employment Date</label>
+    <div class={"ctl pill date " + (!editMode ? 'disabled' : '')}>
+      <input type="date" bind:value={detailsForm.employmentDate} disabled={!editMode}/>
+    </div>
+  </div>
+</div>
 
-              <div class="row">
-                <div>
-                  <label>Employment Date</label>
-                  <div class={"ctl pill date " + (!editMode ? 'disabled' : '')}>
-                    <input type="date" bind:value={detailsForm.employmentDate} disabled={!editMode} />
-                  </div>
-                </div>
-                <div>
-                  <label>Confirmation Date</label>
-                  <div class={"ctl pill date " + (!editMode ? 'disabled' : '')}>
-                    <input type="date" bind:value={detailsForm.confirmationDate} disabled={!editMode} />
-                  </div>
-                </div>
-              </div>
+<!-- CONFIRMATION DATE + TERMINATION DATE -->
+<div class="row">
+  <div>
+    <label>Confirmation Date</label>
+    <div class={"ctl pill date " + (!editMode ? 'disabled' : '')}>
+      <input type="date" bind:value={detailsForm.confirmationDate} disabled={!editMode}/>
+    </div>
+  </div>
+  <div>
+    <label>Termination Date</label>
+    <div class={"ctl pill date " + (!editMode ? 'disabled' : '')}>
+      <input type="date" bind:value={detailsForm.terminationDate} disabled={!editMode}/>
+    </div>
+  </div>
+</div>
 
-              <div class="row three">
-                <div>
-                  <label>Gender</label>
-                  <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
-                    <select bind:value={detailsForm.gender} disabled={!editMode}>
-                      <option value="">Select</option>
-                      <option>Male</option>
-                      <option>Female</option>
-                      <option>Other</option>
-                    </select>
-                  </div>
-                </div>
-                <div>
-                  <label>Annual Leave</label>
-                  <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
-                      <input type="number" step="0.5" min="0" bind:value={detailsForm.annualLeave} disabled={!editMode} />
-                  </div>
-                </div>
-                <div>
-                  <label>Medical Leave</label>
-                  <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
-                      <input type="number" step="0.5" min="0" bind:value={detailsForm.medicalLeave} disabled={!editMode} />
-                  </div>
-                </div>
-              </div>
-              
-              <div class="row single">
-                <div>
-                  <label>Termination Date</label>
-                  <div class={"ctl pill date " + (!editMode ? 'disabled' : '')}>
-                    <input type="date" bind:value={detailsForm.terminationDate} disabled={!editMode} />
-                  </div>
-                </div>
-              </div>
+<!-- GENDER + ANNUAL + MEDICAL LEAVE -->
+<div class="row three">
+  <div>
+    <label>Gender</label>
+    <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
+      <select bind:value={detailsForm.gender} disabled={!editMode}>
+        <option>Male</option>
+        <option>Female</option>
+      </select>
+    </div>
+  </div>
+  <div>
+    <label>Annual Leave</label>
+    <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
+      <input type="number" step="0.5" min="0" bind:value={detailsForm.annualLeave} disabled={!editMode}/>
+    </div>
+  </div>
+  <div>
+    <label>Medical Leave</label>
+    <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
+      <input type="number" step="0.5" min="0" bind:value={detailsForm.medicalLeave} disabled={!editMode}/>
+    </div>
+  </div>
+</div>
 
-              <div class="row single">
-                <div>
-                  <label>Notes</label>
-                  <div class={"ctl " + (!editMode ? 'disabled' : '')}>
-                    <textarea bind:value={detailsForm.notes} disabled={!editMode} placeholder="Optional notes…" />
-                  </div>
-                </div>
-              </div>
+<!-- NOTES -->
+<div class="row single">
+  <div>
+    <label>Notes</label>
+    <div class={"ctl " + (!editMode ? 'disabled' : '')}>
+      <textarea bind:value={detailsForm.notes} disabled={!editMode} placeholder="Optional notes…" />
+    </div>
+  </div>
+</div>
+
 
               <div class="form-ft">
                 {#if editMode}

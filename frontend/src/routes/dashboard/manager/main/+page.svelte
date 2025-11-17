@@ -165,7 +165,7 @@
   .total-line{ text-align:center; font-size:12px; color:#6b7280; margin-top:4px; }
 
   /* numbers panel */
-  .stats{ display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:10px; margin-top:8px; }
+  .stats{ display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:10px; margin-top:8px; } /*grid employee overview*/
   @media (max-width:980px){ .stats{ grid-template-columns: repeat(2, minmax(0,1fr)); } }
   @media (max-width:580px){ .stats{ grid-template-columns: 1fr; } }
   .stat{ background:#f9fafb; border:1px solid var(--ring); border-radius:12px; padding:14px; display:grid; gap:4px; }

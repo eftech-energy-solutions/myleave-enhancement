@@ -137,38 +137,53 @@ router.get("/employees", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
-
 /* ============================================================
    3) MERGED UPDATE EMPLOYEE (Profile + Optional Password)
 ============================================================ */
 router.put("/:staff_id", async (req, res) => {
   const staffId = req.params.staff_id;
 
- const {
-  full_name, 
-  email,
-  role,
-  department,
-  employment_date,
-  confirmation_date,
-  termination_date,
-  gender,
-  leave_entitlement_annual,
-  leave_entitlement_medical,
-  notes,
-  currentPassword,
-  newPassword,
-   staff_id,   // NEW: staff ID baru yg user edit dlm form
-  photo_url  
-} = req.body;
-
+  const {
+    full_name,
+    email,
+    role,
+    department,
+    employment_date,
+    confirmation_date,
+    termination_date,
+    gender,
+    leave_entitlement_annual,
+    leave_entitlement_medical,
+    notes,
+    currentPassword,
+    newPassword,
+    staff_id,   // NEW: staff ID baru yg user edit dlm form
+    photo_url
+  } = req.body;
 
   try {
     /* ------------------------------
+       0) GET OLD EMAIL + ORIGINAL PASSWORD
+    ------------------------------ */
+    const oldRow = await pool.query(
+      "SELECT email, full_name, password FROM profiles WHERE staff_id = $1 LIMIT 1",
+      [staffId]
+    );
+
+    if (!oldRow.rows.length) {
+      return res.status(404).json({ error: "Employee not found." });
+    }
+
+    const oldEmail = oldRow.rows[0].email;
+    const oldName = oldRow.rows[0].full_name;
+    const originalPassword = oldRow.rows[0].password;
+
+    const emailChanged = oldEmail.trim().toLowerCase() !== (email || "").trim().toLowerCase();
+
+    /* ------------------------------
        1) PASSWORD CHANGE (Optional)
     ------------------------------ */
-      if (currentPassword && newPassword) {
+    if (currentPassword && newPassword) {
 
       if (newPassword.length < 8) {
         return res.status(400).json({ error: "New password must be at least 8 characters" });
@@ -210,48 +225,78 @@ router.put("/:staff_id", async (req, res) => {
     /* ------------------------------
        2) PROFILE UPDATE
     ------------------------------ */
- const result = await pool.query(
-  `
-  UPDATE profiles
-     SET staff_id                = $1,
-         full_name              = $2,
-         email                  = $3,
-         role                   = $4,
-         department             = $5,
-         employment_date        = $6,
-         confirmation_date      = $7,
-         termination_date       = $8,
-         gender                 = $9,
-         leave_entitlement_annual  = $10,
-         leave_entitlement_medical = $11,
-         notes                  = $12,
-         photourl               = COALESCE($13, photourl)
-   WHERE staff_id = $14
-   RETURNING *;
-  `,
-  [
-    staff_id,                  // $1  – staff_id baru (dari form)
-    full_name,                 // $2
-    email,                     // $3
-    role,                      // $4
-    department,                // $5
-    employment_date || null,   // $6
-    confirmation_date || null, // $7
-    termination_date || null,  // $8
-    gender,                    // $9
-    leave_entitlement_annual,  // $10
-    leave_entitlement_medical, // $11
-    notes,                     // $12
-    photo_url || null,         // $13 (kalau tak hantar, dia kekalkan photourl lama)
-    staffId                    // $14 – staff_id LAMA (dari URL) utk WHERE
-  ]
-);
-
-
-
+    const result = await pool.query(
+      `
+      UPDATE profiles
+         SET staff_id                = $1,
+             full_name              = $2,
+             email                  = $3,
+             role                   = $4,
+             department             = $5,
+             employment_date        = $6,
+             confirmation_date      = $7,
+             termination_date       = $8,
+             gender                 = $9,
+             leave_entitlement_annual  = $10,
+             leave_entitlement_medical = $11,
+             notes                  = $12,
+             photourl               = COALESCE($13, photourl)
+       WHERE staff_id = $14
+       RETURNING *;
+      `,
+      [
+        staff_id,                  // $1 – staff_id baru (dari form)
+        full_name,                 // $2
+        email,                     // $3
+        role,                      // $4
+        department,                // $5
+        employment_date || null,   // $6
+        confirmation_date || null, // $7
+        termination_date || null,  // $8
+        gender,                    // $9
+        (leave_entitlement_annual == null || leave_entitlement_annual === "" ? null : Number(leave_entitlement_annual)), // $10
+        (leave_entitlement_medical == null || leave_entitlement_medical === "" ? null : Number(leave_entitlement_medical)), // $11
+        notes,                     // $12
+        photo_url || null,         // $13
+        staffId                    // $14 – staff_id lama
+      ]
+    );
 
     if (!result.rowCount) {
       return res.status(404).json({ error: "Employee not found." });
+    }
+
+    /* ------------------------------
+       3) RESEND ORIGINAL TEMP PASSWORD IF EMAIL CHANGED
+    ------------------------------ */
+    if (emailChanged) {
+      const transporter = nodemailer.createTransport({
+        host: "mail.eftech.com.my",
+        port: 465,
+        secure: true,
+        auth: {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASS
+        }
+      });
+
+      await transporter.sendMail({
+        from: '"Eftech HR" <no-reply@eftech.com.my>',
+        to: email, // email baru yang betul
+        subject: "Your MyLeave Account (Corrected Email)",
+        text: `Hi ${full_name || oldName},
+
+Your MyLeave account email has been corrected.
+
+Here is your temporary password:
+
+Email: ${email}
+Temporary Password: ${originalPassword}
+
+Please log in and change your password.
+
+Thank you.`
+      });
     }
 
     res.json({
@@ -265,7 +310,6 @@ router.put("/:staff_id", async (req, res) => {
     res.status(500).json({ error: "Failed to update employee." });
   }
 });
-
 
 /* ============================================================
    4) DELETE EMPLOYEE
