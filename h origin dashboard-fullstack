@@ -1,0 +1,272 @@
+[33mcommit 18132ebfaa0ab4f4de17cbc03ccd6e504ee39b20[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mdashboard-fullstack[m[33m)[m
+Author: NUR AZIRA AZMAN <azira.azman@eftech.com.my>
+Date:   Mon Nov 17 11:44:11 2025 +0800
+
+    Employees view for Manager in particular department added
+
+[33mcommit 2788487221c67f080af7eaefdc4169396dbdc7a9[m
+Author: NUR AZIRA AZMAN <azira.azman@eftech.com.my>
+Date:   Mon Nov 17 11:35:51 2025 +0800
+
+    Manager employee lists added
+
+[33mcommit a7906f032041a035fbbb6c107fb129bec09f68dc[m[33m ([m[1;31morigin/dashboard-fullstack[m[33m)[m
+Author: yarownies <nalya1809@gmail.com>
+Date:   Mon Nov 17 11:05:52 2025 +0800
+
+    Resend email
+
+[33mcommit 1c81b34709f0c594c888abbe0248e88aa6991e3c[m
+Author: yarownies <nalya1809@gmail.com>
+Date:   Fri Nov 14 14:56:50 2025 +0800
+
+    Employee overview
+
+[33mcommit d888db40ca3b78230ffd226fdb3273614b324d1b[m
+Author: yarownies <nalya1809@gmail.com>
+Date:   Fri Nov 14 11:21:06 2025 +0800
+
+    Save update staff id
+
+[33mcommit 7e885a60b13260e06229b86b33861fda77fe7763[m
+Author: yarownies <nalya1809@gmail.com>
+Date:   Thu Nov 13 16:13:34 2025 +0800
+
+    Edit profile
+
+[33mcommit 9d3a9203c879f4a0ae4296c9d5aae6703583adfd[m
+Author: yarownies <nalya1809@gmail.com>
+Date:   Thu Nov 13 14:45:29 2025 +0800
+
+    Upload successful notifications
+
+[33mcommit 176dedfdfd79f2d36cfff15699905a7daea1d0bd[m
+Author: yarownies <nalya1809@gmail.com>
+Date:   Thu Nov 13 14:21:19 2025 +0800
+
+    Upload photo on Add new employee
+
+[33mcommit 53e3c9b584f0b0a3f7765c364bd8a154c0f573a9[m[33m ([m[1;32mrestore-specific-commit[m[33m)[m
+Author: yarownies <nalya1809@gmail.com>
+Date:   Thu Nov 13 10:47:49 2025 +0800
+
+    Better version of forgot password
+
+[33mcommit c8360beb14a5de630c0757b1f12d9512913d0719[m
+Author: yarownies <nalya1809@gmail.com>
+Date:   Thu Nov 13 09:55:38 2025 +0800
+
+    Update password
+
+[33mcommit 73850dca755e19d3d7911f39737f400572e31d6f[m
+Author: NUR AZIRA AZMAN <azira.azman@eftech.com.my>
+Date:   Tue Nov 11 11:30:18 2025 +0800
+
+    latest update Profile and Calender
+
+[33mcommit 561258b9faca4dff85c535f7d11014fc5cc133f3[m
+Author: NUR AZIRA AZMAN <azira.azman@eftech.com.my>
+Date:   Wed Nov 5 14:26:35 2025 +0800
+
+    Add delete button in setting at Sidebar
+
+[33mcommit 141a296f676420d514b4ae0b681581738fb44ad3[m
+Merge: 2cc59c7 fbe70d4
+Author: NUR AZIRA AZMAN <azira.azman@eftech.com.my>
+Date:   Mon Nov 3 14:37:45 2025 +0800
+
+    latest update
+
+[33mcommit 2cc59c72988844e890687059c43ba21de200927d[m
+Author: NUR AZIRA AZMAN <azira.azman@eftech.com.my>
+Date:   Thu Oct 30 10:27:06 2025 +0800
+
+    Save current changes before testing alya's branch
+
+[33mcommit fbe70d46a45f9259236098b2f6bc1f34ecf130bd[m[33m ([m[1;32mtest-history[m[33m)[m
+Author: yarownies <nalya1809@gmail.com>
+Date:   Mon Oct 27 14:46:53 2025 +0800
+
+    Tambah role permission functions and minor changes on manager sidebar
+
+[33mcommit 6e7b41b59d771f23abfb350a74dde497dcde3d51[m[33m ([m[1;32mbackup-mywork-before-pull-alyas[m[33m)[m
+Merge: 2bcbc2a d566a62
+Author: NUR AZIRA AZMAN <azira.azman@eftech.com.my>
+Date:   Wed Oct 22 10:56:14 2025 +0800
+
+    My current changes
+
+[33mcommit c5199e06ebbb6ee3048ea446a817f6283c057fa2[m
+Author: yarownies <nalya1809@gmail.com>
+Date:   Tue Oct 14 11:36:24 2025 +0800
+
+    Label annual and medical leave on add new employee form
+
+[33mcommit dc65cc1562dddc1602d7f1884839d72ca12081f5[m
+Author: yarownies <nalya1809@gmail.com>
+Date:   Tue Oct 14 10:57:39 2025 +0800
+
+    Changes on login page and download button on admin
+
+[33mcommit a17c60831e3610817208131281fd149f6fe7c204[m
+Author: yarownies <nalya1809@gmail.com>
+Date:   Fri Oct 10 15:29:48 2025 +0800
+
+    Add bin button on history page of staffs
+
+[33mcommit d4c5daccb1ee42f70e6d3892f47548b2ae6494fb[m
+Author: yarownies <nalya1809@gmail.com>
+Date:   Fri Oct 10 14:42:48 2025 +0800
+
+    Add New Employee
+
+[33mcommit d566a62f1c5d1aba14cd76a9d510f0644e6bc05f[m
+Author: yarownies <nalya1809@gmail.com>
+Date:   Fri Oct 10 11:00:01 2025 +0800
+
+    Change on history page and sidebar icons
+
+[33mcommit 2bcbc2ad6bb19cd412e36da29295a639ee303b64[m[33m ([m[1;31morigin/dashboard-stable[m[33m, [m[1;32mdashboard-stable[m[33m)[m
+Author: NUR AZIRA AZMAN <azira.azman@eftech.com.my>
+Date:   Fri Oct 10 10:23:03 2025 +0800
+
+    Integrated backend + dashboard frontend into dashboard-fullstack
+
+[33mcommit ff42a4e6fbb88bbad05992d0c78ebde3cc9347ab[m
+Author: NUR AZIRA AZMAN <azira.azman@eftech.com.my>
+Date:   Fri Oct 10 10:22:18 2025 +0800
+
+    Stop tracking node_modules and .env
+
+[33mcommit 9e32f1f39c6d45d77b54d2376263283e67539d27[m
+Author: NUR AZIRA AZMAN <azira.azman@eftech.com.my>
+Date:   Fri Oct 10 10:19:21 2025 +0800
+
+    Add node_modules/ and .env to .gitignore
+
+[33mcommit 9f9d55859bed1cbf3369fad16e9129a6b97ae071[m
+Author: yarownies <nalya1809@gmail.com>
+Date:   Tue Oct 7 14:25:45 2025 +0800
+
+    Public holiday highlight on each role
+
+[33mcommit 4bfec66b7120a2d8b7ac197e9495a380bbe85d7e[m
+Author: yarownies <nalya1809@gmail.com>
+Date:   Mon Oct 6 11:08:30 2025 +0800
+
+    Update on history on admin and manager
+
+[33mcommit 2952ed4d9a1ec98ded0c397785c82c6e395d9285[m[33m ([m[1;31morigin/employees[m[33m)[m
+Author: yarownies <nalya1809@gmail.com>
+Date:   Tue Sep 30 14:16:24 2025 +0800
+
+    Update Profile on header
+
+[33mcommit 52f32f5c4333ae6ae18ffce5ae4d7d4505eb1906[m
+Author: yarownies <nalya1809@gmail.com>
+Date:   Tue Sep 30 14:13:14 2025 +0800
+
+    Update Profile on header
+
+[33mcommit f39f8a64f9dbd1160c1a3450834fa85129ef1ecf[m
+Author: yarownies <nalya1809@gmail.com>
+Date:   Tue Sep 30 10:59:25 2025 +0800
+
+    Add filter option in Employee Page
+
+[33mcommit f360fd9d9e3269ef47b50d79e07bff4a7830903b[m
+Author: yarownies <nalya1809@gmail.com>
+Date:   Tue Sep 30 10:31:25 2025 +0800
+
+    Adjusment header on AdminSidebar
+
+[33mcommit 14a00b258beb04e8e5b997c51429879dc43e6a81[m[33m ([m[1;32mdashboard[m[33m)[m
+Merge: 9e4896a a8e05a2
+Author: NUR AZIRA AZMAN <azira.azman@eftech.com.my>
+Date:   Tue Sep 30 10:09:24 2025 +0800
+
+    Merge branch 'employees' of https://github.com/eftech-energy-solutions/myleave-enhancement into dashboard
+
+[33mcommit a8e05a2a4f8023b2d3c6cb1248fbc60a51f10cd1[m[33m ([m[1;32memployees[m[33m)[m
+Author: yarownies <nalya1809@gmail.com>
+Date:   Mon Sep 29 16:42:21 2025 +0800
+
+    Update on forms and details
+
+[33mcommit 9e4896a1f7c239891025272e55be6071297793c0[m[33m ([m[1;31morigin/dashboard[m[33m)[m
+Author: yarownies <nalya1809@gmail.com>
+Date:   Mon Sep 29 10:50:22 2025 +0800
+
+    Update on calendar (wajib attachment on medical leave
+
+[33mcommit 09900e966ccc89cd622ab73591a7027a83427cee[m
+Author: yarownies <nalya1809@gmail.com>
+Date:   Fri Sep 26 16:17:28 2025 +0800
+
+    Employee page
+
+[33mcommit ddb559b69a07656e91c538847394efe008886a8e[m
+Author: yarownies <nalya1809@gmail.com>
+Date:   Thu Sep 25 11:19:45 2025 +0800
+
+    Update on calendar (public holiday)
+
+[33mcommit ab6323d662aa1c42cfdcbc942b790feb5583c0fe[m
+Author: yarownies <nalya1809@gmail.com>
+Date:   Wed Sep 24 15:40:14 2025 +0800
+
+    Update on dashboard
+
+[33mcommit a44cfb9d08e0cc1a1d9bc62630b6b9c0ceaecac5[m
+Author: yarownies <nalya1809@gmail.com>
+Date:   Tue Sep 23 15:12:47 2025 +0800
+
+    Update on calendar
+
+[33mcommit b3728df193824a7308933c653b86f6f9253ed639[m
+Author: yarownies <nalya1809@gmail.com>
+Date:   Tue Sep 23 15:07:23 2025 +0800
+
+    Update on calendar
+
+[33mcommit ce05e16e467351fdb4b2ebd0d8ab2bbdd23691db[m
+Author: yarownies <nalya1809@gmail.com>
+Date:   Tue Sep 23 14:48:25 2025 +0800
+
+    Update on leave form
+
+[33mcommit f0cef4fa85640b31a61abff91cf9bb7f8f27fcb8[m
+Author: yarownies <nalya1809@gmail.com>
+Date:   Tue Sep 23 10:48:39 2025 +0800
+
+    Update on dashboard
+
+[33mcommit b547d0fba4a0efc3d4c4f406b443135fb1abec33[m
+Author: yarownies <nalya1809@gmail.com>
+Date:   Mon Sep 22 16:47:33 2025 +0800
+
+    Update on dashboard
+
+[33mcommit 2cf64353f4d14b931656b018865b4d241af2ec72[m
+Author: yarownies <nalya1809@gmail.com>
+Date:   Mon Sep 22 13:56:20 2025 +0800
+
+    Update on dashboard
+
+[33mcommit e97d5169549a1db9ca99d34251302f1b0a1a0200[m
+Author: yarownies <nalya1809@gmail.com>
+Date:   Thu Sep 18 14:22:23 2025 +0800
+
+    Update on dashboard
+
+[33mcommit 0e59c53225f9246fec8e6f1ccf2228f1f500d9c5[m[33m ([m[1;31morigin/main[m[33m)[m
+Author: aziraeftech <162680999+aziraeftech@users.noreply.github.com>
+Date:   Tue Sep 9 15:14:41 2025 +0800
+
+    Create README.md
+
+[33mcommit 436c01b208be0643f57b308086c86d355d873f8d[m[33m ([m[1;32mmain[m[33m)[m
+Author: NUR AZIRA AZMAN <azira.azman@eftech.com.my>
+Date:   Tue Sep 9 15:06:32 2025 +0800
+
+    Initial commit

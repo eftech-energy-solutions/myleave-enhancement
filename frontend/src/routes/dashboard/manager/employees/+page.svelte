@@ -58,10 +58,15 @@
       }));
 
       // Build details map for modal
-      detailsById = {};
-      for (const e of employees) {
-        detailsById[e.id] = structuredClone(e);
-      }
+    detailsById = {};
+    for (const e of employees) {
+      detailsById[e.id] = {
+        ...structuredClone(e),
+        empId: e.id,              // <-- PENTING
+        position: e.role,         // <-- Admin modal guna "position"
+      };
+    }
+
 
     } catch (err) {
       console.error("❌ Error loading manager or employees:", err);
@@ -324,7 +329,7 @@
                 <div><label>Staff ID</label><div class="ctl pill disabled"><input value={selectedEmp.empId} disabled /></div></div>
               </div>
               <div class="row">
-                <div><label>Position</label><div class="ctl pill disabled"><input value={selectedEmp.position} disabled /></div></div>
+                <div><label>Position</label><div class="ctl pill disabled"><input value={selectedEmp.role} disabled /></div></div>
                 <div><label>Department</label><div class="ctl pill disabled"><input value={selectedEmp.department} disabled /></div></div>
               </div>
               <div class="row">
