@@ -39,13 +39,13 @@
 			});
 			const data = await res.json();
 
-			if (!res.ok || !data?.success) {
-				loginError =
-					data?.error === 'Invalid email or password'
-						? 'Wrong password'
-						: data?.error || 'Login failed';
-				return;
-			}
+			if (!res.ok) {
+    loginError =
+        data?.error === 'Invalid email or password'
+            ? 'Wrong password'
+            : data?.error || 'Login failed';
+    return;
+}
 			window.location.href = data.redirectTo || '/dashboard/staff';
 		} catch (err) {
 			console.error(err);
@@ -54,7 +54,6 @@
 			loginLoading = false;
 		}
 	}
-
 	// -------------------------------
 	// FORGOT (Send OTP)
 	// -------------------------------

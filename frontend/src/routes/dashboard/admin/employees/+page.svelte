@@ -140,40 +140,41 @@ function formatDate(dbDate) {
   return byName !== 0 ? byName : a.id.localeCompare(b.id, 'en', { sensitivity: 'base' });
 });
 
-  // =======================
-  // 5) PENDING APPROVALS (New logic)
-  // =======================
-   let pending = [
-    {
-      id: "MN002",
-      name: "Nur Aisyah",
-      role: "Manager",
-      department: "Operations",
-      leaveType: "Annual Leave",
-      dateFrom: todayISO(),
-      dateTo: todayISO(),
-      requestedAt: todayISO(),
-      type: 'new' // Type for new leave request
-    },
-    {
-      id: "EN003",
-      name: "Daniel Tan",
-      role: "Engineer",
-      department: "Technical Data",
-      leaveType: "Medical Leave",
-      dateFrom: '2025-10-20',
-      dateTo: '2025-10-21',
-      requestedAt: todayISO(),
-      type: 'cancel' // Type for cancellation request
-    }
-  ];
-  
-  // Separate pending items into two lists
-  $: pendingLeave = pending.filter(p => p.type !== 'cancel');
-  $: pendingCancel = pending.filter(p => p.type === 'cancel');
+ let pending = [];
+let pendingLeave = [];
+let pendingCancel = [];
 
-  // remove from grid so it “moves” into Pending
-  employees = employees.filter(e => e.id !== "MN002" && e.id !== "EN003");
+onMount(async () => {
+  try {
+    const res = await fetch("/api/leave-requests?status=pending", {
+      credentials: "include"
+    });
+
+    if (!res.ok) {
+      console.error("Failed to fetch pending leave:", res.status);
+      return;
+    }
+
+    const all = await res.json();
+
+    // Filter visibility ikut role pengguna sekarang
+    if (user.role === "Manager") {
+      // Manager TIDAK BOLEH nampak request dari Manager lain
+      pending = all.filter(lv => lv.requester_role !== "Manager");
+    } else {
+      // Admin / HR nampak semua
+      pending = all;
+    }
+
+    // Separate apply leave vs cancel leave
+    pendingLeave = pending.filter(p => p.request_type !== "cancel");
+    pendingCancel = pending.filter(p => p.request_type === "cancel");
+
+  } catch (err) {
+    console.error("Error loading pending leaves:", err);
+  }
+});
+
 
   // Simulate new request coming in (optional)
   function requestCameIn(empId) {
@@ -187,37 +188,6 @@ function formatDate(dbDate) {
     employees = [...employees.slice(0, idx), ...employees.slice(idx + 1)];
     sidebarOpen = true;
   }
-
-  function approveRequest(item) {
-    const idx = pending.findIndex(e => e.id === item.id);
-    if (idx === -1) return;
-    // return card to grid (works for both approving leave and approving cancellation)
-    if (!employees.some(e => e.id === item.id)) {
-      employees = [{ id:item.id, name:item.name, role:item.role, department:item.department }, ...employees];
-    }
-    pending = [...pending.slice(0, idx), ...pending.slice(idx + 1)];
-    if (!detailsById[item.id]) {
-      detailsById[item.id] = {
-        photoUrl: "",
-        empId: item.id, name: item.name, email: "", role: item.role,
-        department: item.department, employmentDate: "", terminationDate: "",
-        confirmationDate: "", gender: "", annualLeave: "", medicalLeave: "", notes: ""
-      };
-    }
-  }
-  
-  const rejectRequest = (item) => {
-    const idx = pending.findIndex(e => e.id === item.id);
-    if (idx === -1) return;
-    
-    // Return card to grid when request is rejected
-    if (!employees.some(e => e.id === item.id)) {
-      employees = [{ id:item.id, name:item.name, role:item.role, department:item.department }, ...employees];
-    }
-    
-    // Remove from pending list
-    pending = [...pending.slice(0, idx), ...pending.slice(idx + 1)];
-  };
 
   // =======================
   // 6) SIDEBAR
@@ -402,22 +372,90 @@ let detailsForm = null; // working copy
 let showDeleteConfirm = false;
 let employeeToDelete = null;
 
-function openDetails(empId) {
-  const base = detailsById[empId] ?? null;
+function openDetails(item) {
+  let profile = {};
+  let leave = {};
 
-  if (!base) return;
+  // 1) Detect source: Employee Grid OR Pending Approval
 
-  // Pastikan empId wujud
-  selectedEmp = {
-    ...structuredClone(base),
-    empId: base.empId || base.id
-  };
+  // CASE A: ITEM DATANG DARI EMPLOYEE GRID (emp.id)
+  if (item.empId || detailsById[item]) {
+    const id = item.empId || item;          // item = emp.id ketika grid
+    profile = structuredClone(detailsById[id] || {});
+  }
 
-  detailsForm = structuredClone(selectedEmp);
+  // CASE B: ITEM DATANG DARI PENDING LEAVE (leave_requests table)
+  if (item.leave_id) {
+    leave = structuredClone(item);
+
+    // Map staff_id → employee profile
+    const staffId = leave.staff_id;
+    if (detailsById[staffId]) {
+      profile = structuredClone(detailsById[staffId]);
+    }
+  }
+
+const merged = {
+  // 1) Profile always priority (has employment dates etc)
+  ...profile,
+
+  // 2) ADD leave data (but don't override profile fields)
+  leave_id: leave.leave_id,
+  leave_type: leave.leave_type,
+  request_type: leave.request_type,
+  reason: leave.reason,
+  date_from: leave.date_from,
+  date_until: leave.date_until,
+  created_at: leave.created_at,
+  status: leave.status,
+  attachment_path: leave.attachment_path,
+
+  // 3) NORMALIZE fields
+  empId: profile.empId || leave.staff_id,
+
+  name:
+    profile.name ||
+    leave.profile_name ||
+    leave.staff_name ||
+    '',
+
+  department:
+    profile.department ||
+    leave.profile_department ||
+    leave.department ||
+    '',
+
+  email: profile.email || leave.email || '',
+
+  role:
+    profile.role ||
+    leave.requester_role ||
+    '',
+
+  employmentDate:
+    profile.employmentDate ||
+    leave.employment_date ||
+    '',
+
+  confirmationDate:
+    profile.confirmationDate ||
+    leave.confirmation_date ||
+    '',
+
+  terminationDate:
+    profile.terminationDate ||
+    leave.termination_date ||
+    '',
+
+  gender: profile.gender || leave.gender || '',
+};
+
+  selectedEmp = merged;
+  detailsForm = structuredClone(merged);
+
   editMode = false;
   detailsOpen = true;
 }
-
 
 const safe = (v) => (v && String(v).trim().length ? v : "-");
 
@@ -589,6 +627,45 @@ if (newId && newId !== oldId) {
   // ============================
   editMode = true;
   if (detailsForm) detailsForm.photoFile = null;
+}
+async function approveRequest(item) {
+  try {
+    const res = await fetch(`/api/leave-requests/${item.leave_id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "approved" }),
+      credentials: "include"
+    });
+
+    if (!res.ok) return;
+
+    pending = pending.filter(p => p.leave_id !== item.leave_id);
+    pendingLeave = pending.filter(p => p.type !== "cancel");
+    pendingCancel = pending.filter(p => p.type === "cancel");
+
+  } catch (err) {
+    console.error("Approve error:", err);
+  }
+}
+
+async function rejectRequest(item) {
+  try {
+    const res = await fetch(`/api/leave-requests/${item.leave_id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "rejected" }),
+      credentials: "include"
+    });
+
+    if (!res.ok) return;
+
+    pending = pending.filter(p => p.leave_id !== item.leave_id);
+    pendingLeave = pending.filter(p => p.type !== "cancel");
+    pendingCancel = pending.filter(p => p.type === "cancel");
+
+  } catch (err) {
+    console.error("Reject error:", err);
+  }
 }
 
 
@@ -830,7 +907,9 @@ async function deleteEmployee() {
 <div class:show={sidebarOpen} class="overlay" on:click={toggleSidebar}></div>
 <div class:open={sidebarOpen} class="sidebar" aria-hidden={!sidebarOpen}>
   <div class="sidebar-header">
-    <div class="sidebar-title">Pending Approval{pendingCount > 0 ? ` (${pendingCount})` : ''}</div>
+    <div class="sidebar-title">
+      Pending Approval{pendingCount > 0 ? ` (${pendingCount})` : ''}
+    </div>
     <button class="close-btn" on:click={toggleSidebar}>✕</button>
   </div>
 
@@ -841,20 +920,34 @@ async function deleteEmployee() {
       <!-- Section for Leave Approval -->
       {#if pendingLeave.length > 0}
         <h3 class="sub-ttl">Pending Leave Approval ({pendingLeave.length})</h3>
-        {#each pendingLeave as item (item.id + (item.requestedAt || ''))}
+        {#each pendingLeave as item (item.leave_id + (item.created_at || ''))}
           <div class="pending-card">
             <div class="row1">
               <div class="who">
-                <div class="name">{item.name}</div>
-                <div class="sub">{item.role} • {item.id} • {item.department}</div>
+                <!-- Nama ambil dari profiles; fallback staff_name dari leave_requests -->
+                <div class="name">
+                  {item.profile_name || item.staff_name}
+                </div>
+                <div class="sub">
+                  {item.requester_role} • {item.staff_id} • {item.profile_department || item.department}
+                </div>
               </div>
-              <span class="pill type">{item.leaveType || 'Leave'}</span>
+              <span class="pill type">{item.leave_type || 'Leave'}</span>
             </div>
 
             <div class="kv">
-              <div><span class="k">From:</span><span class="v">{fmt(item.dateFrom)}</span></div>
-              <div><span class="k">To:</span><span class="v">{fmt(item.dateTo)}</span></div>
-              <div><span class="k">Requested:</span><span class="v">{fmt(item.requestedAt)}</span></div>
+              <div>
+                <span class="k">From:</span>
+                <span class="v">{fmt(item.date_from)}</span>
+              </div>
+              <div>
+                <span class="k">To:</span>
+                <span class="v">{fmt(item.date_until)}</span>
+              </div>
+              <div>
+                <span class="k">Requested:</span>
+                <span class="v">{fmt(item.created_at)}</span>
+              </div>
             </div>
 
             <div class="actions">
@@ -862,7 +955,8 @@ async function deleteEmployee() {
                 <button class="btn-approve" on:click={() => approveRequest(item)}>Approve</button>
                 <button class="btn-reject"  on:click={() => rejectRequest(item)}>Reject</button>
               </div>
-              <button class="btn-details" on:click={() => openDetails(item.id)}>Details</button>
+              <!-- Hantar satu object terus supaya modal boleh baca semua field -->
+              <button class="btn-details" on:click={() => openDetails(item)}>Details</button>
             </div>
           </div>
         {/each}
@@ -870,21 +964,38 @@ async function deleteEmployee() {
 
       <!-- Section for Cancellation Approval -->
       {#if pendingCancel.length > 0}
-        <h3 class="sub-ttl" style="margin-top:20px;">Pending Cancellation Approval ({pendingCancel.length})</h3>
-        {#each pendingCancel as item (item.id + (item.requestedAt || ''))}
+        <h3 class="sub-ttl" style="margin-top:20px;">
+          Pending Cancellation Approval ({pendingCancel.length})
+        </h3>
+        {#each pendingCancel as item (item.leave_id + (item.created_at || ''))}
           <div class="pending-card">
             <div class="row1">
               <div class="who">
-                <div class="name">{item.name}</div>
-                <div class="sub">{item.role} • {item.id} • {item.department}</div>
+                <div class="name">
+                  {item.profile_name || item.staff_name}
+                </div>
+                <div class="sub">
+                  {item.requester_role} • {item.staff_id} • {item.profile_department || item.department}
+                </div>
               </div>
-              <span class="pill type" style="background-color: #fee2e2; color: #b91c1c;">Cancellation: {item.leaveType}</span>
+              <span class="pill type" style="background-color: #fee2e2; color: #b91c1c;">
+                Cancellation: {item.leave_type}
+              </span>
             </div>
 
             <div class="kv">
-              <div><span class="k">Leave From:</span><span class="v">{fmt(item.dateFrom)}</span></div>
-              <div><span class="k">Leave To:</span><span class="v">{fmt(item.dateTo)}</span></div>
-              <div><span class="k">Cancellation Requested:</span><span class="v">{fmt(item.requestedAt)}</span></div>
+              <div>
+                <span class="k">Leave From:</span>
+                <span class="v">{fmt(item.date_from)}</span>
+              </div>
+              <div>
+                <span class="k">Leave To:</span>
+                <span class="v">{fmt(item.date_until)}</span>
+              </div>
+              <div>
+                <span class="k">Cancellation Requested:</span>
+                <span class="v">{fmt(item.created_at)}</span>
+              </div>
             </div>
 
             <div class="actions">
@@ -892,7 +1003,7 @@ async function deleteEmployee() {
                 <button class="btn-approve" on:click={() => approveRequest(item)}>Approve Cancel</button>
                 <button class="btn-reject"  on:click={() => rejectRequest(item)}>Reject Cancel</button>
               </div>
-              <button class="btn-details" on:click={() => openDetails(item.id)}>Details</button>
+              <button class="btn-details" on:click={() => openDetails(item)}>Details</button>
             </div>
           </div>
         {/each}

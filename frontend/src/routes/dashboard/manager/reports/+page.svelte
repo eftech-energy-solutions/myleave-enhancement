@@ -326,6 +326,7 @@
   let totalDays = 1;
 
   let leaveType = 'Annual';
+  let requestType = "new";  // default apply leave
   let endLocked = false;
 
   let attachmentFiles; // FileList
@@ -393,13 +394,44 @@
     await tick();
   }
 
-  function submitLeave(e) {
-    const form = e.currentTarget;
-    if (!form.reportValidity()) return;
-    // TODO: post to backend
-    modal?.close();
-  }
+async function submitLeave(e) {
+  const formEl = e.currentTarget;
+  e.preventDefault();
 
+  if (!formEl.reportValidity()) return;
+
+  const fd = new FormData(formEl);
+
+  fd.set("type", leaveType);
+  fd.set("requestType", requestType);
+  fd.set("duration", duration);
+  fd.set("dateFrom", dateFrom);
+  fd.set("dateUntil", dateUntil);
+  fd.set("totalDays", String(totalDays));
+
+  try {
+    const res = await fetch("/api/leave-requests", {
+      method: "POST",
+      body: fd,
+      credentials: "include"
+    });
+
+    if (!res.ok) {
+      const msg = await res.text().catch(() => "Failed to submit leave.");
+      alert(msg);
+      return;
+    }
+
+    const created = await res.json().catch(() => null);
+    console.log("Leave created:", created);
+
+    modal?.close(); 
+
+  } catch (err) {
+    console.error("Error submit leave:", err);
+    alert("Something went wrong while submitting your leave.");
+  }
+}
   // Recent (demo)
   const recent = [
     { id: 101, from: '2025-09-10', to: '2025-09-11', totalDays: 2,   type: 'Annual', status: 'Approved' },
@@ -534,7 +566,7 @@
 
 <!-- Modal -->
 <dialog bind:this={modal} class="leave-modal" aria-labelledby="leave-title">
-  <form method="dialog" class="leave-form" on:submit|preventDefault={submitLeave}>
+  <form class="leave-form" on:submit={submitLeave}>
     <button type="button" class="close-btn" on:click={() => modal.close()} aria-label="Close">✕</button>
     <h2 id="leave-title" class="title">Leave Application Form</h2>
 
