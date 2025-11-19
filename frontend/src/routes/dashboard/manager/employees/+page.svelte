@@ -45,6 +45,7 @@
         id: e.staff_id,
         name: e.full_name,
         role: e.role,
+        position: e.position,
         department: e.department,
         email: e.email,
         photoUrl: e.photourl ? `http://localhost:5000${e.photourl}` : "",
@@ -63,7 +64,7 @@
       detailsById[e.id] = {
         ...structuredClone(e),
         empId: e.id,              // <-- PENTING
-        position: e.role,         // <-- Admin modal guna "position"
+        position: e.position,         // <-- Admin modal guna "position"
       };
     }
 
@@ -214,7 +215,7 @@
             {/if}
           </div>
           <h3>{emp.name}</h3>
-          <p>{emp.role}</p>
+          <p>{emp.position}</p>
           <p>Staff ID: {emp.id}</p>
           <p>Department: {emp.department}</p>
         </div>
@@ -329,7 +330,7 @@
                 <div><label>Staff ID</label><div class="ctl pill disabled"><input value={selectedEmp.empId} disabled /></div></div>
               </div>
               <div class="row">
-                <div><label>Position</label><div class="ctl pill disabled"><input value={selectedEmp.role} disabled /></div></div>
+                <div><label>Position</label><div class="ctl pill disabled"><input value={selectedEmp.position} disabled /></div></div>
                 <div><label>Department</label><div class="ctl pill disabled"><input value={selectedEmp.department} disabled /></div></div>
               </div>
               <div class="row">
@@ -350,6 +351,9 @@
                   </div>
                 </div>
               </div>
+              <div class="row">
+                  <div><label>Role</label><div class="ctl pill disabled"><input value={selectedEmp.role} disabled /></div></div>
+                </div>
               <div class="row single">
                 <div><label>Notes</label><div class="ctl disabled"><textarea value={selectedEmp.notes} disabled /></div></div>
               </div>

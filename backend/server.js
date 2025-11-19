@@ -11,6 +11,8 @@ import uploadRoute from './src/routes/uploadRoute.js';
 import holidayRoutes from './src/routes/holidayRoutes.js';
 import authRoutes from './src/routes/authRoutes.js';
 import dashboardRoutes from './src/routes/dashboardRoutes.js';
+import roleSettingRoute from "./src/routes/roleSettingRoute.js";
+
 
 dotenv.config();
 
@@ -39,6 +41,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/employee', profileRoutes); // singular 'employee'
 app.use('/uploads', express.static('uploads'));
 app.use("/api/employee", profileRoutes);
+app.use("/api", roleSettingRoute);
 
 // ============================
 // HELPER
@@ -62,8 +65,9 @@ app.post('/api/login', async (req, res) => {
 
     email = String(email).trim().toLowerCase();
 
+    // ====== FETCH USER ASAL ======
     const q = await pool.query(
-      `SELECT id, staff_id, full_name, email, role, photourl,
+      `SELECT id, staff_id, full_name, email, role, photourl, department,
               TRIM(CAST(password AS TEXT)) AS password
          FROM profiles
         WHERE LOWER(email) = $1
@@ -76,26 +80,19 @@ app.post('/api/login', async (req, res) => {
     }
 
     const user = q.rows[0];
-    const storedRaw = user.password ?? '';
-    const stored = String(storedRaw).trim();
-    const input = String(password);
 
-    console.log('🔐 Login attempt:', {
-      email,
-      hasStored: stored.length > 0,
-      isBcrypt: stored.startsWith('$2'),
-      storedLen: stored.length
-    });
+    // ====== PASSWORD CHECK ======
+    const stored = String(user.password ?? '').trim();
+    const input = String(password);
 
     let ok = false;
     try {
       if (stored.startsWith('$2')) {
-        ok = await bcrypt.compare(input, stored); // bcrypt hashed password
+        ok = await bcrypt.compare(input, stored);
       } else {
-        ok = stored === input; // legacy plaintext
+        ok = stored === input;
       }
     } catch (err) {
-      console.warn('compare error, fallback to plaintext');
       ok = stored === input;
     }
 
@@ -103,32 +100,52 @@ app.post('/api/login', async (req, res) => {
       return res.status(401).json({ success: false, error: 'Invalid email or password' });
     }
 
-    // set cookie payload
+    // ======================================================
+    // CHECK ROLE OVERRIDE DARI role_setting
+    // ======================================================
+    const overrideQ = await pool.query(
+      `SELECT role FROM role_setting WHERE LOWER(email) = $1 LIMIT 1`,
+      [email]
+    );
+
+    let finalRole = user.role; // default
+
+    if (overrideQ.rows.length) {
+      finalRole = overrideQ.rows[0].role;  // override dari table role_setting
+      console.log("🔄 Role override applied:", finalRole);
+    } else {
+      console.log("➡ No override, using default role:", finalRole);
+    }
+
+    // =======================================================
+    // SET COOKIE PAYLOAD (role sudah override)
+    // =======================================================
     const payload = {
       staffId: user.staff_id,
       email: user.email,
-      role: user.role,
+      role: finalRole,          // ← guna finalRole
       name: user.full_name,
-      department: user.department,  
+      department: user.department,
       photoUrl: user.photourl
     };
 
     res.cookie('auth_token', JSON.stringify(payload), {
       httpOnly: false,
       sameSite: 'lax',
-      path: '/',             // IMPORTANT
+      path: '/',
     });
-
 
     return res.json({
       success: true,
-      redirectTo: roleRedirect(user.role)
+      redirectTo: roleRedirect(finalRole) // ← guna finalRole
     });
+
   } catch (err) {
     console.error('Login error:', err);
     return res.status(500).json({ success: false, error: 'Server error' });
   }
 });
+
 
 // ============================
 // WHO AM I (PHOTO)
@@ -140,7 +157,7 @@ app.get('/api/me/photo', async (req, res) => {
 
     const me = JSON.parse(token);
     const q = await pool.query(
-      'SELECT staff_id, full_name, email, role, department, photourl FROM profiles WHERE staff_id = $1 LIMIT 1',
+      'SELECT staff_id, full_name, email, role, position, department, photourl FROM profiles WHERE staff_id = $1 LIMIT 1',
       [me.staffId]
     );
     if (!q.rows.length) return res.status(404).json({ error: 'User not found' });
@@ -150,6 +167,7 @@ app.get('/api/me/photo', async (req, res) => {
       staffId: u.staff_id,
       name: u.full_name,
       email: u.email,
+      position: u.position,
       role: u.role,
       department: u.department,  
       photoUrl: u.photourl
@@ -180,7 +198,7 @@ app.put('/api/employee/:staffId/password', async (req, res) => {
 
     // Ambil user dari table yang sama dengan login (profiles)
     const q = await pool.query(
-      `SELECT id, staff_id, email, role, photourl,
+      `SELECT id, staff_id, email, role, position, photourl,
               TRIM(CAST(password AS TEXT)) AS password
          FROM profiles
         WHERE staff_id = $1

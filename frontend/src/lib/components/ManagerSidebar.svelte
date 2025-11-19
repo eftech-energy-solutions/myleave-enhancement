@@ -16,6 +16,7 @@
   let safeUser = {
     name: '',
     role: '',
+    position: '',
     staffId: '',
     email: '',
     department: '',          // ensure backend returns this in /api/me/photo
@@ -383,7 +384,7 @@
           {/if}
           <div class="who">
             <div class="name">{safeUser?.name}</div>
-            <div class="sub">{safeUser?.role}</div>
+            <div class="sub">{safeUser?.position}</div>
             <div class="sub">Staff ID : {safeUser?.staffId}</div>
           </div>
         </div>

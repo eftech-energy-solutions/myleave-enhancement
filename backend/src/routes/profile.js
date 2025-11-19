@@ -15,6 +15,7 @@ router.post('/', async (req, res) => {
     name,
     email,
     role,
+    position,
     department,
     employmentDate,
     confirmationDate,
@@ -29,30 +30,35 @@ router.post('/', async (req, res) => {
   try {
     const randomPassword = crypto.randomBytes(6).toString('hex');
 
-    await pool.query(
-      `INSERT INTO profiles (
-        staff_id, full_name, email, password, role, department,
-        employment_date, confirmation_date, termination_date, gender,
-        leave_entitlement_annual, leave_entitlement_medical, notes, photourl
-      )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
-      [
-        empId,
-        name,
-        email,
-        randomPassword,
-        role,
-        department,
-        employmentDate || null,
-        confirmationDate || null,
-        terminationDate || null,
-        gender,
-        annualLeave,
-        medicalLeave,
-        notes,
-        photoUrl
-      ]
-    );
+  await pool.query(
+    `INSERT INTO profiles (
+      full_name, staff_id, email, password, role, department,
+      employment_date, confirmation_date, termination_date, gender,
+      notes, leave_entitlement_annual, leave_entitlement_medical,
+      photourl, position
+    )
+    VALUES (
+      $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15
+    )`,
+    [
+      name,              // full_name
+      empId,             // staff_id
+      email,
+      randomPassword,
+      role,
+      department,
+      employmentDate || null,
+      confirmationDate || null,
+      terminationDate || null,
+      gender,
+      notes,
+      annualLeave,
+      medicalLeave,
+      photoUrl,
+      position
+    ]
+  );
+
 
     const transporter = nodemailer.createTransport({
       host: "mail.eftech.com.my",
@@ -77,7 +83,7 @@ router.post('/', async (req, res) => {
       from: '"Eftech HR" <no-reply@eftech.com.my>',
       to: "aziraazman0105@gmail.com",
       subject: `New employee added: ${name}`,
-      text: `New employee added:\n\nName: ${name}\nEmail: ${email}\nRole: ${role}\nPassword: ${randomPassword}`,
+      text: `New employee added:\n\nName: ${name}\nEmail: ${email}\nRole: ${role}\nPosition: ${position}\nPassword: ${randomPassword}`,
     });
 
     res.json({ success: true, message: 'Employee added and emails sent.' });
@@ -114,7 +120,7 @@ router.get("/", async (req, res) => {
     // ADMIN → see all
     if (meData.role?.toLowerCase() === "admin") {
       result = await pool.query(`
-        SELECT id, staff_id, full_name, role, department, email,
+        SELECT id, staff_id, full_name, role, position, department, email,
                employment_date, confirmation_date, termination_date,
                gender, leave_entitlement_annual, leave_entitlement_medical,
                photourl, notes
@@ -125,7 +131,7 @@ router.get("/", async (req, res) => {
     // MANAGER → only same department
     } else if (meData.role?.toLowerCase() === "manager") {
       result = await pool.query(`
-        SELECT id, staff_id, full_name, role, department, email,
+        SELECT id, staff_id, full_name, role, position, department, email,
                employment_date, confirmation_date, termination_date,
                gender, leave_entitlement_annual, leave_entitlement_medical,
                photourl, notes
@@ -183,6 +189,7 @@ router.put("/:staff_id", async (req, res) => {
     full_name,
     email,
     role,
+    position,
     department,
     employment_date,
     confirmation_date,
@@ -267,17 +274,18 @@ router.put("/:staff_id", async (req, res) => {
          SET staff_id                = $1,
              full_name              = $2,
              email                  = $3,
-             role                   = $4,
-             department             = $5,
-             employment_date        = $6,
-             confirmation_date      = $7,
-             termination_date       = $8,
-             gender                 = $9,
-             leave_entitlement_annual  = $10,
-             leave_entitlement_medical = $11,
-             notes                  = $12,
-             photourl               = COALESCE($13, photourl)
-       WHERE staff_id = $14
+             role                   = $4,  
+             position               = $5,
+             department             = $6,
+             employment_date        = $7,
+             confirmation_date      = $8,
+             termination_date       = $9,
+             gender                 = $10,
+             leave_entitlement_annual  = $11,
+             leave_entitlement_medical = $12,
+             notes                  = $13,
+             photourl               = COALESCE($14, photourl)
+       WHERE staff_id = $15
        RETURNING *;
       `,
       [
@@ -285,16 +293,17 @@ router.put("/:staff_id", async (req, res) => {
         full_name,                 // $2
         email,                     // $3
         role,                      // $4
-        department,                // $5
-        employment_date || null,   // $6
-        confirmation_date || null, // $7
-        termination_date || null,  // $8
-        gender,                    // $9
-        (leave_entitlement_annual == null || leave_entitlement_annual === "" ? null : Number(leave_entitlement_annual)), // $10
-        (leave_entitlement_medical == null || leave_entitlement_medical === "" ? null : Number(leave_entitlement_medical)), // $11
-        notes,                     // $12
-        photo_url || null,         // $13
-        staffId                    // $14 – staff_id lama
+        position,                   // $5
+        department,                // $6
+        employment_date || null,   // $7
+        confirmation_date || null, // $8
+        termination_date || null,  // $9
+        gender,                    // $10
+        (leave_entitlement_annual == null || leave_entitlement_annual === "" ? null : Number(leave_entitlement_annual)), // $11
+        (leave_entitlement_medical == null || leave_entitlement_medical === "" ? null : Number(leave_entitlement_medical)), // $12
+        notes,                     // $13
+        photo_url || null,         // $14
+        staffId                    // $15 – staff_id lama
       ]
     );
 
@@ -383,7 +392,7 @@ router.get('/me', async (req, res) => {
     const user = JSON.parse(token);
 
     const result = await pool.query(
-      `SELECT staff_id, full_name, email, role, department, photourl
+      `SELECT staff_id, full_name, email, role, position, department, photourl
          FROM profiles
         WHERE staff_id = $1`,
       [user.staffId]
@@ -398,6 +407,7 @@ router.get('/me', async (req, res) => {
       name: result.rows[0].full_name,
       email: result.rows[0].email,
       role: result.rows[0].role,
+      position: result.rows[0].position,
       department: result.rows[0].department,
       photoUrl: result.rows[0].photourl || "/uploads/default-avatar.png"
     });

@@ -77,6 +77,7 @@ function formatDate(dbDate) {
       employees = data.map((emp, i) => ({
         id: emp.staff_id || makeId(IDS[i % IDS.length], i),
         name: emp.full_name,
+        position: emp.position,
         role: emp.role,
         department: emp.department,
         photoUrl: emp.photourl
@@ -97,6 +98,7 @@ function formatDate(dbDate) {
           empId: e.staff_id,
           name: e.full_name,
           email: e.email,
+          position: e.position,
           role: e.role,
           department: e.department,
           employmentDate: formatDate(e.employment_date),
@@ -193,13 +195,13 @@ function formatDate(dbDate) {
     if (idx === -1) return;
     // return card to grid (works for both approving leave and approving cancellation)
     if (!employees.some(e => e.id === item.id)) {
-      employees = [{ id:item.id, name:item.name, role:item.role, department:item.department }, ...employees];
+      employees = [{ id:item.id, name:item.name, position: item.position, role:item.role, department:item.department }, ...employees];
     }
     pending = [...pending.slice(0, idx), ...pending.slice(idx + 1)];
     if (!detailsById[item.id]) {
       detailsById[item.id] = {
         photoUrl: "",
-        empId: item.id, name: item.name, email: "", role: item.role,
+        empId: item.id, name: item.name, email: "", role: item.role, position: item.position,
         department: item.department, employmentDate: "", terminationDate: "",
         confirmationDate: "", gender: "", annualLeave: "", medicalLeave: "", notes: ""
       };
@@ -212,7 +214,7 @@ function formatDate(dbDate) {
     
     // Return card to grid when request is rejected
     if (!employees.some(e => e.id === item.id)) {
-      employees = [{ id:item.id, name:item.name, role:item.role, department:item.department }, ...employees];
+      employees = [{ id:item.id, name:item.name, role:item.role, position:item.position, department:item.department }, ...employees];
     }
     
     // Remove from pending list
@@ -236,6 +238,7 @@ function formatDate(dbDate) {
     empId: "",
     name: "",
     email: "",
+    position: "",
     role: "",
     employmentDate: "",
     terminationDate: "",
@@ -251,7 +254,7 @@ function formatDate(dbDate) {
     addModalOpen = true;
     // Reset form
     newEmp = {
-      photoUrl: "", photoFile: null, empId: "", name: "", email: "", role: "",
+      photoUrl: "", photoFile: null, empId: "", name: "", email: "", role: "", position: "",
       employmentDate: "", terminationDate: "", confirmationDate: "",
       gender: "Male", annualLeave: "", medicalLeave: "",
       department: "Technical Data", notes: ""
@@ -275,8 +278,8 @@ async function submitNewEmployee(e) {
   e.preventDefault();
 
   // ensure required fields
-  if (!newEmp.empId || !newEmp.name || !newEmp.email || !newEmp.role) { // Tukar 'position' ke 'role'
-    alert("Please fill Employee ID, Full Name, Email, and Role.");
+  if (!newEmp.empId || !newEmp.name || !newEmp.email || !newEmp.position || !newEmp.role) { // Tukar 'position' ke 'role'
+    alert("Please fill Employee ID, Full Name, Email, Role and Position");
     return;
   }
 
@@ -320,6 +323,7 @@ async function submitNewEmployee(e) {
       empId: newEmp.empId,
       name: newEmp.name,
       email: newEmp.email,
+      position: newEmp.position,
       role: newEmp.role, // Guna 'role'
       department: newEmp.department,
       employmentDate: newEmp.employmentDate,
@@ -358,6 +362,7 @@ async function submitNewEmployee(e) {
       const card = {
         id: newEmp.empId,
         name: newEmp.name,
+        position: newEmp.position || "Position",
         role: newEmp.role || "Employee",
         department: newEmp.department || "General",
         photoUrl: fullPhotoUrl // Tambah ini jika kad anda tunjuk gambar
@@ -370,6 +375,7 @@ async function submitNewEmployee(e) {
         empId: newEmp.empId,
         name: newEmp.name,
         email: newEmp.email,
+        position: newEmp.position,
         role: newEmp.role,
         department: newEmp.department,
         employmentDate: newEmp.employmentDate,
@@ -450,8 +456,8 @@ async function toggleEditSave() {
   // CASE 1 — USER CLICK SAVE
   // ============================
   if (editMode) {
-    if (!detailsForm.name || !detailsForm.role) {
-      alert("Name and Role are required.");
+    if (!detailsForm.name || !detailsForm.role || !detailsForm.position) {
+      alert("Name, Role and Position are required.");
       return;
     }
 
@@ -504,6 +510,7 @@ async function toggleEditSave() {
     photo_url: finalRelativePhotoUrl,
     full_name: detailsForm.name,
     email: detailsForm.email,
+    position: detailsForm.position,
     role: detailsForm.role,
     department: detailsForm.department,
     employment_date: detailsForm.employmentDate,
@@ -569,6 +576,7 @@ if (newId && newId !== oldId) {
           ...employees[idx],
           name: detailsForm.name,
           role: detailsForm.role,
+          position: detailsForm.postion,
           department: detailsForm.department
         };
         employees = [...employees];
@@ -811,7 +819,7 @@ async function deleteEmployee() {
           {/if}
           </div>
           <h3>{emp.name}</h3>
-          <p>{emp.role}</p>
+          <p>{emp.position}</p>
           <p>Staff ID: {emp.id}</p>
           <p>Department: {emp.department}</p>
         </div>
@@ -942,7 +950,7 @@ async function deleteEmployee() {
               <div class="row">
                 <div>
                   <label>Position</label>
-                  <div class="ctl pill"><input name="position" placeholder="e.g., Data Engineer" bind:value={newEmp.role} autocomplete="on" required /></div>
+                  <div class="ctl pill"><input name="position" placeholder="e.g., Data Engineer" bind:value={newEmp.position} autocomplete="on" required /></div>
                 </div>
                 <div>
                   <label>Department</label>
@@ -997,6 +1005,18 @@ async function deleteEmployee() {
                   <div class="ctl pill"><input type="number" step="0.5" min="0" bind:value={newEmp.medicalLeave} /></div>
                 </div>
               </div>
+              <div>
+                  <label>Role</label>
+                  <div class="ctl pill">
+                    <select bind:value={newEmp.role}>
+                      <option>Admin</option>
+                      <option>Manager</option>
+                      <option>Staff</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+            </div>
 
               <div class="row single">
                 <div>
@@ -1069,7 +1089,7 @@ async function deleteEmployee() {
   <div>
     <label>Position</label>
     <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
-      <input bind:value={detailsForm.role} disabled={!editMode} />
+      <input bind:value={detailsForm.position} disabled={!editMode} />
     </div>
   </div>
   <div>
@@ -1140,6 +1160,16 @@ async function deleteEmployee() {
     </div>
   </div>
 </div>
+<div>
+    <label>Role</label>
+    <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
+      <select bind:value={detailsForm.role} disabled={!editMode}>
+        <option>Admin</option>
+        <option>Manager</option>
+        <option>Staff</option>
+      </select>
+    </div>
+  </div>
 
 <!-- NOTES -->
 <div class="row single">
