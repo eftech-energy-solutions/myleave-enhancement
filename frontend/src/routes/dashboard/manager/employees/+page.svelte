@@ -89,6 +89,7 @@
           empId: e.staff_id,
           name: e.full_name,
           role: e.role,
+          position: e.position,
           department: e.department,
           email: e.email,
           photoUrl: fixedPhotoUrl,
