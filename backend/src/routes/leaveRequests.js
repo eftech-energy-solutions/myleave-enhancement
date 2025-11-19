@@ -94,9 +94,6 @@ const attachmentPath = req.file ? req.file.path : null;
 /* ============================================================
    2) GET LEAVE REQUESTS  (GET /api/leave-requests?status=pending)
    ============================================================ */
-/* ============================================================
-   2) GET LEAVE REQUESTS  (GET /api/leave-requests?status=pending)
-   ============================================================ */
 router.get("/", async (req, res) => {
   try {
     const { status } = req.query;
@@ -110,7 +107,11 @@ router.get("/", async (req, res) => {
         p.confirmation_date,
         p.termination_date,
         p.gender,
-        p.full_name AS profile_name
+        p.full_name AS profile_name,
+        p.photourl AS photo_url,
+        p.leave_entitlement_annual,
+        p.leave_entitlement_medical,
+        p.notes
       FROM leave_requests lr
       LEFT JOIN profiles p
         ON p.staff_id = lr.staff_id
@@ -128,7 +129,6 @@ router.get("/", async (req, res) => {
   }
 });
 
-
 /* ============================================================
    3) UPDATE STATUS (APPROVE / REJECT)
    PATCH /api/leave-requests/:id
@@ -143,11 +143,12 @@ router.patch("/:id", async (req, res) => {
     }
 
     const sql = `
-      UPDATE leave_requests
-      SET status = $1, updated_at = NOW()
-      WHERE leave_id = $2
-      RETURNING *;
-    `;
+  UPDATE leave_requests
+  SET status = $1
+  WHERE leave_id = $2
+  RETURNING *;
+`;
+
 
     const result = await pool.query(sql, [status, leaveId]);
 

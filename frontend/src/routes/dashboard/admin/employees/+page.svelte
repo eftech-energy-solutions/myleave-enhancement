@@ -29,26 +29,17 @@
   // =======================
   // 1️⃣ KEEP YOUR CONSTANTS
   // =======================
-  const NAMES = [
-    "Afiq Mikail","Nur Aisyah","Daniel Tan","Sophia Lim","Muhammad Shamsul","Ariana Wong","John Lee","Farah Zahra",
-    "Hafiz Rahman","Amirul Hakim","Nabila Rahman","Jason Ong","Puteri Balqis","Christopher Yap","Mira Izzati","Iqbal Zain",
-    "Syafiqah Noor","Faizal Aziz","Hannah Cho","Kelvin Teo","Rina Hashim","Zara Kamal","Ridzuan Salleh","Mei Yee",
-    "Irfan Danial","Aisyah Humaira","Adam Firdaus","Noraishah Ismail","Kevin Chan","Lydia Goh","Wan Aiman","Diyana Ahmad",
-    "Hakim Roslan","Zul Hilmi","Nurul Auni","Faris Zulkifli","Melissa Chong","Zaid Hakimi"
-  ];
-  const ROLES = ["Human Resources","Manager","Engineer","Executive","Analyst","Technician","Team Lead","Coordinator"];
-  const DEPTS = ["Administrator","Operations Support","Technical Data","Operations","Sales & Technical Excellence","Director"];
-  const IDS   = ["HR","MN","EN","EX","AN","TC","TL","CO"];
+  const DEPTS = ["Operations Support","Technical Data","Operations","Sales & Technical Excellence","Director"];
 
-  const makeId = (prefix, i) => `${prefix}${String(i + 1).padStart(3, "0")}`;
-
-  // =======================
   // 2️⃣ EMPLOYEE VARIABLES
   // =======================
   let employees = [];
   /** @type {Record<string, any>} */
   let detailsById = {};
-
+let pending = [];
+let pendingLeave = [];
+let pendingCancel = [];
+let pendingRequests = [];
   // =======================
   // 3️⃣ LOAD FROM DATABASE
   // =======================
@@ -59,69 +50,106 @@ function formatDate(dbDate) {
   if (isNaN(d)) return "";
   return d.toISOString().split("T")[0]; // returns "YYYY-MM-DD"
 }
+async function loadPendingRequests() {
+  try {
+    const res = await fetch("/api/leave-requests?status=pending", {
+      credentials: "include"
+    });
+
+    if (!res.ok) {
+      console.error("❌ Failed to fetch pending:", res.status);
+      return;
+    }
+
+    // Admin sees ALL pending requests
+    pendingRequests = await res.json();
+
+    // Group
+    pendingLeave  = pendingRequests.filter(p => p.request_type !== "cancel");
+    pendingCancel = pendingRequests.filter(p => p.request_type === "cancel");
+
+  } catch (err) {
+    console.error("❌ Error loading pending:", err);
+  }
+}
+
 
   async function loadEmployees() {
-    try {
-      const res = await fetch("http://localhost:5000/api/employee", {
-        credentials: "include"
-      }); // adjust port if needed
-      const data = await res.json();
-      console.log(data);
+  try {
+    const res = await fetch("http://localhost:5000/api/employee", {
+      credentials: "include"
+    });
+    const data = await res.json();
 
-      if (!res.ok) {
-        console.error("❌ Failed to fetch employees:", data);
-        return;
-      }
+    if (!res.ok) {
+      console.error("❌ Failed to fetch employees:", data);
+      return;
+    }
 
-      // Fill employee list for display
-      employees = data.map((emp, i) => ({
-        id: emp.staff_id || makeId(IDS[i % IDS.length], i),
-        name: emp.full_name,
-        role: emp.role,
-        department: emp.department,
-        photoUrl: emp.photourl
-      }));
+    // STEP 1 — Staff yang pending leave
+    const pendingIds = new Set(
+      pendingRequests.map(r => r.staff_id)
+    );
 
-      // Fill detailed data for modal/view
-      detailsById = {};
-      for (const e of data) {
+    // STEP 2 — Build full detailsById
+    detailsById = {};
+    const fullProfileList = data.map(emp => {
+      const url = emp.photourl
+        ? (emp.photourl.startsWith("http")
+            ? emp.photourl
+            : `http://localhost:5000${emp.photourl}`)
+        : "";
 
-      const fixedPhotoUrl = e.photourl
-        ? (e.photourl.startsWith("http")
-            ? e.photourl
-            : `http://localhost:5000${e.photourl}`)
-        : "";
+      const profile = {
+        id: emp.staff_id,
+        empId: emp.staff_id,
+        name: emp.full_name,
+        role: emp.role,
+        department: emp.department,
+        email: emp.email,
+        photoUrl: url,
+        employmentDate: formatDate(emp.employment_date),
+        confirmationDate: formatDate(emp.confirmation_date),
+        terminationDate: formatDate(emp.termination_date),
+        gender: emp.gender,
+        annualLeave: emp.leave_entitlement_annual,
+        medicalLeave: emp.leave_entitlement_medical,
+        notes: emp.notes
+      };
 
-        detailsById[e.staff_id] = {
-          photoUrl: fixedPhotoUrl,
-          empId: e.staff_id,
-          name: e.full_name,
-          email: e.email,
-          role: e.role,
-          department: e.department,
-          employmentDate: formatDate(e.employment_date),
-          confirmationDate: formatDate(e.confirmation_date),
-          terminationDate: formatDate(e.termination_date),
-          gender: e.gender || "",
-          annualLeave: e.leave_entitlement_annual || "",
-          medicalLeave: e.leave_entitlement_medical || "",
-          notes: e.notes || ""
-        };
-      }
+      detailsById[emp.staff_id] = structuredClone(profile);
+      return profile;
+    });
 
-      console.log("✅ Employees loaded:", employees.length);
+    // STEP 3 — Grid: HIDE employees with pending leave
+    employees = fullProfileList.filter(emp => !pendingIds.has(emp.empId));
 
-    } catch (err) {
-      console.error("⚠️ Error fetching employees:", err);
-    }
-  }
+  } catch (err) {
+    console.error("⚠️ Error in loadEmployees():", err);
+  }
+}
 
   // =======================
   // 4️⃣ RUN ON PAGE LOAD
   // =======================
-  onMount(() => {
-    loadEmployees();
-  });
+  onMount(async () => {
+  try {
+    // 1) Load pending leave requests FIRST
+    await loadPendingRequests();      
+
+    // 2) Load employee list AFTER pending is known
+    await loadEmployees();             // hides pending staff in grid
+
+    // 3) Build sidebar list for ADMIN
+    pending = pendingRequests;         
+    pendingLeave  = pending.filter(p => p.request_type !== "cancel");
+    pendingCancel = pending.filter(p => p.request_type === "cancel");
+
+  } catch (err) {
+    console.error("❌ onMount error:", err);
+  }
+});
+
 
   // =======================
   // 4) FILTERS
@@ -130,49 +158,13 @@ function formatDate(dbDate) {
   const deptOptions = ['All', ...Array.from(new Set(DEPTS)).sort((a,b) =>
   a.localeCompare(b, 'en', { sensitivity: 'base' })
 )];
-
- $: filteredEmployees = (
-  deptFilter === 'All'
-    ? employees
-    : employees.filter(e => e.department === deptFilter)
+$: filteredEmployees = (
+  deptFilter === 'All'
+    ? employees
+    : employees.filter(e => e.department === deptFilter)
 ).slice().sort((a, b) => {
-  const byName = a.name.localeCompare(b.name, 'en', { sensitivity: 'base' });
-  return byName !== 0 ? byName : a.id.localeCompare(b.id, 'en', { sensitivity: 'base' });
-});
-
- let pending = [];
-let pendingLeave = [];
-let pendingCancel = [];
-
-onMount(async () => {
-  try {
-    const res = await fetch("/api/leave-requests?status=pending", {
-      credentials: "include"
-    });
-
-    if (!res.ok) {
-      console.error("Failed to fetch pending leave:", res.status);
-      return;
-    }
-
-    const all = await res.json();
-
-    // Filter visibility ikut role pengguna sekarang
-    if (user.role === "Manager") {
-      // Manager TIDAK BOLEH nampak request dari Manager lain
-      pending = all.filter(lv => lv.requester_role !== "Manager");
-    } else {
-      // Admin / HR nampak semua
-      pending = all;
-    }
-
-    // Separate apply leave vs cancel leave
-    pendingLeave = pending.filter(p => p.request_type !== "cancel");
-    pendingCancel = pending.filter(p => p.request_type === "cancel");
-
-  } catch (err) {
-    console.error("Error loading pending leaves:", err);
-  }
+  const byName = a.name.localeCompare(b.name, 'en', { sensitivity: 'base' });
+  return byName !== 0 ? byName : a.id.localeCompare(b.id, 'en', { sensitivity: 'base' });
 });
 
 
@@ -202,7 +194,7 @@ onMount(async () => {
   let addModalOpen = false;
   let newEmp = {
     photoUrl: "",
-    photoFile: null, // Untuk simpan file sebenar
+    photoFile: null, //onMount Untuk simpan file sebenar
     empId: "",
     name: "",
     email: "",
@@ -628,46 +620,37 @@ if (newId && newId !== oldId) {
   editMode = true;
   if (detailsForm) detailsForm.photoFile = null;
 }
-async function approveRequest(item) {
+async function approve(id) {
   try {
-    const res = await fetch(`/api/leave-requests/${item.leave_id}`, {
+    await fetch(`/api/leave-requests/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "approved" }),
-      credentials: "include"
+      body: JSON.stringify({ status: "approved" })
     });
 
-    if (!res.ok) return;
-
-    pending = pending.filter(p => p.leave_id !== item.leave_id);
-    pendingLeave = pending.filter(p => p.type !== "cancel");
-    pendingCancel = pending.filter(p => p.type === "cancel");
+    await loadPendingRequests();
+    await loadEmployees();   
 
   } catch (err) {
-    console.error("Approve error:", err);
+    console.error("❌ Error approving:", err);
   }
 }
 
-async function rejectRequest(item) {
+async function reject(id) {
   try {
-    const res = await fetch(`/api/leave-requests/${item.leave_id}`, {
+    await fetch(`/api/leave-requests/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "rejected" }),
-      credentials: "include"
+      body: JSON.stringify({ status: "rejected" })
     });
-
-    if (!res.ok) return;
-
-    pending = pending.filter(p => p.leave_id !== item.leave_id);
-    pendingLeave = pending.filter(p => p.type !== "cancel");
-    pendingCancel = pending.filter(p => p.type === "cancel");
+    await loadPendingRequests();
+    await loadEmployees();   
+    
 
   } catch (err) {
-    console.error("Reject error:", err);
+    console.error("❌ Error rejecting:", err);
   }
 }
-
 
 // ✅ SHOW DELETE CONFIRMATION
 function openDeleteConfirm() {
@@ -675,6 +658,16 @@ function openDeleteConfirm() {
   employeeToDelete = selectedEmp;
   showDeleteConfirm = true;
 }
+function approveRequest(item) {
+  const id = item.leave_id ?? item.leaveid ?? item.id;
+  approve(id);
+}
+
+function rejectRequest(item) {
+  const id = item.leave_id ?? item.leaveid ?? item.id;
+  reject(id);
+}
+
 
 // ✅ DELETE EMPLOYEE
 async function deleteEmployee() {
