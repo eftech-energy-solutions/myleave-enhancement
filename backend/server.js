@@ -12,7 +12,7 @@ import holidayRoutes from './src/routes/holidayRoutes.js';
 import authRoutes from './src/routes/authRoutes.js';
 import dashboardRoutes from './src/routes/dashboardRoutes.js';
 import roleSettingRoute from "./src/routes/roleSettingRoute.js";
-
+import leaveRequestsRoutes from "./src/routes/leaveRequests.js";
 
 dotenv.config();
 
@@ -30,10 +30,31 @@ app.use(cookieParser());
 
 // static uploads folder
 app.use('/uploads', express.static('uploads'));
+app.use(async (req, res, next) => {
+  try {
+    const token = req.cookies["auth_token"];
+    if (!token) return next();
 
-// ============================
-// ROUTES
-// ============================
+    const basic = JSON.parse(token); // { staffId, name, role, ... maybe }
+    if (!basic?.staffId) return next();
+
+    const { rows } = await pool.query(
+      `SELECT staff_id, full_name, email, role, department
+         FROM profiles
+        WHERE staff_id = $1
+        LIMIT 1`,
+      [basic.staffId]
+    );
+
+    if (rows[0]) {
+      req.user = rows[0]; // 🎯 ini yang POST /leave-requests guna
+    }
+    return next();
+  } catch (err) {
+    console.error("attachUser error:", err);
+    return next(); // jangan block request, cuma tak ada req.user
+  }
+});
 app.use('/api/employee', profileRoutes);
 app.use('/api/upload', uploadRoute);
 app.use('/api/holidays', holidayRoutes);
@@ -42,6 +63,7 @@ app.use('/api/employee', profileRoutes); // singular 'employee'
 app.use('/uploads', express.static('uploads'));
 app.use("/api/employee", profileRoutes);
 app.use("/api", roleSettingRoute);
+app.use("/api/leave-requests", leaveRequestsRoutes);
 
 // ============================
 // HELPER

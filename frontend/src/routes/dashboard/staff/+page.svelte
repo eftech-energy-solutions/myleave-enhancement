@@ -296,6 +296,7 @@
   let dateFrom = '';
   let dateUntil = '';
   let totalDays = 1;
+  let requestType = "new";
 
   // ---- Medical: attachment required ----
   let attachmentFiles;   // FileList
@@ -356,12 +357,44 @@
     await tick();
   }
 
-  function submitLeave(e) {
-    const fd = new FormData(e.currentTarget);
-    if (!e.currentTarget.reportValidity()) return;
-    // TODO: post fd to backend
-    modal?.close();
+async function submitLeave(e) {
+  const formEl = e.currentTarget;
+  e.preventDefault();
+
+  if (!formEl.reportValidity()) return;
+
+  const fd = new FormData(formEl);
+
+  fd.set("type", leaveType);
+  fd.set("requestType", requestType);
+  fd.set("duration", duration);
+  fd.set("dateFrom", dateFrom);
+  fd.set("dateUntil", dateUntil);
+  fd.set("totalDays", String(totalDays));
+
+  try {
+    const res = await fetch("/api/leave-requests", {
+      method: "POST",
+      body: fd,
+      credentials: "include"
+    });
+
+    if (!res.ok) {
+      const msg = await res.text().catch(() => "Failed to submit leave.");
+      alert(msg);
+      return;
+    }
+
+    const created = await res.json().catch(() => null);
+    console.log("Leave created:", created);
+
+    modal?.close(); // 🔥 PERBETULKAN INI
+
+  } catch (err) {
+    console.error("Error submit leave:", err);
+    alert("Something went wrong while submitting your leave.");
   }
+}
 
   // ----- recent -----
   const recent = [
@@ -499,7 +532,7 @@
 
 <!-- ===== MODAL ===== -->
 <dialog bind:this={modal} class="leave-modal" aria-labelledby="leave-title">
-  <form method="dialog" class="leave-form" on:submit|preventDefault={submitLeave}>
+  <form class="leave-form" on:submit={submitLeave}>
     <button type="button" class="close-btn" on:click={() => modal.close()} aria-label="Close">✕</button>
     <h2 id="leave-title" class="title">Leave Application Form</h2>
 

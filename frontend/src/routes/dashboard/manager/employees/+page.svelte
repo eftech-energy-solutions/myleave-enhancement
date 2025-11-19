@@ -1,9 +1,10 @@
 <script>
   import { onMount } from "svelte";
 
-  // =======================
-  // 1) STATE
-  // =======================
+  /* ================================
+      1) MANAGER & EMPLOYEE STATE
+     ================================ */
+
   let manager = null;
   let managerDept = null;
 
@@ -13,83 +14,313 @@
 
   let detailsOpen = false;
   let selectedEmp = null;
+  let detailsForm = null;
 
-  const fmt = (iso) => (iso ? new Date(iso).toLocaleDateString() : "-");
+  const fmt = (iso) =>
+    iso ? new Date(iso).toLocaleDateString() : "-";
 
-  // =======================
-  // 2) LOAD MANAGER + EMPLOYEE DATA
-  // =======================
+  const formatDate = (dbDate) => {
+    if (!dbDate) return "";
+    const d = new Date(dbDate);
+    return !isNaN(d) ? d.toISOString().split("T")[0] : "";
+  };
+
+  /* ================================
+      2) LOAD MANAGER + EMPLOYEES
+     ================================ */
+
   onMount(async () => {
     try {
-      // 2.1 — GET LOGGED-IN USER (MANAGER)
-      const userRes = await fetch("http://localhost:5000/api/me/photo", {
+      const userRes = await fetch("/api/me/photo", {
         credentials: "include",
       });
       const userData = await userRes.json();
-
-      console.log("Manager profile loaded:", userData);
-
       manager = userData;
       managerDept = userData?.department;
 
-
-      // 2.2 — GET ALL EMPLOYEES
-      const res = await fetch("http://localhost:5000/api/employee", {
-        credentials: "include",
-      });
-
-      const data = await res.json();
-
-      // CONVERT backend keys → frontend keys
-      employees = data.map(e => ({
-        id: e.staff_id,
-        name: e.full_name,
-        role: e.role,
-        position: e.position,
-        department: e.department,
-        email: e.email,
-        photoUrl: e.photourl ? `http://localhost:5000${e.photourl}` : "",
-        employmentDate: e.employment_date,
-        confirmationDate: e.confirmation_date,
-        terminationDate: e.termination_date,
-        gender: e.gender,
-        annualLeave: e.leave_entitlement_annual,
-        medicalLeave: e.leave_entitlement_medical,
-        notes: e.notes
-      }));
-
-      // Build details map for modal
-    detailsById = {};
-    for (const e of employees) {
-      detailsById[e.id] = {
-        ...structuredClone(e),
-        empId: e.id,              // <-- PENTING
-        position: e.position,         // <-- Admin modal guna "position"
-      };
-    }
-
-
+      await loadPendingRequests();
+      await loadEmployees();
+      await loadPending();
     } catch (err) {
-      console.error("❌ Error loading manager or employees:", err);
+      console.error(
+        "❌ Error loading manager or employees:",
+        err
+      );
     }
   });
 
-  // =======================
-  // 3) FILTER EMPLOYEES UNDER THIS MANAGER'S DEPT
-  // =======================
-  $: filteredEmployees =
-    managerDept
-      ? employees.filter(e => e.department === managerDept)
-      : [];
+  /* ================================
+      EMPLOYEES (FIXED STRUCTURE)
+     ================================ */
 
-  // =======================
-  // 4) OPEN DETAILS MODAL
-  // =======================
-  function openDetails(id) {
-    selectedEmp = detailsById[id] || null;
-    detailsOpen = !!selectedEmp;
+  async function loadEmployees() {
+    try {
+      const res = await fetch(
+        "http://localhost:5000/api/employee",
+        {
+          credentials: "include",
+        }
+      );
+      const data = await res.json();
+
+      if (!res.ok) {
+        console.error(
+          "❌ Failed to fetch employees:",
+          data
+        );
+        return;
+      }
+
+      // pending IDs from leave-requests
+      const pendingIds = new Set(
+        pendingRequests.map((r) => r.staff_id)
+      );
+
+      // Build full list
+      const fullProfileList = data.map((e) => {
+        const fixedPhotoUrl = e.photourl
+          ? e.photourl.startsWith("http")
+            ? e.photourl
+            : `http://localhost:5000${e.photourl}`
+          : "";
+
+        return {
+          id: e.staff_id,
+          empId: e.staff_id,
+          name: e.full_name,
+          role: e.role,
+          department: e.department,
+          email: e.email,
+          photoUrl: fixedPhotoUrl,
+          employmentDate: formatDate(e.employment_date),
+          confirmationDate: formatDate(e.confirmation_date),
+          terminationDate: formatDate(e.termination_date),
+          gender: e.gender,
+          annualLeave: e.leave_entitlement_annual,
+          medicalLeave: e.leave_entitlement_medical,
+          notes: e.notes,
+        };
+      });
+
+      // Build detailsById for ALL staff
+      detailsById = {};
+      fullProfileList.forEach((emp) => {
+        detailsById[emp.id] = structuredClone(emp);
+      });
+
+      // Filter to remove pending staff from grid
+      employees = fullProfileList.filter(
+        (emp) => !pendingIds.has(emp.empId)
+      );
+    } catch (err) {
+      console.error("⚠️ Error in loadEmployees():", err);
+    }
+  }
+
+  /* ================================
+      3) FILTER BY DEPT
+     ================================ */
+
+  $: filteredEmployees = managerDept
+    ? employees.filter(
+        (e) => e.department === managerDept
+      )
+    : [];
+
+  /* ================================
+      4) PENDING APPROVAL
+     ================================ */
+
+  let pending = [];
+  let pendingLeave = [];
+  let pendingCancel = [];
+  let pendingRequests = [];
+  let sidebarOpen = false;
+
+  const toggleSidebar = () =>
+    (sidebarOpen = !sidebarOpen);
+
+  $: pendingCount = pending.length;
+
+  async function loadPendingRequests() {
+    const res = await fetch(
+      "/api/leave-requests?status=pending",
+      { credentials: "include" }
+    );
+    const all = await res.json();
+
+    pendingRequests =
+      manager?.role === "Manager"
+        ? all.filter(
+            (r) => r.requester_role !== "Manager"
+          )
+        : all;
+  }
+
+  async function loadPending() {
+    try {
+      const res = await fetch(
+        "/api/leave-requests?status=pending",
+        { credentials: "include" }
+      );
+      const all = await res.json();
+
+      const view = all.filter(
+        (r) => r.requester_role !== "Manager"
+      );
+
+      pending = view;
+      pendingLeave = pending.filter(
+        (p) => p.request_type !== "cancel"
+      );
+      pendingCancel = pending.filter(
+        (p) => p.request_type === "cancel"
+      );
+    } catch (err) {
+      console.error("❌ Error loading pending:", err);
+    }
+  }
+
+  /* ================================
+      5) openDetails (STRUCTURE FIXED)
+     ================================ */
+
+  function openDetails(item) {
+    let profile = {};
+    let leave = {};
+
+    // From grid
+    if (
+      typeof item === "string" &&
+      detailsById[item]
+    ) {
+      profile = structuredClone(detailsById[item]);
+    }
+
+    // From pending
+    if (item && item.leave_id) {
+      leave = structuredClone(item);
+      const staffId = leave.staff_id;
+
+      if (detailsById[staffId]) {
+        profile = structuredClone(
+          detailsById[staffId]
+        );
+      }
+    }
+
+    const merged = {
+      ...profile,
+
+      leave_id: leave.leave_id,
+      leave_type: leave.leave_type,
+      request_type: leave.request_type,
+      reason: leave.reason,
+      date_from: leave.date_from,
+      date_until: leave.date_until,
+      created_at: leave.created_at,
+      status: leave.status,
+      attachment_path: leave.attachment_path,
+
+      empId: profile.empId || leave.staff_id,
+      name:
+        profile.name ||
+        leave.profile_name ||
+        leave.staff_name ||
+        "",
+      department:
+        profile.department ||
+        leave.profile_department ||
+        leave.department ||
+        "",
+      email: profile.email || leave.email || "",
+      role:
+        profile.role ||
+        leave.requester_role ||
+        "",
+
+      employmentDate:
+        profile.employmentDate || "",
+      confirmationDate:
+        profile.confirmationDate || "",
+      terminationDate:
+        profile.terminationDate || "",
+
+      gender: profile.gender || leave.gender || "",
+
+      photoUrl:
+        profile.photoUrl ||
+        leave.photo_url ||
+        "",
+      annualLeave:
+        profile.annualLeave ||
+        leave.leave_entitlement_annual ||
+        "",
+      medicalLeave:
+        profile.medicalLeave ||
+        leave.leave_entitlement_medical ||
+        "",
+      notes: profile.notes || leave.notes || "",
+    };
+
+    selectedEmp = merged;
+    detailsForm = structuredClone(merged);
+    detailsOpen = true;
+  }
+
+  /* ================================
+      6) APPROVE / REJECT
+     ================================ */
+
+  async function approve(id) {
+    await fetch(`/api/leave-requests/${id}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        status: "approved",
+      }),
+    });
+
+    await loadPendingRequests();
+    await loadPending();
+    await loadEmployees();
+  }
+
+  async function reject(id) {
+    await fetch(`/api/leave-requests/${id}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        status: "rejected",
+      }),
+    });
+
+    await loadPendingRequests();
+    await loadPending();
+    await loadEmployees();
+  }
+
+  function approveRequest(item) {
+    const id =
+      item.leave_id ??
+      item.leaveid ??
+      item.id;
+    approve(id);
+  }
+
+  function rejectRequest(item) {
+    const id =
+      item.leave_id ??
+      item.leaveid ??
+      item.id;
+    reject(id);
   }
 </script>
+
 
 <style>
   :global(html, body){ height:100%; margin:0; }
@@ -228,13 +459,12 @@
   </div>
 </div>
 
-<!-- =======================
-<!-- 10) SIDEBAR + TAB       -->
-<!-- ======================= -->
-<!-- <div class:show={sidebarOpen} class="overlay" on:click={toggleSidebar}></div>
+<div class:show={sidebarOpen} class="overlay" on:click={toggleSidebar}></div>
 <div class:open={sidebarOpen} class="sidebar" aria-hidden={!sidebarOpen}>
   <div class="sidebar-header">
-    <div class="sidebar-title">Pending Approval{pendingCount > 0 ? ` (${pendingCount})` : ''}</div>
+    <div class="sidebar-title">
+      Pending Approval{pendingCount > 0 ? ` (${pendingCount})` : ''}
+    </div>
     <button class="close-btn" on:click={toggleSidebar}>✕</button>
   </div>
 
@@ -242,55 +472,93 @@
     {#if pending.length === 0}
       <p style="color:#64748b; text-align:center;">No pending requests.</p>
     {:else}
+      <!-- Section for Leave Approval -->
       {#if pendingLeave.length > 0}
         <h3 class="sub-ttl">Pending Leave Approval ({pendingLeave.length})</h3>
-        {#each pendingLeave as item (item.id + (item.requestedAt || ''))}
+        {#each pendingLeave as item (item.leave_id + (item.created_at || ''))}
           <div class="pending-card">
             <div class="row1">
               <div class="who">
-                <div class="name">{item.name}</div>
-                <div class="sub">{item.role} • {item.id} • {item.department}</div>
+                <!-- Nama ambil dari profiles; fallback staff_name dari leave_requests -->
+                <div class="name">
+                  {item.profile_name || item.staff_name}
+                </div>
+                <div class="sub">
+                  {item.requester_role} • {item.staff_id} • {item.profile_department || item.department}
+                </div>
               </div>
-              <span class="pill type">{item.leaveType || 'Leave'}</span>
+              <span class="pill type">{item.leave_type || 'Leave'}</span>
             </div>
+
             <div class="kv">
-              <div><span class="k">From:</span><span class="v">{fmt(item.dateFrom)}</span></div>
-              <div><span class="k">To:</span><span class="v">{fmt(item.dateTo)}</span></div>
-              <div><span class="k">Requested:</span><span class="v">{fmt(item.requestedAt)}</span></div>
+              <div>
+                <span class="k">From:</span>
+                <span class="v">{fmt(item.date_from)}</span>
+              </div>
+              <div>
+                <span class="k">To:</span>
+                <span class="v">{fmt(item.date_until)}</span>
+              </div>
+              <div>
+                <span class="k">Requested:</span>
+                <span class="v">{fmt(item.created_at)}</span>
+              </div>
             </div>
+
             <div class="actions">
               <div class="left">
                 <button class="btn-approve" on:click={() => approveRequest(item)}>Approve</button>
                 <button class="btn-reject"  on:click={() => rejectRequest(item)}>Reject</button>
               </div>
-              <button class="btn-details" on:click={() => openDetails(item.id)}>Details</button>
+              <!-- Hantar satu object terus supaya modal boleh baca semua field -->
+              <button class="btn-details" on:click={() => openDetails(item)}>Details</button>
             </div>
           </div>
         {/each}
       {/if}
 
+      <!-- Section for Cancellation Approval -->
       {#if pendingCancel.length > 0}
-        <h3 class="sub-ttl" style="margin-top:20px;">Pending Cancellation Approval ({pendingCancel.length})</h3>
-        {#each pendingCancel as item (item.id + (item.requestedAt || ''))}
+        <h3 class="sub-ttl" style="margin-top:20px;">
+          Pending Cancellation Approval ({pendingCancel.length})
+        </h3>
+        {#each pendingCancel as item (item.leave_id + (item.created_at || ''))}
           <div class="pending-card">
             <div class="row1">
               <div class="who">
-                <div class="name">{item.name}</div>
-                <div class="sub">{item.role} • {item.id} • {item.department}</div>
+                <div class="name">
+                  {item.profile_name || item.staff_name}
+                </div>
+                <div class="sub">
+                  {item.requester_role} • {item.staff_id} • {item.profile_department || item.department}
+                </div>
               </div>
-              <span class="pill type" style="background-color: #fee2e2; color: #b91c1c;">Cancellation: {item.leaveType}</span>
+              <span class="pill type" style="background-color: #fee2e2; color: #b91c1c;">
+                Cancellation: {item.leave_type}
+              </span>
             </div>
+
             <div class="kv">
-              <div><span class="k">Leave From:</span><span class="v">{fmt(item.dateFrom)}</span></div>
-              <div><span class="k">Leave To:</span><span class="v">{fmt(item.dateTo)}</span></div>
-              <div><span class="k">Cancellation Requested:</span><span class="v">{fmt(item.requestedAt)}</span></div>
+              <div>
+                <span class="k">Leave From:</span>
+                <span class="v">{fmt(item.date_from)}</span>
+              </div>
+              <div>
+                <span class="k">Leave To:</span>
+                <span class="v">{fmt(item.date_until)}</span>
+              </div>
+              <div>
+                <span class="k">Cancellation Requested:</span>
+                <span class="v">{fmt(item.created_at)}</span>
+              </div>
             </div>
+
             <div class="actions">
               <div class="left">
                 <button class="btn-approve" on:click={() => approveRequest(item)}>Approve Cancel</button>
                 <button class="btn-reject"  on:click={() => rejectRequest(item)}>Reject Cancel</button>
               </div>
-              <button class="btn-details" on:click={() => openDetails(item.id)}>Details</button>
+              <button class="btn-details" on:click={() => openDetails(item)}>Details</button>
             </div>
           </div>
         {/each}
@@ -301,14 +569,13 @@
   <div class="sidebar-footer">
     <button class="cancel-btn" on:click={() => (sidebarOpen = false)}>Cancel</button>
   </div>
-</div> -->
-
-<!-- <div class="sidebar-tab" on:click={toggleSidebar}>
+</div>
+<div class="sidebar-tab" on:click={toggleSidebar}>
   <span class="label">Pending Approval</span>
   {#if pendingCount > 0}
     <span class="badge">{pendingCount}</span>
   {/if}
-</div>  -->
+</div> 
 
 <!-- ======================= -->
 <!-- 12) DETAILS MODAL (VIEW-ONLY) -->

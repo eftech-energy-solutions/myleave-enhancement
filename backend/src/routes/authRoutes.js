@@ -29,6 +29,54 @@ transporter.verify((error, success) => {
     console.log('✅ SMTP server is ready to send emails');
   }
 });
+// ---------- LOGIN ----------
+router.post("/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password)
+      return res.status(400).json({ error: "Missing fields" });
+
+    const userRes = await pool.query(
+      "SELECT staff_id, full_name, email, role, department, password, photourl FROM profiles WHERE LOWER(email)=LOWER($1) LIMIT 1",
+      [email]
+    );
+
+    if (!userRes.rows.length)
+      return res.status(400).json({ error: "Invalid email or password" });
+
+    const user = userRes.rows[0];
+
+    const valid = await bcrypt.compare(password, user.password);
+    if (!valid)
+      return res.status(400).json({ error: "Invalid email or password" });
+
+    // SET COOKIE
+    res.cookie("session", JSON.stringify({
+      staffId: user.staff_id,
+      name: user.full_name,
+      email: user.email,
+      role: user.role,
+      department: user.department,
+      photoUrl: user.photourl
+    }), {
+      httpOnly: true,
+      sameSite: "lax",
+      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+    });
+
+    // Decide redirect based on role
+    let redirectTo = "/dashboard/staff";
+    if (user.role === "admin") redirectTo = "/dashboard/admin";
+    if (user.role === "manager") redirectTo = "/dashboard/manager";
+
+    res.json({ success: true, redirectTo });
+
+  } catch (err) {
+    console.error("Login error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 
 // ---------- CHANGE PASSWORD (email + current + new) ----------
 router.post('/change-password', async (req, res) => {
