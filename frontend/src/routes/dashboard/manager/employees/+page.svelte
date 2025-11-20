@@ -109,9 +109,16 @@
       });
 
       // Filter to remove pending staff from grid
-      employees = fullProfileList.filter(
-        (emp) => !pendingIds.has(emp.empId)
-      );
+      // 1) Filter ONLY employees in manager's department
+let deptFiltered = manager?.role === "Manager"
+  ? fullProfileList.filter((e) => e.department === managerDept)
+  : fullProfileList;
+
+// 2) Remove pending staff but ONLY for that department
+employees = deptFiltered.filter(
+  (emp) => !pendingIds.has(emp.empId)
+);
+
     } catch (err) {
       console.error("⚠️ Error in loadEmployees():", err);
     }
@@ -121,11 +128,7 @@
       3) FILTER BY DEPT
      ================================ */
 
-  $: filteredEmployees = managerDept
-    ? employees.filter(
-        (e) => e.department === managerDept
-      )
-    : [];
+  $: filteredEmployees = employees;
 
   /* ================================
       4) PENDING APPROVAL
@@ -150,11 +153,14 @@
     const all = await res.json();
 
     pendingRequests =
-      manager?.role === "Manager"
-        ? all.filter(
-            (r) => r.requester_role !== "Manager"
-          )
-        : all;
+  manager?.role === "Manager"
+    ? all.filter(
+        (r) =>
+          r.requester_role !== "Manager" &&
+          r.profile_department === managerDept
+      )
+    : all;
+
   }
 
   async function loadPending() {
@@ -165,17 +171,18 @@
       );
       const all = await res.json();
 
-      const view = all.filter(
-        (r) => r.requester_role !== "Manager"
-      );
+ const view = manager?.role === "Manager"
+  ? all.filter(
+      (r) =>
+        r.requester_role !== "Manager" &&
+        r.profile_department === managerDept
+    )
+  : all;
 
-      pending = view;
-      pendingLeave = pending.filter(
-        (p) => p.request_type !== "cancel"
-      );
-      pendingCancel = pending.filter(
-        (p) => p.request_type === "cancel"
-      );
+pending = view;
+pendingLeave = pending.filter((p) => p.request_type !== "cancel");
+pendingCancel = pending.filter((p) => p.request_type === "cancel");
+
     } catch (err) {
       console.error("❌ Error loading pending:", err);
     }
