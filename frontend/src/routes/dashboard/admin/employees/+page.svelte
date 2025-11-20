@@ -62,12 +62,12 @@
   // =======================
   // 3) LOAD FROM DATABASE
   // =======================
-  function formatDate(dbDate) {
-    if (!dbDate) return "";
-    const d = new Date(dbDate);
-    if (isNaN(d)) return "";
-    return d.toISOString().split("T")[0];
-  }
+function formatDate(dbDate) {
+  if (!dbDate) return "";
+  const d = new Date(dbDate);
+  d.setHours(d.getHours() + 8); // Malaysia timezone fix
+  return d.toISOString().split("T")[0];
+}
 
   async function loadPendingRequests() {
     try {
@@ -123,6 +123,7 @@
       detailsById = {};
 
       const fullProfileList = data.map((emp) => {
+        console.log("Backend returned:", emp.staff_id, emp.employment_date, emp.confirmation_date);
         const url = emp.photourl
           ? emp.photourl.startsWith("http")
             ? emp.photourl
@@ -422,11 +423,9 @@
       department: profile.department || leave.department || "",
       email: profile.email || leave.email || "",
       role: profile.role || leave.requester_role || "",
-      employmentDate: profile.employmentDate || leave.employment_date || "",
-      confirmationDate:
-        profile.confirmationDate || leave.confirmation_date || "",
-      terminationDate:
-        profile.terminationDate || leave.termination_date || "",
+      employmentDate: profile.employmentDate ?? leave.employment_date ?? "",
+      confirmationDate: profile.confirmationDate ?? leave.confirmation_date ?? "",
+      terminationDate: profile.terminationDate ?? leave.termination_date ?? "",
       gender: profile.gender || leave.gender || ""
     };
 
@@ -553,7 +552,7 @@
           };
           employees = [...employees];
         }
-
+        await loadEmployees();
         editMode = false;
       } catch (err) {
         console.error("❌ Error updating employee:", err);
@@ -564,6 +563,7 @@
     }
 
     // EDIT MODE
+    await loadEmployees();
     editMode = true;
     if (detailsForm) detailsForm.photoFile = null;
   }
