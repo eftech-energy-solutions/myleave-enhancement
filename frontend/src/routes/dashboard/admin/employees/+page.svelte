@@ -1,550 +1,301 @@
 <script>
-  // =======================
-  // 1) APP STATE & HELPERS
-  // =======================
-  let profileMenuOpen = false;
-  const user = { name: "Afiq Mikail", role: "Human Resources", staffId: "E8505" };
+  // =======================
+  // 1) APP STATE & HELPERS
+  // =======================
+  import { onMount } from "svelte";
 
-  function clickOutside(node) {
-    const onClick = (e) => { if (!node.contains(e.target)) profileMenuOpen = false; };
-    document.addEventListener('click', onClick);
-    return { destroy: () => document.removeEventListener('click', onClick) };
-  }
+  let profileMenuOpen = false;
 
-  function handleKey(e) {
-    if (e.key === 'Escape') {
-      if (sidebarOpen) sidebarOpen = false;
-      if (profileMenuOpen) profileMenuOpen = false;
-      if (addModalOpen) addModalOpen = false;
-      if (detailsOpen) { detailsOpen = false; editMode = false; }
-      if (showDeleteConfirm) showDeleteConfirm = false;
-    }
-  }
+  const user = {
+    name: "Afiq Mikail",
+    role: "Human Resources",
+    staffId: "E8505"
+  };
 
-  const todayISO = () => new Date().toISOString().slice(0, 10);
-  const fmt = (iso) => (iso ? new Date(iso).toLocaleDateString() : '-');
-
-  import { onMount } from "svelte";
-
-  // =======================
-  // 1️⃣ KEEP YOUR CONSTANTS
-  // =======================
-  const DEPTS = ["Operations Support","Technical Data","Operations","Sales & Technical Excellence","Director"];
-
-  // 2️⃣ EMPLOYEE VARIABLES
-  // =======================
-  let employees = [];
-  /** @type {Record<string, any>} */
-  let detailsById = {};
-let pending = [];
-let pendingLeave = [];
-let pendingCancel = [];
-let pendingRequests = [];
-  // =======================
-  // 3️⃣ LOAD FROM DATABASE
-  // =======================
-
-function formatDate(dbDate) {
-  if (!dbDate) return "";
-  const d = new Date(dbDate);
-  if (isNaN(d)) return "";
-  return d.toISOString().split("T")[0]; // returns "YYYY-MM-DD"
-}
-async function loadPendingRequests() {
-  try {
-    const res = await fetch("/api/leave-requests?status=pending", {
-      credentials: "include"
-    });
-
-    if (!res.ok) {
-      console.error("❌ Failed to fetch pending:", res.status);
-      return;
-    }
-
-    // Admin sees ALL pending requests
-    pendingRequests = await res.json();
-
-    // Group
-    pendingLeave  = pendingRequests.filter(p => p.request_type !== "cancel");
-    pendingCancel = pendingRequests.filter(p => p.request_type === "cancel");
-
-  } catch (err) {
-    console.error("❌ Error loading pending:", err);
+  function clickOutside(node) {
+    const onClick = (e) => {
+      if (!node.contains(e.target)) profileMenuOpen = false;
+    };
+    document.addEventListener("click", onClick);
+    return {
+      destroy: () => document.removeEventListener("click", onClick)
+    };
   }
-}
 
-
-async function loadEmployees() {
-  try {
-    const res = await fetch("http://localhost:5000/api/employee", {
-      credentials: "include"
-    });
-    const data = await res.json();
-
-    if (!res.ok) {
-      console.error("❌ Failed to fetch employees:", data);
-      return;
+  function handleKey(e) {
+    if (e.key === "Escape") {
+      if (sidebarOpen) sidebarOpen = false;
+      if (profileMenuOpen) profileMenuOpen = false;
+      if (addModalOpen) addModalOpen = false;
+      if (detailsOpen) {
+        detailsOpen = false;
+        editMode = false;
+      }
+      if (showDeleteConfirm) showDeleteConfirm = false;
     }
+  }
 
-    // STEP 1 — Staff yang pending leave
-    const pendingIds = new Set(
-      pendingRequests.map(r => r.staff_id)
-    );
+  const todayISO = () => new Date().toISOString().slice(0, 10);
+  const fmt = (iso) => (iso ? new Date(iso).toLocaleDateString() : "-");
 
-    // Fill employee list for display
-    employees = data.map((emp, i) => ({
-      id: emp.staff_id || makeId(IDS[i % IDS.length], i),
-      name: emp.full_name,
-      position: emp.position,   // ✅ kept your field
-      role: emp.role,
-      department: emp.department,
-      photoUrl: emp.photourl
-    }));
+  // =======================
+  // CONSTANTS
+  // =======================
+  const DEPTS = [
+    "Operations Support",
+    "Technical Data",
+    "Operations",
+    "Sales & Technical Excellence",
+    "Director"
+  ];
 
-    // STEP 2 — Build full detailsById
-    detailsById = {};
-    const fullProfileList = data.map(emp => {
-      const url = emp.photourl
-        ? (emp.photourl.startsWith("http")
-            ? emp.photourl
-            : `http://localhost:5000${emp.photourl}`)
-        : "";
+  // =======================
+  // EMPLOYEE VARIABLES
+  // =======================
+  let employees = [];
+  let detailsById = {};
+  let pending = [];
+  let pendingLeave = [];
+  let pendingCancel = [];
+  let pendingRequests = [];
 
-      const profile = {
+  // =======================
+  // 3) LOAD FROM DATABASE
+  // =======================
+  function formatDate(dbDate) {
+    if (!dbDate) return "";
+    const d = new Date(dbDate);
+    if (isNaN(d)) return "";
+    return d.toISOString().split("T")[0];
+  }
+
+  async function loadPendingRequests() {
+    try {
+      const res = await fetch("/api/leave-requests?status=pending", {
+        credentials: "include"
+      });
+      if (!res.ok) {
+        console.error("❌ Failed to fetch pending:", res.status);
+        return;
+      }
+
+      pendingRequests = await res.json();
+      pending = pendingRequests; // <-- important: updates real-time
+
+      pendingLeave = pendingRequests.filter(
+        (p) => p.request_type !== "cancel"
+      );
+      pendingCancel = pendingRequests.filter(
+        (p) => p.request_type === "cancel"
+      );
+    } catch (err) {
+      console.error("❌ Error loading pending:", err);
+    }
+  }
+
+  async function loadEmployees() {
+    try {
+      const res = await fetch("http://localhost:5000/api/employee", {
+        credentials: "include"
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        console.error("❌ Failed to fetch employees:", data);
+        return;
+      }
+
+      // Pending staff IDs
+      const pendingIds = new Set(pendingRequests.map((r) => r.staff_id));
+
+      // STEP 1 — Card list
+      employees = data.map((emp) => ({
         id: emp.staff_id,
-        empId: emp.staff_id,
         name: emp.full_name,
+        position: emp.position,
         role: emp.role,
         department: emp.department,
-        email: emp.email,
-        photoUrl: url,
-        employmentDate: formatDate(emp.employment_date),
-        confirmationDate: formatDate(emp.confirmation_date),
-        terminationDate: formatDate(emp.termination_date),
-        gender: emp.gender,
-        annualLeave: emp.leave_entitlement_annual,
-        medicalLeave: emp.leave_entitlement_medical,
-        notes: emp.notes,
-        position: emp.position  // ✅ added your missing field
-      };
+        photoUrl: emp.photourl
+      }));
 
-      detailsById[emp.staff_id] = structuredClone(profile);
-      return profile;
-    });
+      // STEP 2 — Full profile store
+      detailsById = {};
 
-    // STEP 3 — Grid: HIDE employees with pending leave
-    employees = fullProfileList.filter(emp => !pendingIds.has(emp.empId));
+      const fullProfileList = data.map((emp) => {
+        const url = emp.photourl
+          ? emp.photourl.startsWith("http")
+            ? emp.photourl
+            : `http://localhost:5000${emp.photourl}`
+          : "";
 
-  } catch (err) {
-    console.error("⚠️ Error in loadEmployees():", err);
-  }
-}
+        const profile = {
+          id: emp.staff_id,
+          empId: emp.staff_id,
+          name: emp.full_name,
+          position: emp.position,
+          role: emp.role,
+          department: emp.department,
+          email: emp.email,
+          photoUrl: url,
+          employmentDate: formatDate(emp.employment_date),
+          confirmationDate: formatDate(emp.confirmation_date),
+          terminationDate: formatDate(emp.termination_date),
+          gender: emp.gender,
+          annualLeave: emp.leave_entitlement_annual,
+          medicalLeave: emp.leave_entitlement_medical,
+          notes: emp.notes
+        };
 
+        detailsById[emp.staff_id] = structuredClone(profile);
+        return profile;
+      });
 
-  // =======================
-  // 4️⃣ RUN ON PAGE LOAD
-  // =======================
-  onMount(async () => {
-  try {
-    // 1) Load pending leave requests FIRST
-    await loadPendingRequests();      
-
-    // 2) Load employee list AFTER pending is known
-    await loadEmployees();             // hides pending staff in grid
-
-    // 3) Build sidebar list for ADMIN
-    pending = pendingRequests;         
-    pendingLeave  = pending.filter(p => p.request_type !== "cancel");
-    pendingCancel = pending.filter(p => p.request_type === "cancel");
-
-  } catch (err) {
-    console.error("❌ onMount error:", err);
-  }
-});
-
-
-  // =======================
-  // 4) FILTERS
-  // =======================
-  let deptFilter = 'All';
-  const deptOptions = ['All', ...Array.from(new Set(DEPTS)).sort((a,b) =>
-  a.localeCompare(b, 'en', { sensitivity: 'base' })
-)];
-$: filteredEmployees = (
-  deptFilter === 'All'
-    ? employees
-    : employees.filter(e => e.department === deptFilter)
-).slice().sort((a, b) => {
-  const byName = a.name.localeCompare(b.name, 'en', { sensitivity: 'base' });
-  return byName !== 0 ? byName : a.id.localeCompare(b.id, 'en', { sensitivity: 'base' });
-});
-
-
-  // Simulate new request coming in (optional)
-  function requestCameIn(empId) {
-    const idx = employees.findIndex(e => e.id === empId);
-    if (idx === -1) return;
-    const base = employees[idx];
-    pending = [
-      { ...base, leaveType: "Annual Leave", dateFrom: todayISO(), dateTo: todayISO(), requestedAt: todayISO(), type: 'new' },
-      ...pending
-    ];
-    employees = [...employees.slice(0, idx), ...employees.slice(idx + 1)];
-    sidebarOpen = true;
-  }
-
-  function approveRequest(item) {
-    const idx = pending.findIndex(e => e.id === item.id);
-    if (idx === -1) return;
-    // return card to grid (works for both approving leave and approving cancellation)
-    if (!employees.some(e => e.id === item.id)) {
-      employees = [{ id:item.id, name:item.name, position: item.position, role:item.role, department:item.department }, ...employees];
-    }
-    pending = [...pending.slice(0, idx), ...pending.slice(idx + 1)];
-    if (!detailsById[item.id]) {
-      detailsById[item.id] = {
-        photoUrl: "",
-        empId: item.id, name: item.name, email: "", role: item.role, position: item.position,
-        department: item.department, employmentDate: "", terminationDate: "",
-        confirmationDate: "", gender: "", annualLeave: "", medicalLeave: "", notes: ""
-      };
-    }
-  }
-  
-  const rejectRequest = (item) => {
-    const idx = pending.findIndex(e => e.id === item.id);
-    if (idx === -1) return;
-    
-    // Return card to grid when request is rejected
-    if (!employees.some(e => e.id === item.id)) {
-      employees = [{ id:item.id, name:item.name, role:item.role, position:item.position, department:item.department }, ...employees];
-    }
-    
-    // Remove from pending list
-    pending = [...pending.slice(0, idx), ...pending.slice(idx + 1)];
-  };
-
-  // =======================
-  // 6) SIDEBAR
-  // =======================
-  let sidebarOpen = false;
-  const toggleSidebar = () => (sidebarOpen = !sidebarOpen);
-  $: pendingCount = pending.length;
-
-  // =======================
-  // 7) ADD EMPLOYEE MODAL
-  // =======================
-  let addModalOpen = false;
-  let newEmp = {
-    photoUrl: "",
-    photoFile: null, //onMount Untuk simpan file sebenar
-    empId: "",
-    name: "",
-    email: "",
-    position: "",
-    role: "",
-    employmentDate: "",
-    terminationDate: "",
-    confirmationDate: "",
-    gender: "Male",
-    annualLeave: "",
-    medicalLeave: "",
-    department: "Technical Data",
-    notes: ""
-  };
-
-  function openAddModal() {
-    addModalOpen = true;
-    // Reset form
-    newEmp = {
-      photoUrl: "", photoFile: null, empId: "", name: "", email: "", role: "", position: "",
-      employmentDate: "", terminationDate: "", confirmationDate: "",
-      gender: "Male", annualLeave: "", medicalLeave: "",
-      department: "Technical Data", notes: ""
-    };
-  }
-
-  async function handleNewPhotoFile(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    // store locally for preview
-    newEmp.photoUrl = URL.createObjectURL(file);
-
-    // also store the actual file for upload
-    newEmp.photoFile = file;
-  }
-
-  let employmentDateEl; // ref to focus when missing
-
-async function submitNewEmployee(e) {
-  e.preventDefault();
-
-  // ensure required fields
-  if (!newEmp.empId || !newEmp.name || !newEmp.email || !newEmp.position || !newEmp.role) { // Tukar 'position' ke 'role'
-    alert("Please fill Employee ID, Full Name, Email, Role and Position");
-    return;
-  }
-
-  if (!newEmp.employmentDate) {
-    alert("Please select the Employment Date.");
-    employmentDateEl?.focus();
-    return;
-  }
-
-  try {
-    let uploadedPhotoUrl = ""; // Mula dengan string kosong
-
-    // 1. Upload gambar dahulu jika ada
-    if (newEmp.photoFile) {
-      console.log("Uploading new photo...");
-      const formData = new FormData();
-      formData.append("photo", newEmp.photoFile);
-
-      const uploadRes = await fetch("http://localhost:5000/api/upload", {
-        method: "POST",
-        body: formData,
-      });
-
-      const uploadData = await uploadRes.json();
-
-      if (uploadData.success && uploadData.photoUrl) {
-        uploadedPhotoUrl = uploadData.photoUrl; // <-- SIMPAN RELATIVE PATH
-        console.log("Photo uploaded:", uploadedPhotoUrl);
-      } else {
-        console.warn("Photo upload failed, proceeding without photo.");
-        uploadedPhotoUrl = ""; // Gagal upload, guna string kosong
-      }
+      // STEP 3 — Remove pending staff from main grid
+      employees = fullProfileList.filter((emp) => !pendingIds.has(emp.empId));
+    } catch (err) {
+      console.error("⚠️ Error in loadEmployees():", err);
     }
+  }
 
-  // 2. Hantar data pekerja (termasuk URL gambar jika ada)
-  const res = await fetch("http://localhost:5000/api/employee", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      photoUrl: uploadedPhotoUrl, // Hantar relative path
-      empId: newEmp.empId,
-      name: newEmp.name,
-      email: newEmp.email,
-      position: newEmp.position,
-      role: newEmp.role, // Guna 'role'
-      department: newEmp.department,
-      employmentDate: newEmp.employmentDate,
-      confirmationDate: newEmp.confirmationDate,
-      terminationDate: newEmp.terminationDate,
-      gender: newEmp.gender,
+  // =======================
+  // PAGE LOAD
+  // =======================
+  onMount(async () => {
+    try {
+      await loadPendingRequests();
+      await loadEmployees();
 
-      // 🔽 PENTING: jangan hantar "" ke DB
-      annualLeave:
-        newEmp.annualLeave === "" || newEmp.annualLeave == null
-          ? null
-          : Number(newEmp.annualLeave),
-
-      medicalLeave:
-        newEmp.medicalLeave === "" || newEmp.medicalLeave == null
-          ? null
-          : Number(newEmp.medicalLeave),
-
-      notes: newEmp.notes
-    }),
+      pending = pendingRequests;
+      pendingLeave = pending.filter(
+        (p) => p.request_type !== "cancel"
+      );
+      pendingCancel = pending.filter(
+        (p) => p.request_type === "cancel"
+      );
+    } catch (err) {
+      console.error("❌ onMount error:", err);
+    }
   });
 
-    const data = await res.json();
+  // =======================
+  // FILTERS
+  // =======================
+  let deptFilter = "All";
 
-    if (res.ok) {
-      alert(`✅ ${newEmp.name} with ID ${newEmp.empId} added successfully!`);
+  const deptOptions = [
+    "All",
+    ...Array.from(new Set(DEPTS)).sort((a, b) =>
+      a.localeCompare(b, "en", { sensitivity: "base" })
+    )
+  ];
 
-      // pastikan URL sama style macam loadEmployees()
-      const fullPhotoUrl = uploadedPhotoUrl
-        ? (uploadedPhotoUrl.startsWith("http")
-            ? uploadedPhotoUrl
-            : `http://localhost:5000${uploadedPhotoUrl}`)
-        : "";
+  $: filteredEmployees = (
+    deptFilter === "All"
+      ? employees
+      : employees.filter((e) => e.department === deptFilter)
+  )
+    .slice()
+    .sort((a, b) => {
+      const byName = a.name.localeCompare(b.name, "en", {
+        sensitivity: "base"
+      });
+      return byName !== 0
+        ? byName
+        : a.id.localeCompare(b.id, "en", { sensitivity: "base" });
+    });
 
-      // Data untuk kad di grid
-      const card = {
-        id: newEmp.empId,
-        name: newEmp.name,
-        position: newEmp.position || "Position",
-        role: newEmp.role || "Employee",
-        department: newEmp.department || "General",
-        photoUrl: fullPhotoUrl // Tambah ini jika kad anda tunjuk gambar
-      };
-      employees = [card, ...employees];
+  // =======================
+  // SIDEBAR
+  // =======================
+  let sidebarOpen = false;
+  const toggleSidebar = () => (sidebarOpen = !sidebarOpen);
 
-      // Data untuk 'details modal'
-      detailsById[newEmp.empId] = {
-        photoUrl: fullPhotoUrl,
-        empId: newEmp.empId,
-        name: newEmp.name,
-        email: newEmp.email,
-        position: newEmp.position,
-        role: newEmp.role,
-        department: newEmp.department,
-        employmentDate: newEmp.employmentDate,
-        terminationDate: newEmp.terminationDate,
-        confirmationDate: newEmp.confirmationDate,
-        gender: newEmp.gender,
-        annualLeave: String(newEmp.annualLeave ?? ""),
-        medicalLeave: String(newEmp.medicalLeave ?? ""),
-        notes: newEmp.notes
-      };
+  $: pendingCount = pending.length;
 
-      addModalOpen = false;
-    } else {
-      alert("❌ Failed to add employee: " + (data.error || data.message));
-    }
+  // =======================
+  // ADD EMPLOYEE MODAL
+  // =======================
+  let addModalOpen = false;
 
-  } catch (err) {
-    console.error("Error submitting form:", err);
-    alert("⚠️ Server error while adding employee.");
-  }
-}
-// =======================
-// 8) DETAILS MODAL (UPDATE)
-// =======================
-let detailsOpen = false;
-let selectedEmp = null;
-let editMode = false;
-/** @type {Record<string, any> | null} */
-let detailsForm = null; // working copy
-let showDeleteConfirm = false;
-let employeeToDelete = null;
+  let newEmp = {
+    photoUrl: "",
+    photoFile: null,
+    empId: "",
+    name: "",
+    email: "",
+    position: "",
+    role: "",
+    employmentDate: "",
+    terminationDate: "",
+    confirmationDate: "",
+    gender: "Male",
+    annualLeave: "",
+    medicalLeave: "",
+    department: "Technical Data",
+    notes: ""
+  };
 
-function openDetails(item) {
-  let profile = {};
-  let leave = {};
-
-  // 1) Detect source: Employee Grid OR Pending Approval
-
-  // CASE A: ITEM DATANG DARI EMPLOYEE GRID (emp.id)
-  if (item.empId || detailsById[item]) {
-    const id = item.empId || item;          // item = emp.id ketika grid
-    profile = structuredClone(detailsById[id] || {});
+  function openAddModal() {
+    addModalOpen = true;
+    newEmp = {
+      photoUrl: "",
+      photoFile: null,
+      empId: "",
+      name: "",
+      email: "",
+      position: "",
+      role: "",
+      employmentDate: "",
+      terminationDate: "",
+      confirmationDate: "",
+      gender: "Male",
+      annualLeave: "",
+      medicalLeave: "",
+      department: "Technical Data",
+      notes: ""
+    };
   }
 
-  // CASE B: ITEM DATANG DARI PENDING LEAVE (leave_requests table)
-  if (item.leave_id) {
-    leave = structuredClone(item);
+  async function handleNewPhotoFile(e) {
+    const file = e.target.files[0];
+    if (!file) return;
 
-    // Map staff_id → employee profile
-    const staffId = leave.staff_id;
-    if (detailsById[staffId]) {
-      profile = structuredClone(detailsById[staffId]);
+    newEmp.photoUrl = URL.createObjectURL(file);
+    newEmp.photoFile = file;
+  }
+
+  let employmentDateEl;
+
+  async function submitNewEmployee(e) {
+    e.preventDefault();
+
+    if (
+      !newEmp.empId ||
+      !newEmp.name ||
+      !newEmp.email ||
+      !newEmp.position ||
+      !newEmp.role
+    ) {
+      alert("Please fill Employee ID, Full Name, Email, Role and Position");
+      return;
     }
-  }
 
-const merged = {
-  // 1) Profile always priority (has employment dates etc)
-  ...profile,
-
-  // 2) ADD leave data (but don't override profile fields)
-  leave_id: leave.leave_id,
-  leave_type: leave.leave_type,
-  request_type: leave.request_type,
-  reason: leave.reason,
-  date_from: leave.date_from,
-  date_until: leave.date_until,
-  created_at: leave.created_at,
-  status: leave.status,
-  attachment_path: leave.attachment_path,
-
-  // 3) NORMALIZE fields
-  empId: profile.empId || leave.staff_id,
-
-  name:
-    profile.name ||
-    leave.profile_name ||
-    leave.staff_name ||
-    '',
-
-  department:
-    profile.department ||
-    leave.profile_department ||
-    leave.department ||
-    '',
-
-  email: profile.email || leave.email || '',
-
-  role:
-    profile.role ||
-    leave.requester_role ||
-    '',
-
-  employmentDate:
-    profile.employmentDate ||
-    leave.employment_date ||
-    '',
-
-  confirmationDate:
-    profile.confirmationDate ||
-    leave.confirmation_date ||
-    '',
-
-  terminationDate:
-    profile.terminationDate ||
-    leave.termination_date ||
-    '',
-
-  gender: profile.gender || leave.gender || '',
-};
-
-  selectedEmp = merged;
-  detailsForm = structuredClone(merged);
-
-  editMode = false;
-  detailsOpen = true;
-}
-
-const safe = (v) => (v && String(v).trim().length ? v : "-");
-
-// Handler untuk 'input type="file"' dalam MODAL EDIT
-async function handleEditPhotoFile(e) {
-  const file = e.target.files[0];
-  if (!file || !detailsForm) return;
-
-  // 1. Simpan 'file object' sebenar untuk di-upload
-  //    Fungsi 'toggleEditSave' akan periksa 'detailsForm.photoFile' ini
-  detailsForm.photoFile = file;
-
-  // 2. Cipta 'preview' URL untuk paparan segera dalam modal
-  detailsForm.photoUrl = URL.createObjectURL(file);
-}
-// Helper utk bersihkan tarikh
-const cleanDate = (d) => (d && d.trim() !== "" ? d : null);
-
-// Helper utk bersihkan leave number
-const cleanNum = (v) => (v === "" || v == null ? null : Number(v));
-
-
-// ==============================================
-// FIXED - EDIT & SAVE EMPLOYEE
-// ==============================================
-async function toggleEditSave() {
-  if (!selectedEmp || !detailsForm) return;
-
-  // ============================
-  // CASE 1 — USER CLICK SAVE
-  // ============================
-  if (editMode) {
-    if (!detailsForm.name || !detailsForm.role || !detailsForm.position) {
-      alert("Name, Role and Position are required.");
+    if (!newEmp.employmentDate) {
+      alert("Please select the Employment Date.");
+      employmentDateEl?.focus();
       return;
     }
 
     try {
-      let finalRelativePhotoUrl = detailsForm.photoUrl || "";
+      let uploadedPhotoUrl = "";
 
-      // -------------------------------------------
-      // A) UPLOAD PHOTO JIKA ADA FILE BARU
-      // -------------------------------------------
-      if (detailsForm.photoFile) {
-        console.log("Uploading new photo...");
+      if (newEmp.photoFile) {
         const formData = new FormData();
-        formData.append("photo", detailsForm.photoFile);
+        formData.append("photo", newEmp.photoFile);
 
         const uploadRes = await fetch(
-          "http://localhost:5000/api/upload/profile",
+          "http://localhost:5000/api/upload",
           {
             method: "POST",
             body: formData
@@ -552,190 +303,352 @@ async function toggleEditSave() {
         );
 
         const uploadData = await uploadRes.json();
-
         if (uploadData.success && uploadData.photoUrl) {
-          finalRelativePhotoUrl = uploadData.photoUrl;
-          console.log("New photo uploaded:", finalRelativePhotoUrl);
-        } else {
-          alert("❌ Failed to upload new photo.");
-          return;
+          uploadedPhotoUrl = uploadData.photoUrl;
         }
       }
 
-      // -------------------------------------------
-      // B) REMOVE DOMAIN PREFIX
-      // -------------------------------------------
-      const prefix = "http://localhost:5000";
-      if (finalRelativePhotoUrl.startsWith(prefix)) {
-        finalRelativePhotoUrl = finalRelativePhotoUrl.replace(prefix, "");
-      }
+      const res = await fetch("http://localhost:5000/api/employee", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          photoUrl: uploadedPhotoUrl,
+          empId: newEmp.empId,
+          name: newEmp.name,
+          email: newEmp.email,
+          position: newEmp.position,
+          role: newEmp.role,
+          department: newEmp.department,
+          employmentDate: newEmp.employmentDate,
+          confirmationDate: newEmp.confirmationDate,
+          terminationDate: newEmp.terminationDate,
+          gender: newEmp.gender,
+          annualLeave: newEmp.annualLeave
+            ? Number(newEmp.annualLeave)
+            : null,
+          medicalLeave: newEmp.medicalLeave
+            ? Number(newEmp.medicalLeave)
+            : null,
+          notes: newEmp.notes
+        })
+      });
 
-      // -------------------------------------------
-      // C) HANTAR PUT REQUEST KE BACKEND
-      // -------------------------------------------
-    const res = await fetch(`http://localhost:5000/api/employee/${selectedEmp.empId}`, {
-  method: "PUT",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({
-    staff_id: detailsForm.empId,            // ✅ HANTAR ID BARU KE BACKEND
-    photo_url: finalRelativePhotoUrl,
-    full_name: detailsForm.name,
-    email: detailsForm.email,
-    position: detailsForm.position,
-    role: detailsForm.role,
-    department: detailsForm.department,
-    employment_date: detailsForm.employmentDate,
-    confirmation_date: detailsForm.confirmationDate,
-    termination_date: detailsForm.terminationDate,
-    gender: detailsForm.gender,
-    leave_entitlement_annual: detailsForm.annualLeave,
-    leave_entitlement_medical: detailsForm.medicalLeave,
-    notes: detailsForm.notes
-  })
-});
       const data = await res.json();
-      if (!res.ok) {
-        console.error(data);
-        throw new Error(data.error || "Failed to update employee");
+
+      if (res.ok) {
+        const fullPhotoUrl = uploadedPhotoUrl.startsWith("http")
+          ? uploadedPhotoUrl
+          : `http://localhost:5000${uploadedPhotoUrl}`;
+
+        const card = {
+          id: newEmp.empId,
+          name: newEmp.name,
+          position: newEmp.position,
+          role: newEmp.role,
+          department: newEmp.department,
+          photoUrl: fullPhotoUrl
+        };
+
+        employees = [card, ...employees];
+
+        detailsById[newEmp.empId] = {
+          photoUrl: fullPhotoUrl,
+          empId: newEmp.empId,
+          name: newEmp.name,
+          email: newEmp.email,
+          position: newEmp.position,
+          role: newEmp.role,
+          department: newEmp.department,
+          employmentDate: newEmp.employmentDate,
+          terminationDate: newEmp.terminationDate,
+          confirmationDate: newEmp.confirmationDate,
+          gender: newEmp.gender,
+          annualLeave: String(newEmp.annualLeave ?? ""),
+          medicalLeave: String(newEmp.medicalLeave ?? ""),
+          notes: newEmp.notes
+        };
+
+        addModalOpen = false;
+      } else {
+        alert("❌ Failed to add employee: " + (data.error || data.message));
       }
-
-      alert("✅ Employee updated successfully!");
-// --- Handle kalau Staff ID ditukar ---
-const oldId = selectedEmp.empId;
-const newId = detailsForm.empId;
-
-// Kalau user tukar staff ID
-if (newId && newId !== oldId) {
-  // 1) Pindahkan entry dalam detailsById
-  detailsById[newId] = {
-    ...detailsById[oldId],
-    empId: newId
-  };
-  delete detailsById[oldId];
-
-  // 2) Update id dalam employees array (kad grid)
-  const idx = employees.findIndex(e => e.id === oldId);
-  if (idx !== -1) {
-    employees[idx] = {
-      ...employees[idx],
-      id: newId
-    };
-    employees = [...employees]; // trigger reactivity
+    } catch (err) {
+      console.error("Error submitting form:", err);
+      alert("⚠️ Server error while adding employee.");
+    }
   }
 
-  // 3) Update selectedEmp supaya modal guna ID baru
-  selectedEmp.empId = newId;
-}
+  // =======================
+  // DETAILS MODAL
+  // =======================
+  let detailsOpen = false;
+  let selectedEmp = null;
+  let editMode = false;
+  let detailsForm = null;
+  let showDeleteConfirm = false;
+  let employeeToDelete = null;
 
-      // -------------------------------------------
-      // D) UPDATE FRONTEND STATE
-      // -------------------------------------------
+  function openDetails(item) {
+    let profile = {};
+    let leave = {};
 
-      const fullPhoto = finalRelativePhotoUrl
-        ? `http://localhost:5000${finalRelativePhotoUrl}`
-        : "";
-
-      detailsForm.photoUrl = fullPhoto;
-      detailsForm.photoFile = null;
-
-      detailsById[selectedEmp.empId] = structuredClone(detailsForm);
-      selectedEmp = structuredClone(detailsForm);
-
-      const idx = employees.findIndex((e) => e.id === selectedEmp.empId);
-      if (idx !== -1) {
-        employees[idx] = {
-          ...employees[idx],
-          name: detailsForm.name,
-          role: detailsForm.role,
-          position: detailsForm.postion,
-          department: detailsForm.department
-        };
-        employees = [...employees];
-      }
-
-      editMode = false;
-
-    } catch (err) {
-      console.error("❌ Error updating employee:", err);
-      alert("Failed to update employee.");
+    if (item.empId || detailsById[item]) {
+      const id = item.empId || item;
+      profile = structuredClone(detailsById[id] || {});
     }
 
-    return;
+    if (item.leave_id) {
+      leave = structuredClone(item);
+      const staffId = leave.staff_id;
+      if (detailsById[staffId])
+        profile = structuredClone(detailsById[staffId]);
+    }
+
+    const merged = {
+      ...profile,
+      leave_id: leave.leave_id,
+      leave_type: leave.leave_type,
+      request_type: leave.request_type,
+      reason: leave.reason,
+      date_from: leave.date_from,
+      date_until: leave.date_until,
+      created_at: leave.created_at,
+      status: leave.status,
+      attachment_path: leave.attachment_path,
+
+      // Overwrite/fill missing
+      empId: profile.empId || leave.staff_id,
+      name: profile.name || leave.profile_name || leave.staff_name || "",
+      department: profile.department || leave.department || "",
+      email: profile.email || leave.email || "",
+      role: profile.role || leave.requester_role || "",
+      employmentDate: profile.employmentDate || leave.employment_date || "",
+      confirmationDate:
+        profile.confirmationDate || leave.confirmation_date || "",
+      terminationDate:
+        profile.terminationDate || leave.termination_date || "",
+      gender: profile.gender || leave.gender || ""
+    };
+
+    selectedEmp = merged;
+    detailsForm = structuredClone(merged);
+
+    editMode = false;
+    detailsOpen = true;
   }
 
-  // ============================
-  // CASE 2 — USER CLICK EDIT
-  // ============================
-  editMode = true;
-  if (detailsForm) detailsForm.photoFile = null;
-}
-async function approve(id) {
-  try {
-    await fetch(`/api/leave-requests/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "approved" })
-    });
+  async function handleEditPhotoFile(e) {
+    const file = e.target.files[0];
+    if (!file || !detailsForm) return;
 
-    await loadPendingRequests();
-    await loadEmployees();   
-
-  } catch (err) {
-    console.error("❌ Error approving:", err);
+    detailsForm.photoFile = file;
+    detailsForm.photoUrl = URL.createObjectURL(file);
   }
-}
 
-async function reject(id) {
-  try {
-    await fetch(`/api/leave-requests/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "rejected" })
-    });
-    await loadPendingRequests();
-    await loadEmployees();   
-    
+  async function toggleEditSave() {
+    if (!selectedEmp || !detailsForm) return;
 
-  } catch (err) {
-    console.error("❌ Error rejecting:", err);
+    // SAVE MODE
+    if (editMode) {
+      if (!detailsForm.name || !detailsForm.role || !detailsForm.position) {
+        alert("Name, Role and Position are required.");
+        return;
+      }
+
+      try {
+        let finalRelativePhotoUrl = detailsForm.photoUrl || "";
+
+        if (detailsForm.photoFile) {
+          const formData = new FormData();
+          formData.append("photo", detailsForm.photoFile);
+
+          const uploadRes = await fetch(
+            "http://localhost:5000/api/upload/profile",
+            { method: "POST", body: formData }
+          );
+
+          const uploadData = await uploadRes.json();
+          if (!uploadData.success)
+            return alert("❌ Failed to upload photo.");
+
+          finalRelativePhotoUrl = uploadData.photoUrl;
+        }
+
+        // Normalise
+        const prefix = "http://localhost:5000";
+        if (finalRelativePhotoUrl.startsWith(prefix)) {
+          finalRelativePhotoUrl = finalRelativePhotoUrl.replace(prefix, "");
+        }
+
+        const res = await fetch(
+          `http://localhost:5000/api/employee/${selectedEmp.empId}`,
+          {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              staff_id: detailsForm.empId,
+              photo_url: finalRelativePhotoUrl,
+              full_name: detailsForm.name,
+              email: detailsForm.email,
+              position: detailsForm.position,
+              role: detailsForm.role,
+              department: detailsForm.department,
+              employment_date: detailsForm.employmentDate,
+              confirmation_date: detailsForm.confirmationDate,
+              termination_date: detailsForm.terminationDate,
+              gender: detailsForm.gender,
+              leave_entitlement_annual: detailsForm.annualLeave,
+              leave_entitlement_medical: detailsForm.medicalLeave,
+              notes: detailsForm.notes
+            })
+          }
+        );
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to update employee");
+
+        // HANDLE ID CHANGE
+        const oldId = selectedEmp.empId;
+        const newId = detailsForm.empId;
+
+        if (newId && newId !== oldId) {
+          detailsById[newId] = {
+            ...detailsById[oldId],
+            empId: newId
+          };
+          delete detailsById[oldId];
+
+          const idx = employees.findIndex((e) => e.id === oldId);
+          if (idx !== -1) {
+            employees[idx] = {
+              ...employees[idx],
+              id: newId
+            };
+            employees = [...employees];
+          }
+
+          selectedEmp.empId = newId;
+        }
+
+        const fullPhoto = finalRelativePhotoUrl
+          ? `http://localhost:5000${finalRelativePhotoUrl}`
+          : "";
+
+        detailsForm.photoUrl = fullPhoto;
+        detailsForm.photoFile = null;
+
+        detailsById[selectedEmp.empId] = structuredClone(detailsForm);
+        selectedEmp = structuredClone(detailsForm);
+
+        const idx = employees.findIndex(
+          (e) => e.id === selectedEmp.empId
+        );
+        if (idx !== -1) {
+          employees[idx] = {
+            ...employees[idx],
+            name: detailsForm.name,
+            role: detailsForm.role,
+            position: detailsForm.position,
+            department: detailsForm.department
+          };
+          employees = [...employees];
+        }
+
+        editMode = false;
+      } catch (err) {
+        console.error("❌ Error updating employee:", err);
+        alert("Failed to update employee.");
+      }
+
+      return;
+    }
+
+    // EDIT MODE
+    editMode = true;
+    if (detailsForm) detailsForm.photoFile = null;
   }
-}
 
-// ✅ SHOW DELETE CONFIRMATION
-function openDeleteConfirm() {
-  if (!selectedEmp) return;
-  employeeToDelete = selectedEmp;
-  showDeleteConfirm = true;
-}
+  // =======================
+  // LEAVE APPROVAL
+  // =======================
+  async function approve(id) {
+    try {
+      await fetch(`/api/leave-requests/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "approved" })
+      });
 
-// ✅ DELETE EMPLOYEE
-async function deleteEmployee() {
-  if (!employeeToDelete) return;
-  const empId = employeeToDelete.empId || employeeToDelete.id;
+      await loadPendingRequests();
+      await loadEmployees();
 
-  try {
-    const res = await fetch(`http://localhost:5000/api/employee/${empId}`, {
-      method: "DELETE"
-    });
+    } catch (err) {
+      console.error("❌ Error approving:", err);
+    }
+  }
 
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Failed to delete employee");
+  async function reject(id) {
+    try {
+      await fetch(`/api/leave-requests/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "rejected" })
+      });
 
-    // alert("✅ Employee deleted successfully!");
+      await loadPendingRequests();
+      await loadEmployees();
 
-    employees = employees.filter(e => e.id !== empId);
-    delete detailsById[empId];
+    } catch (err) {
+      console.error("❌ Error rejecting:", err);
+    }
+  }
 
-    showDeleteConfirm = false;
-    detailsOpen = false;
-    employeeToDelete = null;
-  } catch (err) {
-    console.error("❌ Error deleting employee:", err);
-    // alert("Failed to delete employee.");
-  }
-}
+  function approveRequest(item) {
+    const id = item.leave_id ?? item.leaveid ?? item.id;
+    approve(id);
+  }
 
+  function rejectRequest(item) {
+    const id = item.leave_id ?? item.leaveid ?? item.id;
+    reject(id);
+  }
+
+  // =======================
+  // DELETE EMPLOYEE
+  // =======================
+  function openDeleteConfirm() {
+    if (!selectedEmp) return;
+    employeeToDelete = selectedEmp;
+    showDeleteConfirm = true;
+  }
+
+  async function deleteEmployee() {
+    if (!employeeToDelete) return;
+
+    const empId =
+      employeeToDelete.empId || employeeToDelete.id;
+
+    try {
+      const res = await fetch(
+        `http://localhost:5000/api/employee/${empId}`,
+        { method: "DELETE" }
+      );
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to delete employee");
+
+      employees = employees.filter((e) => e.id !== empId);
+      delete detailsById[empId];
+
+      showDeleteConfirm = false;
+      detailsOpen = false;
+      employeeToDelete = null;
+    } catch (err) {
+      console.error("❌ Error deleting employee:", err);
+    }
+  }
 </script>
+
 
 <svelte:window on:keydown={handleKey} />
 
@@ -937,6 +850,7 @@ async function deleteEmployee() {
 <!-- 10) SIDEBAR + TAB       -->
 <!-- ======================= -->
 <div class:show={sidebarOpen} class="overlay" on:click={toggleSidebar}></div>
+
 <div class:open={sidebarOpen} class="sidebar" aria-hidden={!sidebarOpen}>
   <div class="sidebar-header">
     <div class="sidebar-title">
@@ -944,7 +858,6 @@ async function deleteEmployee() {
     </div>
     <button class="close-btn" on:click={toggleSidebar}>✕</button>
   </div>
-
   <div class="sidebar-body">
     {#if pending.length === 0}
       <p style="color:#64748b; text-align:center;">No pending requests.</p>
@@ -1046,14 +959,6 @@ async function deleteEmployee() {
   <div class="sidebar-footer">
     <button class="cancel-btn" on:click={() => (sidebarOpen = false)}>Cancel</button>
   </div>
-</div>
-
-
-<div class="sidebar-tab" on:click={toggleSidebar}>
-  <span class="label">Pending Approval</span>
-  {#if pendingCount > 0}
-    <span class="badge">{pendingCount}</span>
-  {/if}
 </div>
 
 <!-- ======================= -->
@@ -1315,8 +1220,6 @@ async function deleteEmployee() {
     </div>
   </div>
 </div>
-
-
               <div class="form-ft">
                 {#if editMode}
                   <button class="btn-ghost" on:click={() => { editMode = false; detailsForm = structuredClone(selectedEmp); }}>Cancel</button>
@@ -1367,6 +1270,13 @@ async function deleteEmployee() {
         </div>
       </div>
     </div>
-  </div>
+    </div>
 {/if}
+    <div class="sidebar-tab" on:click={toggleSidebar}>
+  <span class="label">Pending Approval</span>
+  {#if pendingCount > 0}
+    <span class="badge">{pendingCount}</span>
+  {/if}
+</div>
+  
 
