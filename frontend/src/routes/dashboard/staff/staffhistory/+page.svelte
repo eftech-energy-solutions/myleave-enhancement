@@ -1,39 +1,26 @@
 <script>
-  // ===== Base Dummy Data (current year) =====
-  const baseLeaves = [
-    {
-      uuid: crypto.randomUUID(),
-      id: "EMP001",
-      name: "Afiq Mikail",
-      dateFrom: "2025-01-05",
-      dateTo: "2025-01-06",
-      totalDays: 2,
-      type: "Annual",
-      status: "Approved"
-    },
-    {
-      uuid: crypto.randomUUID(),
-      id: "EMP001",
-      name: "Afiq Mikail",
-      dateFrom: "2025-02-10",
-      dateTo: "2025-02-10",
-      totalDays: 1,
-      type: "Emergency",
-      status: "Pending"
-    },
-    {
-      uuid: crypto.randomUUID(),
-      id: "EMP001",
-      name: "Afiq Mikail",
-      dateFrom: "2025-03-20",
-      dateTo: "2025-03-22",
-      totalDays: 3,
-      type: "Medical",
-      status: "Rejected"
-    }
-  ];
+  import { onMount } from "svelte";
 
-  // ===== Helpers =====
+  // =============== STATE =================
+  let leaves = [];
+  let filteredLeaves = [];
+
+  let selectedStatus = "All";
+  let selectedMonth = "All";
+  let selectedYear = "All";
+
+  let showConfirmationModal = false;
+  let leaveToCancel = null;
+
+  const statuses = ["All", "Approved", "Pending", "Rejected", "Cancellation Pending"];
+  const months = [
+    "All", "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+  const currentYear = new Date().getFullYear();
+  const years = ["All", ...Array.from({ length: 10 }, (_, i) => currentYear - i)];
+
+  // =========== HELPERS ============
   const fmt = (iso) =>
     new Date(iso).toLocaleDateString(undefined, {
       day: "2-digit",
@@ -46,60 +33,67 @@
 
   const yearOf = (iso) => Number(String(iso).slice(0, 4));
 
-  // Duplicate base leaves for the past N years by swapping the year portion.
-  const currentYear = new Date().getFullYear();
-  function extendWithPastYears(base = [], yearsBack = 9) {
-    const out = [...base.map(x => ({ ...x, _year: yearOf(x.dateFrom) }))];
-    for (let k = 1; k <= yearsBack; k++) {
-      const y = currentYear - k;
-      for (const it of base) {
-        const df = String(it.dateFrom);
-        const dt = String(it.dateTo ?? it.dateFrom);
-        const newDf = y + df.slice(4); // replace YYYY
-        const newDt = y + dt.slice(4);
-        out.push({
-          ...it,
-          uuid: crypto.randomUUID(), // Give each duplicated entry a new unique ID
-          dateFrom: newDf,
-          dateTo: newDt,
-          _year: y
-        });
+  // =========== LOAD LEAVES FROM BACKEND ============
+  onMount(async () => {
+    try {
+      // ✅ FIX 1 — Correct URL + credentials included
+      const meRes = await fetch("/api/employee/me", {
+        credentials: "include"
+      });
+      const me = await meRes.json();
+
+      // If failed to get user, do not continue
+      if (!me || !me.staffId) {
+        console.error("User not loaded.");
+        return;
       }
+
+      // ✅ FIX 2 — credentials required here too
+      const res = await fetch("/api/leave-requests", {
+        credentials: "include"
+      });
+      const data = await res.json();
+
+      // Filter leaves for this logged-in staff only
+      leaves = data
+        .filter((l) => l.staff_id === me.staffId)
+        .map((l) => ({
+          uuid: l.leave_id,
+          id: l.staff_id,
+          name: l.staff_name,
+          dateFrom: l.date_from,
+          dateTo: l.date_until,
+          totalDays: l.total_days,
+          type: l.leave_type,
+          status:
+  l.status === "pending" ? "Pending" :
+  l.status === "approved" ? "Approved" :
+  l.status === "rejected" ? "Rejected" :
+  l.status === "cancellation_pending" ? "Cancellation Pending" :
+  l.status
+
+        }));
+
+    } catch (err) {
+      console.error("Failed to load leave history:", err);
     }
-    return out;
-  }
+  });
 
-  // Build the working dataset: current + past 9 years
-  let leaves = extendWithPastYears(baseLeaves, 9);
+  // =========== FILTERING ============
+  $: filteredLeaves = leaves
+    .filter((l) => {
+      const m = monthName(l.dateFrom);
+      const y = yearOf(l.dateFrom);
 
-  // ===== Filters =====
-  const statuses = ["All", "Approved", "Pending", "Rejected", "Cancellation Pending"];
-  const months = [
-    "All", "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December"
-  ];
-  const years = ["All", ...Array.from({ length: 10 }, (_, i) => currentYear - i)];
+      const matchStatus = selectedStatus === "All" || l.status === selectedStatus;
+      const matchMonth = selectedMonth === "All" || m === selectedMonth;
+      const matchYear = selectedYear === "All" || y === Number(selectedYear);
 
-  let selectedStatus = "All";
-  let selectedMonth = "All";
-  let selectedYear = "All";
-  
-  $: filteredLeaves = leaves.filter((l) => {
-    const m = monthName(l.dateFrom);
-    const y = yearOf(l.dateFrom);
+      return matchStatus && matchMonth && matchYear;
+    })
+    .sort((a, b) => (a.dateFrom < b.dateFrom ? 1 : -1));
 
-    const matchStatus = selectedStatus === "All" || l.status === selectedStatus;
-    const matchMonth = selectedMonth === "All" || m === selectedMonth;
-    const matchYear = selectedYear === "All" || y === Number(selectedYear);
-
-    return matchStatus && matchMonth && matchYear;
-  }).sort((a, b) => (a.dateFrom < b.dateFrom ? 1 : -1));
-
-
-  // ===== Deletion/Cancellation Logic =====
-  let showConfirmationModal = false;
-  let leaveToCancel = null;
-
+  // =========== DELETE/CANCEL ============
   function requestCancellation(leaveItem) {
     leaveToCancel = leaveItem;
     showConfirmationModal = true;
@@ -110,27 +104,45 @@
     showConfirmationModal = false;
   }
 
-  function confirmCancellation() {
-    if (!leaveToCancel) return;
+  async function confirmCancellation() {
+  if (!leaveToCancel) return;
 
-    const targetUuid = leaveToCancel.uuid;
-    
-    if (leaveToCancel.status === 'Pending') {
-      // Directly remove the leave application if it's still pending
-      leaves = leaves.filter(l => l.uuid !== targetUuid);
-    } else if (leaveToCancel.status === 'Approved') {
-      // Change status to 'Cancellation Pending' if it was already approved
-      const index = leaves.findIndex(l => l.uuid === targetUuid);
-      if (index !== -1) {
-        leaves[index].status = 'Cancellation Pending';
-        leaves = [...leaves]; // Trigger reactivity
-      }
-    }
-    
-    closeConfirmationModal();
+  // ================================
+  // 1) If PENDING → DELETE from DB
+  // ================================
+  if (leaveToCancel.status === "Pending") {
+    await fetch(`/api/leave-requests/by-staff/${leaveToCancel.id}`, {
+      method: "DELETE",
+      credentials: "include"
+    });
+
+    // remove from UI
+    leaves = leaves.filter(l => l.uuid !== leaveToCancel.uuid);
   }
-</script>
 
+  // ==========================================
+  // 2) If APPROVED → SET cancellation_pending
+  // ==========================================
+  else if (leaveToCancel.status === "Approved") {
+    await fetch(`/api/leave-requests/${leaveToCancel.uuid}`, {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "cancellation_pending" })
+    });
+
+    // update UI after backend success
+    const index = leaves.findIndex(l => l.uuid === leaveToCancel.uuid);
+    if (index !== -1) {
+      leaves[index].status = "Cancellation Pending";
+      leaves = [...leaves];
+    }
+  }
+
+  closeConfirmationModal();
+}
+
+</script>
 <!-- ===== Confirmation Modal ===== -->
 {#if showConfirmationModal}
   <div class="modal-backdrop">
@@ -359,4 +371,3 @@
     th, td { padding: 8px 10px; }
   }
 </style>
-

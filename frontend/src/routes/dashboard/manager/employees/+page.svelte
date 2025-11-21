@@ -71,11 +71,6 @@
         return;
       }
 
-      // pending IDs from leave-requests
-      const pendingIds = new Set(
-        pendingRequests.map((r) => r.staff_id)
-      );
-
       // Build full list
       const fullProfileList = data.map((e) => {
         const fixedPhotoUrl = e.photourl
@@ -88,6 +83,7 @@
           id: e.staff_id,
           empId: e.staff_id,
           name: e.full_name,
+          position: e.position, 
           role: e.role,
           department: e.department,
           email: e.email,
@@ -102,22 +98,31 @@
         };
       });
 
-      // Build detailsById for ALL staff
-      detailsById = {};
-      fullProfileList.forEach((emp) => {
-        detailsById[emp.id] = structuredClone(emp);
-      });
+  // Build detailsById for ALL staff, muncul di employee grid
+detailsById = {};
+fullProfileList.forEach((emp) => {
+  detailsById[emp.id] = structuredClone(emp);
+});
 
-      // Filter to remove pending staff from grid
-      // 1) Filter ONLY employees in manager's department
-let deptFiltered = manager?.role === "Manager"
-  ? fullProfileList.filter((e) => e.department === managerDept)
-  : fullProfileList;
-
-// 2) Remove pending staff but ONLY for that department
-employees = deptFiltered.filter(
-  (emp) => !pendingIds.has(emp.empId)
+// === PENTING: Cari staff yang MASIH ada request pending ===
+const pendingIds = new Set(
+  pendingRequests
+    .filter(
+      (r) =>
+        r.status === "pending" ||
+        r.status === "cancellation_pending" // kalau ada status ni
+    )
+    .map((r) => r.staff_id)
 );
+
+// 1) Filter ONLY employees in manager's department (kalau manager)
+let deptFiltered =
+  manager?.role === "Manager"
+    ? fullProfileList.filter((e) => e.department === managerDept)
+    : fullProfileList;
+
+// 2) Buang semua staff yang ada dalam pendingIds
+employees = deptFiltered.filter((emp) => !pendingIds.has(emp.empId));
 
     } catch (err) {
       console.error("⚠️ Error in loadEmployees():", err);
@@ -143,50 +148,74 @@ employees = deptFiltered.filter(
   const toggleSidebar = () =>
     (sidebarOpen = !sidebarOpen);
 
-  $: pendingCount = pending.length;
+  $: pendingCount = pendingLeave.length + pendingCancel.length;
 
   async function loadPendingRequests() {
-    const res = await fetch(
-      "/api/leave-requests?status=pending",
+    const res = await fetch("/api/leave-requests",
       { credentials: "include" }
     );
     const all = await res.json();
 
-    pendingRequests =
+    const view =
   manager?.role === "Manager"
-    ? all.filter(
-        (r) =>
+    ? all.filter((r) => {
+        const dept =
+          r.profile_department ||
+          r.staff_department ||   // ← tambahkan ini
+          r.department ||
+          "";
+
+        return (
           r.requester_role !== "Manager" &&
-          r.profile_department === managerDept
-      )
+          dept === managerDept
+        );
+      })
     : all;
+pendingRequests = view;
 
   }
 
   async function loadPending() {
-    try {
-      const res = await fetch(
-        "/api/leave-requests?status=pending",
-        { credentials: "include" }
-      );
-      const all = await res.json();
+  const res = await fetch("/api/leave-requests", {
+    credentials: "include"
+  });
 
- const view = manager?.role === "Manager"
-  ? all.filter(
-      (r) =>
-        r.requester_role !== "Manager" &&
-        r.profile_department === managerDept
-    )
-  : all;
+  const all = await res.json();
 
-pending = view;
-pendingLeave = pending.filter((p) => p.request_type !== "cancel");
-pendingCancel = pending.filter((p) => p.request_type === "cancel");
+ const view =
+  manager?.role === "Manager"
+    ? all.filter((r) => {
+        const dept =
+          r.profile_department ||
+          r.staff_department ||   // ← tambahkan ini
+          r.department ||
+          "";
 
-    } catch (err) {
-      console.error("❌ Error loading pending:", err);
-    }
-  }
+        return (
+          r.requester_role !== "Manager" &&
+          dept === managerDept
+        );
+      })
+    : all;
+
+
+
+  pending = view;
+  pendingRequests = view.filter(
+  (r) =>
+    r.status === "pending" ||
+    r.status === "cancellation_pending"
+);
+pendingLeave = view.filter(
+  r => r.status === "pending"
+);
+
+pendingCancel = view.filter(
+  r => r.status === "cancellation_pending"
+);
+
+}
+
 
   /* ================================
       5) openDetails (STRUCTURE FIXED)
@@ -310,6 +339,36 @@ pendingCancel = pending.filter((p) => p.request_type === "cancel");
     await loadPending();
     await loadEmployees();
   }
+  async function approveCancellation(item) {
+  const id = item.leave_id;
+
+  await fetch(`/api/leave-requests/${id}`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status: "cancelled" })
+  });
+
+  await loadPendingRequests();
+  await loadPending();
+  await loadEmployees();
+}
+
+async function rejectCancellation(item) {
+  const id = item.leave_id;
+
+  await fetch(`/api/leave-requests/${id}`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status: "approved" }) // revert
+  });
+
+  await loadPendingRequests();
+  await loadPending();
+  await loadEmployees();
+}
+
 
   function approveRequest(item) {
     const id =
@@ -563,8 +622,8 @@ pendingCancel = pending.filter((p) => p.request_type === "cancel");
 
             <div class="actions">
               <div class="left">
-                <button class="btn-approve" on:click={() => approveRequest(item)}>Approve Cancel</button>
-                <button class="btn-reject"  on:click={() => rejectRequest(item)}>Reject Cancel</button>
+                <button class="btn-approve" on:click={() => approveCancellation(item)}>Approve Cancel</button>
+                <button class="btn-reject"  on:click={() => rejectCancellation(item)}>Reject Cancel</button>
               </div>
               <button class="btn-details" on:click={() => openDetails(item)}>Details</button>
             </div>

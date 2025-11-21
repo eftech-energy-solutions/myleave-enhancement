@@ -6,12 +6,6 @@
 
   let profileMenuOpen = false;
 
-  const user = {
-    name: "Afiq Mikail",
-    role: "Human Resources",
-    staffId: "E8505"
-  };
-
   function clickOutside(node) {
     const onClick = (e) => {
       if (!node.contains(e.target)) profileMenuOpen = false;
@@ -63,35 +57,43 @@
   // 3) LOAD FROM DATABASE
   // =======================
   function formatDate(dbDate) {
-    if (!dbDate) return "";
-    const d = new Date(dbDate);
-    if (isNaN(d)) return "";
-    return d.toISOString().split("T")[0];
-  }
+  if (!dbDate) return "";
+  const d = new Date(dbDate);
+  d.setHours(d.getHours() + 8); // Malaysia timezone fix
+  return d.toISOString().split("T")[0];
+}
 
   async function loadPendingRequests() {
-    try {
-      const res = await fetch("/api/leave-requests?status=pending", {
-        credentials: "include"
-      });
-      if (!res.ok) {
-        console.error("❌ Failed to fetch pending:", res.status);
-        return;
-      }
-
-      pendingRequests = await res.json();
-      pending = pendingRequests; // <-- important: updates real-time
-
-      pendingLeave = pendingRequests.filter(
-        (p) => p.request_type !== "cancel"
-      );
-      pendingCancel = pendingRequests.filter(
-        (p) => p.request_type === "cancel"
-      );
-    } catch (err) {
-      console.error("❌ Error loading pending:", err);
+  try {
+    // 👉 buang ?status=pending, ambil SEMUA
+    const res = await fetch("/api/leave-requests", {
+      credentials: "include"
+    });
+    if (!res.ok) {
+      console.error("❌ Failed to fetch pending:", res.status);
+      return;
     }
+
+    const all = await res.json();
+
+    pendingRequests = all.filter(
+  (r) =>
+    r.status === "pending" ||
+    r.status === "cancellation_pending"
+);
+
+pending = pendingRequests;
+
+
+    // pecahkan ikut status
+    pendingLeave  = pending.filter((p) => p.status === "pending");
+    pendingCancel = pending.filter((p) => p.status === "cancellation_pending");
+
+  } catch (err) {
+    console.error("❌ Error loading pending:", err);
   }
+}
+
 
   async function loadEmployees() {
     try {
@@ -162,21 +164,15 @@
   // PAGE LOAD
   // =======================
   onMount(async () => {
-    try {
-      await loadPendingRequests();
-      await loadEmployees();
+  try {
+    await loadPendingRequests();
+    await loadEmployees();
+    // tak perlu filter lagi kat sini
+  } catch (err) {
+    console.error("❌ onMount error:", err);
+  }
+});
 
-      pending = pendingRequests;
-      pendingLeave = pending.filter(
-        (p) => p.request_type !== "cancel"
-      );
-      pendingCancel = pending.filter(
-        (p) => p.request_type === "cancel"
-      );
-    } catch (err) {
-      console.error("❌ onMount error:", err);
-    }
-  });
 
   // =======================
   // FILTERS
@@ -211,7 +207,7 @@
   let sidebarOpen = false;
   const toggleSidebar = () => (sidebarOpen = !sidebarOpen);
 
-  $: pendingCount = pending.length;
+  $: pendingCount = pendingLeave.length + pendingCancel.length;
 
   // =======================
   // ADD EMPLOYEE MODAL
@@ -636,6 +632,11 @@
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to delete employee");
+      // DELETE ALL LEAVE REQUESTS BELONGING TO THIS STAFF
+      await fetch(`http://localhost:5000/api/leave-requests/by-staff/${empId}`, {
+      method: "DELETE"
+});
+
 
       employees = employees.filter((e) => e.id !== empId);
       delete detailsById[empId];
@@ -647,6 +648,33 @@
       console.error("❌ Error deleting employee:", err);
     }
   }
+  async function approveCancellation(item) {
+  const id = item.leave_id;
+
+  await fetch(`/api/leave-requests/${id}`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status: "cancelled" })
+  });
+
+  await loadPendingRequests();
+  await loadEmployees();
+}
+async function rejectCancellation(item) {
+  const id = item.leave_id;
+
+  await fetch(`/api/leave-requests/${id}`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status: "approved" })   // revert back
+  });
+
+  await loadPendingRequests();
+  await loadEmployees();
+}
+
 </script>
 
 
@@ -945,8 +973,9 @@
 
             <div class="actions">
               <div class="left">
-                <button class="btn-approve" on:click={() => approveRequest(item)}>Approve Cancel</button>
-                <button class="btn-reject"  on:click={() => rejectRequest(item)}>Reject Cancel</button>
+                <button class="btn-approve" on:click={() => approveCancellation(item)}>Approve Cancel</button>
+                <button class="btn-reject"  on:click={() => rejectCancellation(item)}>Reject Cancel</button>
+
               </div>
               <button class="btn-details" on:click={() => openDetails(item)}>Details</button>
             </div>

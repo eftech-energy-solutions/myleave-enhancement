@@ -104,6 +104,8 @@ router.get("/", async (req, res) => {
         p.email,
         p.department AS profile_department,
         p.employment_date,
+        p.department AS profile_department,
+        lr.department AS staff_department,
         p.confirmation_date,
         p.termination_date,
         p.gender,
@@ -138,9 +140,9 @@ router.patch("/:id", async (req, res) => {
     const { status } = req.body;
     const leaveId = req.params.id;
 
-    if (!["approved", "rejected"].includes(status)) {
-      return res.status(400).json({ message: "Invalid status" });
-    }
+    if (!["approved", "rejected", "cancellation_pending", "cancelled"].includes(status)) {
+  return res.status(400).json({ message: "Invalid status" });
+}
 
     const sql = `
   UPDATE leave_requests
@@ -162,5 +164,31 @@ router.patch("/:id", async (req, res) => {
     res.status(500).json({ message: "Failed to update leave request" });
   }
 });
+/* ============================================================
+   4) DELETE ALL LEAVE REQUESTS FOR A STAFF
+   DELETE /api/leave-requests/by-staff/:staffId
+   ============================================================ */
+router.delete("/by-staff/:staffId", async (req, res) => {
+  try {
+    const staffId = req.params.staffId;
+
+    const sql = `
+      DELETE FROM leave_requests
+      WHERE staff_id = $1;
+    `;
+
+    await pool.query(sql, [staffId]);
+
+    res.json({
+      success: true,
+      message: `All leave requests for staff ${staffId} deleted`
+    });
+
+  } catch (err) {
+    console.error("DELETE /by-staff error:", err);
+    res.status(500).json({ message: "Failed to delete staff leave requests" });
+  }
+});
+
 
 export default router;
