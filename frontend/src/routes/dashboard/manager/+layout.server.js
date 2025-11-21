@@ -6,7 +6,7 @@ export const load = ({ url, locals }) => {
   // if (!locals.user) throw redirect(302, '/login');
   // if (locals.user.role !== 'admin') throw redirect(302, '/dashboard');
 
-  if (url.pathname === '/dashboard/manager') {
+  if (url.pathname === '/dashboard/manager/main') {
     throw redirect(302, '/dashboard/manager/main');
   }
   return { user: locals.user ?? null };
