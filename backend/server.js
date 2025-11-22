@@ -39,7 +39,7 @@ app.use(async (req, res, next) => {
     if (!basic?.staffId) return next();
 
     const { rows } = await pool.query(
-      `SELECT staff_id, full_name, email, role, department
+      `SELECT staff_id, full_name, email, role, department, position
          FROM profiles
         WHERE staff_id = $1
         LIMIT 1`,
@@ -47,6 +47,7 @@ app.use(async (req, res, next) => {
     );
 
     if (rows[0]) {
+      console.log("ATTACH USER:", rows[0]);
       req.user = rows[0]; // 🎯 ini yang POST /leave-requests guna
     }
     return next();
@@ -148,7 +149,8 @@ app.post('/api/login', async (req, res) => {
       role: finalRole,          // ← guna finalRole
       name: user.full_name,
       department: user.department,
-      photoUrl: user.photourl
+      photoUrl: user.photourl,
+      position: user.position
     };
 
     res.cookie('auth_token', JSON.stringify(payload), {
