@@ -52,6 +52,7 @@
   let pendingLeave = [];
   let pendingCancel = [];
   let pendingRequests = [];
+  let leaveDetailsOpen = {};
 
   // =======================
   // 3) LOAD FROM DATABASE
@@ -419,6 +420,7 @@ pending = pendingRequests;
       department: profile.department || leave.department || "",
       email: profile.email || leave.email || "",
       role: profile.role || leave.requester_role || "",
+      position: profile.position || leave.requester_position || "",
       employmentDate: profile.employmentDate ?? leave.employment_date ?? "",
       confirmationDate: profile.confirmationDate ?? leave.confirmation_date ?? "",
       terminationDate: profile.terminationDate ?? leave.termination_date ?? "",
@@ -890,24 +892,28 @@ async function rejectCancellation(item) {
     {#if pending.length === 0}
       <p style="color:#64748b; text-align:center;">No pending requests.</p>
     {:else}
-      <!-- Section for Leave Approval -->
+
+      <!-- ======================== -->
+      <!--   PENDING LEAVE APPROVAL -->
+      <!-- ======================== -->
       {#if pendingLeave.length > 0}
         <h3 class="sub-ttl">Pending Leave Approval ({pendingLeave.length})</h3>
-        {#each pendingLeave as item (item.leave_id + (item.created_at || ''))}
+
+        {#each pendingLeave as item (item.leave_id)}
           <div class="pending-card">
+
+            <!-- Header -->
             <div class="row1">
               <div class="who">
-                <!-- Nama ambil dari profiles; fallback staff_name dari leave_requests -->
-                <div class="name">
-                  {item.profile_name || item.staff_name}
-                </div>
+                <div class="name">{item.profile_name || item.staff_name}</div>
                 <div class="sub">
-                  {item.requester_role} • {item.staff_id} • {item.profile_department || item.department}
+                  {item.requester_position} • {item.staff_id} • {item.profile_department || item.department}
                 </div>
               </div>
-              <span class="pill type">{item.leave_type || 'Leave'}</span>
+              <span class="pill type">{item.leave_type || "Leave"}</span>
             </div>
 
+            <!-- Dates -->
             <div class="kv">
               <div>
                 <span class="k">From:</span>
@@ -923,67 +929,162 @@ async function rejectCancellation(item) {
               </div>
             </div>
 
+            <!-- ACTIONS + INLINE LEAVE DETAILS LINK -->
             <div class="actions">
               <div class="left">
                 <button class="btn-approve" on:click={() => approveRequest(item)}>Approve</button>
-                <button class="btn-reject"  on:click={() => rejectRequest(item)}>Reject</button>
+                <button class="btn-reject" on:click={() => rejectRequest(item)}>Reject</button>
               </div>
-              <!-- Hantar satu object terus supaya modal boleh baca semua field -->
-              <button class="btn-details" on:click={() => openDetails(item)}>Details</button>
+
+              <div style="display:flex; align-items:center; gap:10px;">
+                <span
+                  style="text-decoration: underline; cursor:pointer; color:#0c4a6e; font-size:12px;"
+                  on:click={() => leaveDetailsOpen[item.leave_id] = !leaveDetailsOpen[item.leave_id]}
+                >
+                  {leaveDetailsOpen[item.leave_id] ? "Hide Details" : "Leave Details"}
+                </span>
+
+                <button class="btn-details" on:click={() => openDetails(item)}>
+                  Details
+                </button>
+              </div>
             </div>
+
+            <!-- EXPANDED BOX -->
+            {#if leaveDetailsOpen[item.leave_id]}
+              <div
+                style="
+                  background:#f8fafc;
+                  border:1px solid #e2e8f0;
+                  padding:10px;
+                  border-radius:8px;
+                  margin-top:10px;
+                "
+              >
+                <div>
+                  <strong style="color:#0c4a6e; font-size:13px;">Reason:</strong>
+                  <div style="margin-top:4px; color:#334155; font-size:12px;">{item.reason}</div>
+                </div>
+
+                <div style="margin-top:8px;">
+                  <strong style="color:#0c4a6e; font-size:13px;">Attachment:</strong>
+
+                  {#if item.attachment_path}
+                    <div style="margin-top:4px;">
+                      <a
+                        href={"http://localhost:5000/" + item.attachment_path}
+                        target="_blank"
+                        style="color:#2563eb; text-decoration: underline; font-size:12px;"
+                      >
+                        View Attachment
+                      </a>
+                    </div>
+                  {:else}
+                    <div style="margin-top:4px; color:#64748b; font-size:12px;">No attachment</div>
+                  {/if}
+                </div>
+              </div>
+            {/if}
+
           </div>
         {/each}
       {/if}
 
-      <!-- Section for Cancellation Approval -->
+      <!-- =============================== -->
+      <!--  PENDING CANCELLATION APPROVAL -->
+      <!-- =============================== -->
       {#if pendingCancel.length > 0}
         <h3 class="sub-ttl" style="margin-top:20px;">
           Pending Cancellation Approval ({pendingCancel.length})
         </h3>
-        {#each pendingCancel as item (item.leave_id + (item.created_at || ''))}
+
+        {#each pendingCancel as item (item.leave_id)}
           <div class="pending-card">
+
+            <!-- Header -->
             <div class="row1">
               <div class="who">
-                <div class="name">
-                  {item.profile_name || item.staff_name}
-                </div>
+                <div class="name">{item.profile_name || item.staff_name}</div>
                 <div class="sub">
-                  {item.requester_role} • {item.staff_id} • {item.profile_department || item.department}
+                  {item.requester_position} • {item.staff_id} • {item.profile_department || item.department}
                 </div>
               </div>
-              <span class="pill type" style="background-color: #fee2e2; color: #b91c1c;">
+              <span class="pill type" style="background:#fee2e2; color:#b91c1c;">
                 Cancellation: {item.leave_type}
               </span>
             </div>
 
+            <!-- Dates -->
             <div class="kv">
-              <div>
-                <span class="k">Leave From:</span>
-                <span class="v">{fmt(item.date_from)}</span>
-              </div>
-              <div>
-                <span class="k">Leave To:</span>
-                <span class="v">{fmt(item.date_until)}</span>
-              </div>
-              <div>
-                <span class="k">Cancellation Requested:</span>
-                <span class="v">{fmt(item.created_at)}</span>
-              </div>
+              <div><span class="k">Leave From:</span> <span class="v">{fmt(item.date_from)}</span></div>
+              <div><span class="k">Leave To:</span> <span class="v">{fmt(item.date_until)}</span></div>
+              <div><span class="k">Requested:</span> <span class="v">{fmt(item.created_at)}</span></div>
             </div>
 
+            <!-- ACTIONS + INLINE LEAVE DETAILS LINK -->
             <div class="actions">
               <div class="left">
-                <button class="btn-approve" on:click={() => approveCancellation(item)}>Approve Cancel</button>
-                <button class="btn-reject"  on:click={() => rejectCancellation(item)}>Reject Cancel</button>
-
+                <button class="btn-approve" on:click={() => approveCancellation(item)}>Approve</button>
+                <button class="btn-reject" on:click={() => rejectCancellation(item)}>Reject</button>
               </div>
-              <button class="btn-details" on:click={() => openDetails(item)}>Details</button>
+
+              <div style="display:flex; align-items:center; gap:10px;">
+                <span
+                  style="text-decoration: underline; cursor:pointer; color:#0c4a6e; font-size:12px;"
+                  on:click={() => leaveDetailsOpen[item.leave_id] = !leaveDetailsOpen[item.leave_id]}
+                >
+                  {leaveDetailsOpen[item.leave_id] ? "Hide Details" : "Leave Details"}
+                </span>
+
+                <button class="btn-details" on:click={() => openDetails(item)}>
+                  Details
+                </button>
+              </div>
             </div>
+
+            <!-- EXPANDED BOX -->
+            {#if leaveDetailsOpen[item.leave_id]}
+              <div
+                style="
+                  background:#f8fafc;
+                  border:1px solid #e2e8f0;
+                  padding:10px;
+                  border-radius:8px;
+                  margin-top:10px;
+                "
+              >
+                <div>
+                  <strong style="color:#0c4a6e; font-size:13px;">Reason:</strong>
+                  <div style="margin-top:4px; color:#334155; font-size:12px;">{item.reason}</div>
+                </div>
+
+                <div style="margin-top:8px;">
+                  <strong style="color:#0c4a6e; font-size:13px;">Attachment:</strong>
+
+                  {#if item.attachment_path}
+                    <div style="margin-top:4px;">
+                      <a
+                        href={"http://localhost:5000/" + item.attachment_path}
+                        target="_blank"
+                        style="color:#2563eb; text-decoration: underline; font-size:12px;"
+                      >
+                        View Attachment
+                      </a>
+                    </div>
+                  {:else}
+                    <div style="margin-top:4px; color:#64748b; font-size:12px;">No attachment</div>
+                  {/if}
+                </div>
+              </div>
+            {/if}
+
           </div>
         {/each}
       {/if}
+
     {/if}
   </div>
+
 
   <div class="sidebar-footer">
     <button class="cancel-btn" on:click={() => (sidebarOpen = false)}>Cancel</button>

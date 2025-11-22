@@ -551,7 +551,7 @@ async function rejectCancellation(item) {
                   {item.profile_name || item.staff_name}
                 </div>
                 <div class="sub">
-                  {item.requester_role} • {item.staff_id} • {item.profile_department || item.department}
+                  {item.requester_position} • {item.staff_id} • {item.profile_department || item.department}
                 </div>
               </div>
               <span class="pill type">{item.leave_type || 'Leave'}</span>
@@ -597,7 +597,7 @@ async function rejectCancellation(item) {
                   {item.profile_name || item.staff_name}
                 </div>
                 <div class="sub">
-                  {item.requester_role} • {item.staff_id} • {item.profile_department || item.department}
+                  {item.requester_position} • {item.staff_id} • {item.profile_department || item.department}
                 </div>
               </div>
               <span class="pill type" style="background-color: #fee2e2; color: #b91c1c;">

@@ -34,6 +34,7 @@ const staffId       = user.staff_id;
 const staffName     = user.full_name;
 const department    = user.department || null;
 const requesterRole = user.role || "Staff";
+const requesterPosition = user.position;
 const attachmentPath = req.file ? req.file.path : null;
 
     // simple validation
@@ -47,6 +48,7 @@ const attachmentPath = req.file ? req.file.path : null;
         staff_name,
         department,
         requester_role,
+        requester_position,
         leave_type,
         request_type,
         duration,
@@ -62,7 +64,7 @@ const attachmentPath = req.file ? req.file.path : null;
         $1,$2,$3,$4,
         $5,$6,$7,
         $8,$9,$10,
-        $11,$12,
+        $11,$12,$13,
         'pending', NOW()
       )
       RETURNING *;
@@ -73,6 +75,7 @@ const attachmentPath = req.file ? req.file.path : null;
       staffName,
       department,
       requesterRole,
+      requesterPosition,
       type,
       requestType || "new",
       duration,
@@ -103,6 +106,7 @@ router.get("/", async (req, res) => {
         lr.*,
         p.email,
         p.department AS profile_department,
+        p.position AS profile_position,
         p.employment_date,
         p.department AS profile_department,
         lr.department AS staff_department,
