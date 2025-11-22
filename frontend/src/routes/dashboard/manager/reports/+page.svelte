@@ -5,10 +5,23 @@
   // ----- state -----
   let loading = true;
   let error = "";
+let recent = [];
 
   // ----- user/profile -----
   // 'data' telah dibuang, jadi kita guna nilai lalai secara terus.
-  const user = { name: 'manager', role: 'Manager', staffId: 'E1234' };
+  let user = null;
+  onMount(async () => {
+  const meRes = await fetch("/api/me/photo", { credentials: "include" });
+  user = await meRes.json();
+console.log("USER FROM BACKEND:", user);
+console.log("STAFF ID:", user.staffId);
+
+await loadRecent();
+
+
+  await loadRecent();
+});
+
   const initials = (name) => (name || 'A B').split(' ').map(x => x[0]).slice(0,2).join('').toUpperCase();
   let profileMenuOpen = false;
   function clickOutside(node) {
@@ -86,6 +99,38 @@
     const iso = localISO(d);
     return holidayDescsByYear[y]?.get(iso) || null;
   }
+async function loadRecent() {
+  try {
+    const res = await fetch("/api/leave-requests", {
+      credentials: "include"
+    });
+
+    const all = await res.json();
+
+    // Filter: recent 5 leave requests for this manager
+    recent = all
+      .filter(l => l.staff_id.toLowerCase() === user.staffId.toLowerCase())
+
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      .slice(0, 4)
+      .map(l => ({
+        id: l.leave_id,
+        from: l.date_from,
+        to: l.date_until,
+        totalDays: l.total_days,
+        type: l.leave_type,
+        status:
+          l.status === "pending" ? "Pending" :
+          l.status === "approved" ? "Approved" :
+          l.status === "rejected" ? "Rejected" :
+          l.status === "cancellation_pending" ? "Cancellation Pending" :
+          l.status
+      }));
+
+  } catch (err) {
+    console.error("Failed to load recent leaves:", err);
+  }
+}
 
   // ======= Logik Kalendar
   let minDate = new Date(new Date().getFullYear(), 0, 1);
@@ -432,12 +477,14 @@ async function submitLeave(e) {
     alert("Something went wrong while submitting your leave.");
   }
 }
-  // Recent (demo)
-  const recent = [
-    { id: 101, from: '2025-09-10', to: '2025-09-11', totalDays: 2,   type: 'Annual', status: 'Approved' },
-    { id: 102, from: '2025-09-18', to: '2025-09-18', totalDays: 1.0, type: 'Medical', status: 'Pending' }
-  ];
-  const fmt = (iso) => parseLocalISO(iso).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
+  
+  const fmt = (iso) =>
+  new Date(iso).toLocaleDateString(undefined, {
+    day: "2-digit",
+    month: "short",
+    year: "numeric"
+  });
+
 </script>
 
 <main class="main">
@@ -556,10 +603,13 @@ async function submitLeave(e) {
               <div><div class="muted">Leave Type:</div><div>{r.type}</div></div>
               <div><div class="muted">Status:</div><div>{r.status}</div></div>
             </div>
-            <a class="link" href={`/dashboard/manager/reports/${r.id}`}>Details</a>
+            <a class="link" href={`/dashboard/manager/myhistory`}>Details</a>
           </div>
         {/each}
       </div>
+      <div class="recent-footer">
+  <a class="view-more" href="/dashboard/manager/myhistory">View more →</a>
+</div>
     </div>
   </div>
 </main>
@@ -704,6 +754,22 @@ async function submitLeave(e) {
 
 .info-btn:hover {
   background: #e5e7eb;    /* light gray only when hovered */
+}
+
+.recent-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.view-more {
+  font-size: 13px;
+  font-weight: 600;
+  color: #2563eb;          /* blue */
+  cursor: pointer;
+}
+.view-more:hover {
+  color: #1d4ed8;
 }
 
   .tooltip{

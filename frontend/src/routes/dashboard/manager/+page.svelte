@@ -1,206 +1,105 @@
 <script>
-  import { onMount, tick } from 'svelte';
-  export let data; // comes from +layout.server.js -> { user }
+  export let data;
+  const user = data?.user;
+  import { onMount } from 'svelte';
+  import { tick } from "svelte";
+  import Chart from "chart.js/auto";
 
-  // ----- user/profile -----
-  const user = data?.user ?? { name: 'admin', role: 'Human Resources', staffId: 'E8505' };
-  const initials = (name) => (name || 'A B').split(' ').map(x => x[0]).slice(0,2).join('').toUpperCase();
   let profileMenuOpen = false;
 
-  // click-outside action for dropdown
   function clickOutside(node) {
     const onClick = (e) => { if (!node.contains(e.target)) profileMenuOpen = false; };
     document.addEventListener('click', onClick);
     return { destroy: () => document.removeEventListener('click', onClick) };
   }
 
-  // ----- donuts -----
+  // donuts — keep
   const donuts = [
-    { title: 'Annual Leave Summary',          spent: 1,  total: 14 },
-    { title: 'Medical Leave Summary',         spent: 0,  total: 14 },
-    { title: 'Hospitalization Leave Summary', spent: 0,  total: 60 }
+    { title: 'Annual Leave Summary', spent: 1, total: 14 },
+    { title: 'Medical Leave Summary', spent: 0, total: 14 },
+    { title: 'Hospitalization Leave Summary', spent: 0, total: 60 }
   ];
-  const pct = (s, t) => Math.min(100, Math.max(0, Math.round((s / t) * 100)));
+  const pct = (s, t) => (t > 0 ? Math.round((s/t)*100) : 0);
 
-  // ----- calendar helpers -----
-  const atStartOfDay = (d) => { const x = new Date(d); x.setHours(0,0,0,0); return x; };
-  const sameDay = (a, b) => atStartOfDay(a).getTime() === atStartOfDay(b).getTime();
+  // ======= Employees Overview State =======
+  let loading = true;
+  let error = "";
+  let dataByDept = [];
+  let totalEmployees = 0;
+  let canvasEl;
 
-  let today = atStartOfDay(new Date());
-  const todayISO = today.toISOString().slice(0,10); // handy for <input min=...>
+  const palette = [
+    "#FFD9CC", "#C6DEF1", "#F2C6DE",
+    "#C9E4DE", "#DBCDF0", "#E2F0CB"
+  ];
 
-  // moving "view base" for the visible calendar
-  let viewBase = atStartOfDay(new Date());
+  // ===== FETCH DEPT DATA + RENDER CHART =====
+  onMount(async () => {
+    try {
+      const res = await fetch("http://localhost:5000/api/employee/department-summary");
+      if (!res.ok) throw new Error("Failed to load");
 
-  let monthLabel = '';
-  let days = [];
-  let modal;
+      const json = await res.json();
 
-  function buildMonth(base = new Date()) {
-    const y = base.getFullYear(), m = base.getMonth();
-    const first = new Date(y, m, 1);
-    const start = new Date(first);
-    // Monday-start
-    start.setDate(first.getDate() - ((first.getDay() + 6) % 7));
+      // fill your array (same as admin)
+      dataByDept = json.departments.map((d, i) => ({
+        name: d.name,
+        count: d.count,
+        color: palette[i % palette.length]
+      }));
 
-    const arr = [];
-    for (let i = 0; i < 42; i++) {
-      const d = new Date(start); d.setDate(start.getDate() + i);
-      arr.push({
-        key: d.toISOString().slice(0,10),
-        label: d.getDate(),
-        date: d,
-        muted: d.getMonth() !== m,
-        today: sameDay(d, today)
-      });
+      // calculate totals
+      totalEmployees = dataByDept.reduce((a,b)=>a+b.count, 0);
+
+      // now draw chart
+      await tick();
+      if (canvasEl) {
+        new Chart(canvasEl, {
+          type: 'bar',
+          data: {
+            labels: dataByDept.map(d=>d.name),
+            datasets: [{
+              label: 'Active Employees',
+              data: dataByDept.map(d=>d.count),
+              backgroundColor: dataByDept.map(d=>d.color),
+              borderColor: dataByDept.map(d=>d.color),
+              borderWidth: 1,
+              borderRadius: 8
+            }]
+          },
+          options: {
+            responsive:true,
+            maintainAspectRatio:false,
+            plugins:{ legend:{ display:false }},
+            scales:{
+              x:{ ticks:{ autoSkip:false, maxRotation:40, minRotation:0 }},
+              y:{ beginAtZero:true }
+            }
+          }
+        });
+      }
+
+      loading = false;
+
+    } catch (err) {
+      console.error(err);
+      error = "Failed to load employee overview";
+      loading = false;
     }
-    monthLabel = new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(first);
-    days = arr;
-  }
-
-  onMount(() => buildMonth(viewBase));
-
-  // ===== navigation (prev/next + jump to today) =====
-  function prevMonth() {
-    const d = new Date(viewBase);
-    d.setMonth(d.getMonth() - 1, 1);
-    viewBase = atStartOfDay(d);
-    buildMonth(viewBase);
-  }
-  function nextMonth() {
-    const d = new Date(viewBase);
-    d.setMonth(d.getMonth() + 1, 1);
-    viewBase = atStartOfDay(d);
-    buildMonth(viewBase);
-  }
-  function prevYear() {
-    const d = new Date(viewBase);
-    d.setFullYear(d.getFullYear() - 1, d.getMonth(), 1);
-    viewBase = atStartOfDay(d);
-    buildMonth(viewBase);
-  }
-  function nextYear() {
-    const d = new Date(viewBase);
-    d.setFullYear(d.getFullYear() + 1, d.getMonth(), 1);
-    viewBase = atStartOfDay(d);
-    buildMonth(viewBase);
-  }
-  function goToday() {
-    viewBase = atStartOfDay(new Date());
-    buildMonth(viewBase);
-  }
-
-  // ===== Leave form state (auto-calc total) =====
-  let duration = 'Full';     // 'Full' | 'Half'
-  let dateFrom = '';
-  let dateUntil = '';
-  let totalDays = 1;
-
-  const dayMs = 24 * 60 * 60 * 1000;
-  const diffDays = (from, until) => {
-    if (!from) return 0;
-    const a = atStartOfDay(from);
-    const b = atStartOfDay(until || from);
-    return Math.max(1, Math.floor((b - a) / dayMs) + 1); // inclusive
-  };
-
-  // keep until >= from
-  $: if (dateFrom && dateUntil && atStartOfDay(dateUntil) < atStartOfDay(dateFrom)) {
-    dateUntil = dateFrom;
-  }
-
-  // auto-calc total
-  $: if (duration === 'Half') {
-    totalDays = 0.5;
-    if (dateFrom) dateUntil = dateFrom; // lock same day
-  } else {
-    totalDays = dateFrom ? diffDays(dateFrom, dateUntil || dateFrom) : 0;
-  }
-
-  function onFromChange() {
-    if (!dateFrom) return;
-    if (duration === 'Half') dateUntil = dateFrom;
-    if (!dateUntil) dateUntil = dateFrom;
-  }
-
-  async function openLeaveForm(date) {
-    const iso = atStartOfDay(date).toISOString().slice(0,10);
-    // initialize form state for the clicked date
-    duration = 'Full';
-    dateFrom = iso;
-    dateUntil = iso;
-    totalDays = 1;
-
-    if (!modal?.open) modal.showModal();
-    await tick();
-  }
-
-  function submitLeave(e) {
-    const fd = new FormData(e.currentTarget);
-    // TODO: post to backend
-    modal?.close();
-  }
-
-  // ----- recent -----
-  const recent = [
-    { id: 1, from: '2024-01-02', to: '2024-01-03', totalDays: 1,   type: 'Annual', status: 'Approved' },
-    { id: 2, from: '2024-01-02', to: '2024-01-03', totalDays: 1.0, type: 'Annual', status: 'Approved' }
-  ];
-  const fmt = (iso) => new Date(iso).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
+  });
 </script>
 
 <main class="main">
-  <!-- HEADER (simple row, no boxed container) -->
-  <div class="topbar">
-    <div class="title-wrap">
-      <div class="hello">Welcome back, {user?.name}!</div>
-      <h1 class="page-title">My Dashboard</h1>
-    </div>
 
-    <div class="profile" use:clickOutside>
-      <button class="icon-btn bell" aria-label="Notifications">🔔</button>
-
-      <div class="profile-info">
-        <img src="/images/icontest1.png" alt="" class="avatar-img"
-             on:error={(e)=> e.currentTarget.style.display='none'} />
-        <div class="who">
-          <div class="name">{user?.name || 'Afiq Mikail'}</div>
-          <div class="sub">{user?.position || 'Human Resources'}</div>
-          <div class="sub">Staff ID : {user?.staffId || 'E8505'}</div>
-        </div>
-      </div>
-
-      <button
-        class="icon-btn caret"
-        aria-haspopup="menu"
-        aria-expanded={profileMenuOpen}
-        on:click={() => (profileMenuOpen = !profileMenuOpen)}
-        aria-label="Open profile menu"
-      >▾</button>
-
-      {#if profileMenuOpen}
-        <div class="menu" role="menu">
-          <a role="menuitem" href="/dashboard/admin/profile">Update Profile</a>
-        </div>
-      {/if}
-    </div>
-  </div>
-
-  <!-- ===== DONUT ROW HEADER: Download on top-right ===== -->
-  <div class="donut-row-header">
-    <a class="download" href="#">Download</a>
-  </div>
-
-  <!-- ===== GRID ===== -->
+  <!-- GRID -->
   <div class="grid">
-    <!-- Top: 3 donuts -->
+    <!-- donuts -->
     {#each donuts as d}
       <div class="card" style="grid-column: span 4;">
         <h3 class="donut-title">{d.title}</h3>
-        <div
-          class="donut fancy"
-          style="--size:110px; --spent:{pct(d.spent,d.total)}; --spent-color: var(--spentRed); --rest-color: var(--restBlue);"
-        ></div>
+        <div class="donut fancy"
+          style="--size:110px; --spent:{pct(d.spent,d.total)}; --spent-color: var(--spentRed); --rest-color: var(--restBlue);">
+        </div>
         <div class="legend-row">
           <div class="legend-item"><span class="chip spent"></span><span>Spent Leave</span></div>
           <div class="legend-item"><span class="chip unspent"></span><span>Unspent Leave</span></div>
@@ -209,181 +108,50 @@
       </div>
     {/each}
 
-    <!-- Bottom: Calendar (4) + Recent (8) -->
-    <div class="card" style="grid-column: span 4;">
-      <h3>Calendar of Application</h3>
-      <div class="calendar calendar-small">
-        <div class="month">
-          <div class="nav">
-            <button class="nav-btn" on:click={prevYear} aria-label="Previous year">«</button>
-            <button class="nav-btn" on:click={prevMonth} aria-label="Previous month">‹</button>
-          </div>
-
-          <span aria-live="polite">{monthLabel}</span>
-
-          <div class="nav">
-            <button class="nav-btn" on:click={goToday} aria-label="Go to current month">Today</button>
-            <button class="nav-btn" on:click={nextMonth} aria-label="Next month">›</button>
-            <button class="nav-btn" on:click={nextYear} aria-label="Next year">»</button>
-          </div>
-        </div>
-
-        <div class="weekdays">
-          <div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div>
-          <div>Fri</div><div>Sat</div><div>Sun</div>
-        </div>
-
-        <div class="days">
-          {#each days as d (d.key)}
-            <button
-  class:muted={d.muted}
-  class:today={d.today}
-  disabled={!d.today && atStartOfDay(d.date) < today}
-  on:click={() => openLeaveForm(d.date)}
-  aria-label={`Select ${d.date.toDateString()}`}
->
-  {d.label}
-</button>
-
-          {/each}
-        </div>
+    <!-- chart -->
+    <div class="card" style="grid-column: span 6;">
+      <h3>Total Active Employees</h3>
+      <div style="height: 360px;">
+        <canvas bind:this={canvasEl}></canvas>
       </div>
     </div>
 
-    <div class="card" style="grid-column: span 8;">
-      <h3>Recent Application</h3>
-      <div class="recent-wrap">
-        {#each recent as r}
-          <div class="recent-item">
-            <div class="when">{fmt(r.from)} – {fmt(r.to)}</div>
-            <div class="cols">
-              <div><div class="muted">Total Days:</div><div>{r.totalDays}</div></div>
-              <div><div class="muted">Leave Type:</div><div>{r.type}</div></div>
-              <div><div class="muted">Status:</div><div>{r.status}</div></div>
-            </div>
-            <a class="link" href={`/dashboard/admin/reports/${r.id}`}>Details</a>
+    <!-- numbers -->
+    <div class="card" style="grid-column: span 6;">
+      <h3>Employees Overview</h3>
+      <div class="stats">
+        <div class="stat total-tile">
+          <div class="label">Total Employees</div>
+          <div class="value">{totalEmployees}</div>
+        </div>
+        {#each dataByDept as d (d.name)}
+          <div class="stat">
+            <div class="label"><span class="dot" style="background:{d.color}"></span>{d.name}</div>
+            <div class="value">{d.count}</div>
           </div>
         {/each}
       </div>
+      <a class="numbers-link" href="/dashboard/admin/employees">View employees</a>
     </div>
   </div>
 </main>
 
-<!-- ===== MODAL ===== -->
-<dialog bind:this={modal} class="leave-modal" aria-labelledby="leave-title">
-  <form method="dialog" class="leave-form" on:submit|preventDefault={submitLeave}>
-    <button type="button" class="close-btn" on:click={() => modal.close()} aria-label="Close">✕</button>
-    <h2 id="leave-title" class="title">Leave Application Form</h2>
-
-    <label>
-      <span>Type</span>
-      <select name="type" required>
-        <option value="Annual">Annual / Emergency</option>
-        <option value="Medical">Medical</option>
-        <option value="Maternity">Maternity</option>
-        <option value="Paternity">Paternity</option>
-        <option value="Compassionate">Compassionate A (Death of parent, children, husband, wife)</option>
-        <option value="Compassionate">Compassionate B (Death of grandparent, sibling)</option>
-        <option value="Marriage">Marriage</option>
-        <option value="Hospitalization">Hospitalization</option>
-      </select>
-    </label>
-
-    <!-- keep position/order of these inputs exactly -->
-    <div class="duration">
-      <span>Leave Duration</span>
-      <label><input type="radio" name="duration" value="Full" bind:group={duration}> Full Day</label>
-      <label><input type="radio" name="duration" value="Half" bind:group={duration}> Half Day</label>
-    </div>
-
-    <div class="dates">
-      <label>
-        <span>Date from</span>
-        <input
-          type="date"
-          name="dateFrom"
-          bind:value={dateFrom}
-          required
-          min={todayISO}
-          on:change={onFromChange}
-        />
-      </label>
-
-      <label>
-        <span>Date until</span>
-        <input
-          type="date"
-          name="dateUntil"
-          bind:value={dateUntil}
-          min={dateFrom || todayISO}
-          disabled={duration === 'Half'}
-          aria-disabled={duration === 'Half'}
-        />
-        {#if duration === 'Half'}
-          <!-- disabled inputs are NOT posted; send value anyway -->
-          <input type="hidden" name="dateUntil" value={dateUntil} />
-        {/if}
-      </label>
-    </div>
-
-    <label>
-      <span>Total day</span>
-      <input
-        type="number"
-        name="totalDays"
-        bind:value={totalDays}
-        min="0.5"
-        step="0.5"
-        required
-        readonly
-      />
-    </label>
-
-    <label><span>Reason</span><textarea name="reason" rows="3" required></textarea></label>
-    <label><span>Attachment</span><input type="file" name="attachment" /></label>
-
-    <button type="submit" class="submit-btn">SUBMIT</button>
-  </form>
-</dialog>
-
 <style>
-  /* page container */
+  :root{ --ring:#e5e7eb; --shadow:0 4px 12px rgba(0,0,0,.06); }
   .main { padding: 18px; }
 
-  /* donut-row header */
-  .donut-row-header{
-    display:flex; justify-content:flex-end; align-items:center;
-    margin: 12px 0 6px;
-  }
-
-  /* grid spacing */
+  /* grid + cards */
   .grid{ margin-top:6px; display:grid; gap:10px; grid-template-columns:repeat(12, minmax(0,1fr)); }
+  .card{ background:#fff; border:1px solid var(--ring); border-radius:12px; padding:14px; box-shadow:var(--shadow); }
+  h3{ margin:0 0 8px 0; }
 
-  /* profile cluster + dropdown */
-  .profile{ position:relative; display:flex; align-items:center; gap:10px; }
-  .icon-btn{ border:none; background:transparent; cursor:pointer; font-size:18px; line-height:1; padding:6px; border-radius:8px; color:#fff; }
-  .icon-btn:hover{ background:rgba(255,255,255,.12); }
-  .profile-info{ display:flex; align-items:center; gap:10px; color:#fff; position:relative; }
-  .avatar-img{ height:70px; width:70px; border-radius:9999px; display:block; box-shadow:0 0 0 2px rgba(255,255,255,.25); }
-  .who .name{  font-size: 20px; font-weight:700; }
-  .who .sub{ font-size:16px; opacity:.95; }
-  .caret{ font-size:16px; }
-  .profile .menu{
-    position:absolute; right:0; top:calc(100% + 8px);
-    background:#fff; border:1px solid var(--ring); border-radius:10px; box-shadow:var(--shadow);
-    min-width:200px; padding:6px; z-index:30;
-  }
-  .profile .menu a{ display:block; padding:10px 12px; border-radius:8px; color:#111827; font-weight:600; text-decoration:none; }
-  .profile .menu a:hover{ background:#f3f4f6; }
-  @media (max-width:640px){ .who .sub{ display:none; } }
-
-  /* donut colors & size */
+  /* donut */
   :global(:root){ --spentRed:#ef4444; --restBlue:#3b82f6; }
   .donut.fancy{
     height: var(--size, 110px); width: var(--size, 110px);
     border-radius:9999px; margin:6px auto 8px;
     background: conic-gradient(var(--spent-color, #ef4444) calc(var(--spent) * 1%), var(--rest-color, #3b82f6) 0);
-    display:grid; place-items:center; box-shadow:var(--shadow);
+    display:grid; place-items:center; box-shadow:var(--shadow); position: relative;
   }
   .donut.fancy::after{
     content:""; height:66%; width:66%; background:#fff; border-radius:9999px; box-shadow:inset 0 0 0 1px var(--ring);
@@ -396,128 +164,14 @@
   .chip.unspent{ background: var(--restBlue); }
   .total-line{ text-align:center; font-size:12px; color:#6b7280; margin-top:4px; }
 
-  /* calendar sizing */
-  .calendar-small{ max-width:360px; margin:0 auto; }
-  .calendar-small .days button{ padding:6px; }
-
-  /* month header with full nav */
-  .calendar .month{
-    display:flex; align-items:center; justify-content:space-between;
-    font-weight:700; margin-bottom:6px;
-    gap:8px;
-  }
-  .calendar .month > span { text-align:center; min-width:160px; }
-  .calendar .month .nav{ display:flex; gap:6px; flex-wrap:wrap; }
-  .calendar .month .nav-btn{
-    border:none; background:#eef2ff; padding:6px 10px; border-radius:8px; cursor:pointer;
-    font-weight:700; line-height:1;
-  }
-  .calendar .month .nav-btn:hover{ background:#e5e7eb; }
-
-  /* weekdays/days grid */
-  .weekdays{ display:grid; grid-template-columns:repeat(7,1fr); gap:4px; font-size:12px; color:#6b7280; margin-bottom:4px; }
-  .days{ display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
-  .days button{
-    border:1px solid var(--ring); border-radius:8px; background:#fff; cursor:pointer;
-  }
-  .days button.today {
-  border: 2px solid #49bdb3;   /* teal border */
-  font-weight: 700;            /* bold text */
-  color: #111827;              /* dark text so it's readable */
-  background: #ffff;         /* light teal background (optional) */
-}
-  .days button.muted{ opacity:.5; }
-  .days button:disabled{ background:#f3f4f6; color:#9ca3af; cursor:not-allowed; }
-
-  /* recent card */
-  .recent-wrap{ display:grid; gap:12px; }
-  .recent-item{ border:1px solid var(--ring); border-radius:12px; padding:12px; display:grid; gap:6px; background:#f9fafb; }
-  .recent-item .when{ font-weight:700; color:#111827; }
-  .recent-item .cols{ display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; font-size:12px; }
-  .recent-item .muted{ color:#6b7280; }
-
-  .download {
-    color: #fff;
-    text-decoration: underline;
-    font-size: 14px;
-  }
-  .download:hover { opacity: 0.85; }
-
-  /* row layout */
-  .topbar{
-    display:flex;
-    align-items:flex-start;
-    justify-content:space-between;
-    gap: 16px;
-    margin-bottom: 8px;
-  }
-
-  /* left side */
-  .title-wrap{ color:#fff; }
-  .hello{
-    font-size:18px;
-    font-weight:400;
-    margin: 4px 0 6px;
-    opacity:.95;
-  }
-  .page-title{
-    margin:0;
-    font-size:58px;
-    line-height:0.80;
-    color:#fff;
-    letter-spacing:.3px;
-  }
-
-  /* right side cluster */
-  .profile{ position:relative; display:flex; align-items:center; gap:10px; }
-  .icon-btn{ border:none; background:transparent; cursor:pointer; font-size:18px; line-height:1; padding:6px; border-radius:8px; color:#fff; }
-  .icon-btn:hover{ background:rgba(255,255,255,.12); }
-  .profile-info{ display:flex; align-items:center; gap:10px; color:#fff; }
-  .avatar-img{ box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25); }
-  .who .name{ font-weight:700; color:#fff; }
-  .who .sub{ font-size:12px; opacity:.95; color:#fff; }
-  .caret{ font-size:16px; color:#fff; }
-
-  .profile .menu{
-    position:absolute; right:0; top:calc(100% + 8px);
-    background:#fff; border:1px solid var(--ring); border-radius:10px; box-shadow:var(--shadow);
-    min-width:200px; padding:6px; z-index:30;
-  }
-  .profile .menu a{ display:block; padding:10px 12px; border-radius:8px; color:#111827; font-weight:600; text-decoration:none; }
-  .profile .menu a:hover{ background:#f3f4f6; }
-
-  /* responsive tweak: reduce title on small screens */
-  @media (max-width: 740px){
-    .page-title{ font-size:40px; }
-  }
-
-  /* --- Keep radios inline/left without changing their markup position --- */
-  .leave-form .duration {
-    display: flex;
-    flex-direction: column;
-    gap: .5rem;
-    align-items: flex-start;
-  }
-  .leave-form .duration label {
-    display: inline-flex;
-    flex-direction: row;
-    align-items: center;
-    gap: .5rem;
-    cursor: pointer;
-    text-align: left;
-  }
-  .leave-form .duration input[type="radio"] {
-    accent-color: #3FADA4; /* slightly darker than #49bdb3 */
-    width: 16px;
-    height: 16px;
-    margin: 0;
-  }
-
-  /* Greyed-out look for locked fields */
-  .leave-form input[readonly],
-  .leave-form input:disabled {
-    background:#f3f4f6;
-    color:#6b7280;
-    cursor:not-allowed;
-  }
+  /* numbers panel */
+  .stats{ display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:10px; margin-top:8px; } /*grid employee overview*/
+  @media (max-width:980px){ .stats{ grid-template-columns: repeat(2, minmax(0,1fr)); } }
+  @media (max-width:580px){ .stats{ grid-template-columns: 1fr; } }
+  .stat{ background:#f9fafb; border:1px solid var(--ring); border-radius:12px; padding:14px; display:grid; gap:4px; }
+  .stat .label{ color:#6b7280; font-size:12px; display:flex; align-items:center; gap:8px; }
+  .stat .value{ font-size:28px; font-weight:800; color:#111827; line-height:1; }
+  .dot{ width:10px; height:10px; border-radius:999px; display:inline-block; }
+  .numbers-link{ display:inline-block; margin-top:10px; font-weight:600; color:#2563eb; text-decoration:none; }
+  .numbers-link:hover{ text-decoration:underline; }
 </style>

@@ -247,10 +247,20 @@
     if (ms > maxMonthStart.getTime()) return new Date(maxMonthStart);
     return new Date(d);
   }
+let user = null;
 
   onMount(async () => {
-    await loadHolidays();
-  });
+  // 1) Load staff profile
+  const meRes = await fetch("/api/me/photo", { credentials: "include" });
+  user = await meRes.json();
+
+  // 2) Load holidays
+  await loadHolidays();
+
+  // 3) Load recent applications
+  await loadRecent();
+});
+
 
   // ===== navigation (prev/next + jump to today) =====
   // BARU: Tambah check canGoPrev/Next
@@ -395,13 +405,45 @@ async function submitLeave(e) {
     alert("Something went wrong while submitting your leave.");
   }
 }
+let recent = [];
 
-  // ----- recent -----
-  const recent = [
-    { id: 1, from: '2024-01-02', to: '2024-01-03', totalDays: 1,   type: 'Annual', status: 'Approved' },
-    { id: 2, from: '2024-01-02', to: '2024-01-03', totalDays: 1.0, type: 'Annual', status: 'Approved' }
-  ];
-  const fmt = (iso) => parseLocalISO(iso).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
+async function loadRecent() {
+  try {
+    const res = await fetch("/api/leave-requests", {
+      credentials: "include"
+    });
+
+    const all = await res.json();
+
+    recent = all
+      .filter(l => l.staff_id.toLowerCase() === user.staffId.toLowerCase())
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      .slice(0, 4)
+      .map(l => ({
+        id: l.leave_id,
+        from: l.date_from,
+        to: l.date_until,
+        totalDays: l.total_days,
+        type: l.leave_type,
+        status:
+          l.status === "pending" ? "Pending" :
+          l.status === "approved" ? "Approved" :
+          l.status === "rejected" ? "Rejected" :
+          l.status === "cancellation_pending" ? "Cancellation Pending" :
+          l.status
+      }));
+
+  } catch (err) {
+    console.error("Failed to load recent staff leaves:", err);
+  }
+}
+
+  const fmt = (iso) =>
+  new Date(iso).toLocaleDateString(undefined, {
+    day: "2-digit",
+    month: "short",
+    year: "numeric"
+  });
 </script>
 
 <main class="main">
@@ -522,10 +564,13 @@ async function submitLeave(e) {
               <div><div class="muted">Leave Type:</div><div>{r.type}</div></div>
               <div><div class="muted">Status:</div><div>{r.status}</div></div>
             </div>
-            <a class="link" href={`/dashboard/admin/reports/${r.id}`}>Details</a>
+            <a class="link" href={`/dashboard/staff/staffhistory`}>Details</a>
           </div>
         {/each}
       </div>
+      <div class="recent-footer">
+  <a class="view-more" href="/dashboard/staff/staffhistory">View more →</a>
+</div>
     </div>
   </div>
 </main>
@@ -655,6 +700,25 @@ async function submitLeave(e) {
   .chip.spent{ background: var(--spentRed); }
   .chip.unspent{ background: var(--restBlue); }
   .total-line{ text-align:center; font-size:12px; color:#6b7280; margin-top:4px; }
+
+  /* recent application */
+.recent-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+
+.view-more {
+  font-size: 13px;
+  font-weight: 600;
+  color: #2563eb;
+  cursor: pointer;
+}
+
+.view-more:hover {
+  color: #1d4ed8;
+}
 
   /* carry-forward line + tooltip (added) */
   .cf-line{

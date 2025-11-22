@@ -282,8 +282,8 @@
         </div>
         <div class="sub-links">
           <a
-            href="/dashboard/manager/main"
-            class:active={$page.url.pathname.startsWith('/dashboard/manager/main')}
+            href="/dashboard/manager"
+            class:active={$page.url.pathname.startsWith('/dashboard/manager')}
           >
             <span class="text">Main</span>
           </a>
