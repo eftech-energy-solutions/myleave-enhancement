@@ -12,6 +12,20 @@
   let showConfirmationModal = false;
   let leaveToCancel = null;
 
+  // ========== Leave Form / Edit State ==========
+let modal;            // bind:this
+let isEdit = false;   // toggle edit/create mode
+let editingUuid = null;
+
+// form fields
+let leaveType = "Annual";
+let duration = "Full";
+let dateFrom = "";
+let dateUntil = "";
+let totalDays = 0;
+let reason = "";
+let attachmentFiles = null;
+
   const statuses = ["All", "Approved", "Pending", "Rejected", "Cancellation Pending"];
   const months = [
     "All", "January", "February", "March", "April", "May", "June",
@@ -56,23 +70,28 @@
 
       // Filter leaves for this logged-in staff only
       leaves = data
-        .filter((l) => l.staff_id === me.staffId)
-        .map((l) => ({
-          uuid: l.leave_id,
-          id: l.staff_id,
-          name: l.staff_name,
-          dateFrom: l.date_from,
-          dateTo: l.date_until,
-          totalDays: l.total_days,
-          type: l.leave_type,
-          status:
-  l.status === "pending" ? "Pending" :
-  l.status === "approved" ? "Approved" :
-  l.status === "rejected" ? "Rejected" :
-  l.status === "cancellation_pending" ? "Cancellation Pending" :
-  l.status
+  .filter((l) => l.staff_id === me.staffId)
+  .map((l) => ({
+    uuid: l.leave_id,
+    id: l.staff_id,
+    name: l.staff_name,
 
-        }));
+    // REQUIRED FIELDS FOR EDIT:
+    dateFrom: l.date_from,
+    dateTo: l.date_until,
+    totalDays: l.total_days,
+    type: l.leave_type,
+    reason: l.reason,        // ← YOU MISSED THIS EARLIER
+    duration: l.duration,    // ← YOU ALSO MISSED THIS
+
+    status:
+      l.status === "pending" ? "Pending" :
+      l.status === "approved" ? "Approved" :
+      l.status === "rejected" ? "Rejected" :
+      l.status === "cancellation_pending" ? "Cancellation Pending" :
+      l.status
+  }));
+
 
     } catch (err) {
       console.error("Failed to load leave history:", err);
@@ -103,6 +122,69 @@
     leaveToCancel = null;
     showConfirmationModal = false;
   }
+  const fixedDurations = {
+  Maternity: 98,
+  Paternity: 7,
+  "Compassionate A": 3,
+  "Compassionate B": 1,
+  Marriage: 3
+};
+$: if (leaveType && dateFrom) {
+  if (fixedDurations[leaveType]) {
+    const days = fixedDurations[leaveType];
+    const start = new Date(dateFrom);
+    const end = new Date(start);
+    end.setDate(start.getDate() + (days - 1));
+    dateUntil = end.toISOString().slice(0, 10);
+  }
+  totalDays = autoCalc(leaveType, dateFrom, dateUntil, duration);
+}
+
+
+function autoCalc(type, from, until, duration) {
+  if (!from) return 0;
+
+  if (duration === "Half") return 0.5;
+
+  if (fixedDurations[type]) return fixedDurations[type];
+
+  const d1 = new Date(from);
+  const d2 = new Date(until || from);
+  const diff = (d2 - d1) / (1000 * 60 * 60 * 24) + 1;
+
+  return diff > 0 ? diff : 1;
+}
+
+
+function handleEdit(l) {
+  if (l.status !== "Pending") return;
+
+  isEdit = true;
+  editingUuid = l.uuid;
+
+  leaveType = l.type;
+  duration = l.duration === "Half" || l.totalDays === 0.5 ? "Half" : "Full";
+
+  dateFrom = l.dateFrom;
+  dateUntil = l.dateTo;
+
+  // auto set fixed leave types
+  if (fixedDurations[leaveType]) {
+    const days = fixedDurations[leaveType];
+    const start = new Date(dateFrom);
+    const end = new Date(start);
+    end.setDate(start.getDate() + (days - 1));
+    dateUntil = end.toISOString().slice(0, 10);
+  }
+
+  totalDays = autoCalc(leaveType, dateFrom, dateUntil, duration);
+
+  reason = l.reason || "";
+  attachmentFiles = null;
+  modal?.showModal?.();
+}
+
+
 
   async function confirmCancellation() {
   if (!leaveToCancel) return;
@@ -141,6 +223,81 @@
 
   closeConfirmationModal();
 }
+async function submitLeave(event) {
+  event.preventDefault();
+
+  const payload = {
+    leave_type: leaveType,
+    duration: duration,
+    date_from: dateFrom,
+    date_until: duration === "Half" ? dateFrom : dateUntil,
+    total_days: totalDays,
+    reason
+  };
+
+  try {
+    if (isEdit && editingUuid) {
+      // PATCH → update DB
+      await fetch(`/api/leave-requests/${editingUuid}/edit`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      // Update UI entry (tanpa reload page)
+      const idx = leaves.findIndex(x => x.uuid === editingUuid);
+      if (idx !== -1) {
+        leaves[idx].type = leaveType;
+        leaves[idx].dateFrom = dateFrom;
+        leaves[idx].dateTo = payload.date_until;
+        leaves[idx].totalDays = totalDays;
+        leaves[idx].reason = reason;
+        leaves = [...leaves];  // trigger reactive update
+      }
+    }
+
+    closeEditModal();
+    
+  } catch (err) {
+    console.error("Error updating:", err);
+  }
+}
+function closeEditModal() {
+  try { 
+    if (modal?.open) modal.close();
+  } catch (e) {
+    console.error("Modal cannot close:", e);
+  }
+
+  isEdit = false;
+  editingUuid = null;
+}
+
+function onFromChange() {
+  if (!dateFrom) return;
+
+  if (duration === "Half") {
+    dateUntil = dateFrom;
+  } 
+  else if (fixedDurations[leaveType]) {
+    const days = fixedDurations[leaveType];
+    const start = new Date(dateFrom);
+    const end = new Date(start);
+    end.setDate(start.getDate() + (days - 1));
+    dateUntil = end.toISOString().slice(0, 10);
+  }
+
+  totalDays = autoCalc(leaveType, dateFrom, dateUntil, duration);
+}
+
+function onUntilChange() {
+  if (duration === "Half") return;
+  totalDays = autoCalc(leaveType, dateFrom, dateUntil, duration);
+}
+
+
+
 
 </script>
 <!-- ===== Confirmation Modal ===== -->
@@ -188,6 +345,84 @@
     </div>
   </div>
 </div>
+<dialog bind:this={modal} class="leave-modal">
+
+  <form class="leave-form" on:submit={submitLeave}>
+    <button type="button" class="close-btn" on:click={closeEditModal}>✕</button>
+
+    <h2 class="title">{isEdit ? "Edit Leave Application" : "Leave Application Form"}</h2>
+
+    <!-- Leave Type -->
+    <label>
+      <span>Type</span>
+      <select bind:value={leaveType} required>
+        <option value="Annual">Annual / Emergency</option>
+        <option value="Medical">Medical</option>
+        <option value="Maternity">Maternity</option>
+        <option value="Paternity">Paternity</option>
+        <option value="Compassionate A">Compassionate A</option>
+        <option value="Compassionate B">Compassionate B</option>
+        <option value="Marriage">Marriage</option>
+        <option value="Hospitalization">Hospitalization</option>
+      </select>
+    </label>
+
+    <!-- Duration -->
+    <div class="duration">
+      <span>Leave Duration</span>
+      <label><input type="radio" value="Full" bind:group={duration}> Full Day</label>
+      <label><input type="radio" value="Half" bind:group={duration}> Half Day</label>
+    </div>
+
+   <div class="dates">
+  <!-- DATE FROM -->
+  <label>
+    <span>Date From</span>
+    <input 
+      type="date" 
+      bind:value={dateFrom} 
+      on:change={onFromChange}
+    />
+  </label>
+
+  <!-- DATE UNTIL -->
+  <label>
+    <span>Date Until</span>
+    <input 
+      type="date" 
+      bind:value={dateUntil}
+      on:change={onUntilChange}
+      disabled={duration === "Half"}
+      readonly={duration === "Half"}
+    />
+  </label>
+</div>
+
+
+    <!-- Total -->
+    <label>
+      <span>Total Days</span>
+      <input type="number" bind:value={totalDays} readonly />
+    </label>
+
+    <!-- Reason -->
+    <label>
+      <span>Reason</span>
+      <textarea rows="3" bind:value={reason} required></textarea>
+    </label>
+
+    <!-- Attachment -->
+    <label>
+      <span>Attachment</span>
+      <input type="file" bind:files={attachmentFiles} />
+    </label>
+
+    <button type="submit" class="submit-btn">
+  {isEdit ? "SAVE" : "SUBMIT"}
+</button>
+
+  </form>
+</dialog>
 
 <!-- ===== TABLE ===== -->
 <table class="leave-table">
@@ -219,14 +454,33 @@
           <span class="badge {l.status.toLowerCase().replace(' ', '-')}">{l.status}</span>
         </td>
         <td class="center">
-          {#if l.status === 'Approved' || l.status === 'Pending'}
-            <button class="delete-btn" on:click={() => requestCancellation(l)} title="Cancel Application">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                <path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.58.22-2.365.468a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clip-rule="evenodd" />
-              </svg>
-            </button>
-          {/if}
-        </td>
+  <div class="action-wrapper">
+    
+    <!-- FIXED SLOT: Pencil (Pending only) -->
+    <div class="slot">
+      {#if l.status === 'Pending'}
+        <button class="icon-btn" title="Edit" on:click={() => handleEdit(l)}>
+          <svg viewBox="0 0 24 24">
+            <path d="M3 17.25V21h3.75L17.8 9.94l-3.75-3.75L3 17.25zM20.7 7a1 1 0 0 0 0-1.4l-2.3-2.3a1 1 0 0 0-1.4 0L15 4.6l3.7 3.7 2-1.3z"/>
+          </svg>
+        </button>
+      {/if}
+    </div>
+
+    <!-- FIXED SLOT: Trash (Pending + Approved) -->
+    <div class="slot">
+      {#if l.status === 'Pending' || l.status === 'Approved'}
+        <button class="icon-btn delete" on:click={() => requestCancellation(l)}>
+          <svg viewBox="0 0 24 24">
+            <path d="M6 7h12v12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7zm3-4h6l1 1h4v2H4V4h4l1-1z"/>
+          </svg>
+        </button>
+      {/if}
+    </div>
+
+  </div>
+</td>
+
       </tr>
     {/each}
   </tbody>
@@ -363,6 +617,136 @@
   }
   .btn-secondary { background: #e5e7eb; color: #1f2937; }
   .btn-danger { background: #ef4444; color: white; }
+.action-wrapper {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  align-items: center;
+}
+
+.slot {
+  width: 28px;               /* kunci lebar setiap slot */
+  display: flex;
+  justify-content: center;
+}
+
+.icon-btn {
+  background: transparent;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-btn svg {
+  width: 18px;
+  height: 18px;
+  fill: #217859;
+}
+
+.icon-btn:hover {
+  background: #dcfce7;
+}
+/* ===============================
+   LEAVE APPLICATION FORM (MATCH UI)
+   =============================== */
+
+ /* Modal Styles */
+  .leave-modal {
+    border: 1px solid var(--ring);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    padding: 0;
+    max-width: 500px;
+    width: 90%;
+  }
+  .leave-modal::backdrop {
+    background: rgba(0,0,0,0.2);
+    backdrop-filter: blur(2px);
+  }
+  .leave-form {
+    padding: 18px 22px 22px;
+    display: grid;
+    gap: 12px;
+  }
+  .leave-form .title { margin: 0 0 4px; }
+  .leave-form label {
+    display: grid;
+    gap: 6px;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .leave-form input, .leave-form select, .leave-form textarea {
+    font-size: 14px;
+    font-weight: 400;
+    border: 1px solid var(--ring);
+    border-radius: 8px;
+    padding: 8px 10px;
+  }
+  .leave-form input[required]:invalid, .leave-form textarea[required]:invalid {
+    border-color: #ef4444;
+  }
+  
+  /* --- Keep radios inline/left without changing their markup position --- */
+  .leave-form .duration {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+    align-items: flex-start;
+  }
+  .leave-form .duration label {
+    display: inline-flex;
+    flex-direction: row;
+    align-items: center;
+    gap: .5rem;
+    cursor: pointer;
+    text-align: left;
+    font-weight: 400; /* label weight normal */
+  }
+  .leave-form .duration input[type="radio"] {
+    accent-color: #3FADA4; /* slightly darker than #49bdb3 */
+    width: 16px;
+    height: 16px;
+    margin: 0;
+  }
+
+  /* Greyed-out look for locked fields */
+  .leave-form input[readonly],
+  .leave-form input:disabled {
+    background:#f3f4f6;
+    color:#6b7280;
+    cursor:not-allowed;
+  }
+
+  /* helper text */
+  .help { color:#6b7280; font-size:12px; display:block; margin-top:4px; font-weight: 400; }
+  .help.warn { color:#b45309; }
+  
+  .submit-btn {
+    background: #3FADA4;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 14px;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 14px;
+    margin-top: 8px;
+  }
+  .submit-btn:hover { opacity: .9; }
+  
+  .close-btn{ 
+    position:absolute; 
+    right:10px; top:8px; 
+    border:none; background:transparent; 
+    font-size:20px; 
+    cursor:pointer; 
+    padding: 4px;
+  }
+
 
   /* ===== Responsive (keep filters usable) ===== */
   @media (max-width: 640px) {

@@ -168,6 +168,60 @@ router.patch("/:id", async (req, res) => {
     res.status(500).json({ message: "Failed to update leave request" });
   }
 });
+
+/* ============================================================
+   UPDATE LEAVE DETAILS (EDIT)
+   PATCH /api/leave-requests/:id/edit
+   ============================================================ */
+router.patch("/:id/edit", async (req, res) => {
+  try {
+    const leaveId = req.params.id;
+
+    const {
+      leave_type,
+      duration,
+      date_from,
+      date_until,
+      total_days,
+      reason
+    } = req.body;
+
+    const sql = `
+      UPDATE leave_requests
+      SET
+        leave_type = $1,
+        duration = $2,
+        date_from = $3,
+        date_until = $4,
+        total_days = $5,
+        reason = $6
+      WHERE leave_id = $7
+      RETURNING *;
+    `;
+
+    const params = [
+      leave_type,
+      duration,
+      date_from,
+      date_until,
+      total_days,
+      reason,
+      leaveId
+    ];
+
+    const result = await pool.query(sql, params);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ message: "Leave request not found" });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error("PATCH /api/leave-requests/:id/edit error:", err);
+    res.status(500).json({ message: "Failed to update leave details" });
+  }
+});
+
 /* ============================================================
    4) DELETE ALL LEAVE REQUESTS FOR A STAFF
    DELETE /api/leave-requests/by-staff/:staffId

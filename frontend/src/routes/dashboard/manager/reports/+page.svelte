@@ -660,9 +660,6 @@ async function submitLeave(e) {
         {#if duration === 'Half'}
           <input type="hidden" name="dateUntil" value={dateUntil} />
         {/if}
-        {#if endLocked}
-          <small class="muted">End date is auto-set for {leaveType}.</small>
-        {/if}
       </label>
     </div>
 
