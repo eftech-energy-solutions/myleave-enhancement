@@ -184,14 +184,15 @@ $: filteredLeaves = leaves
     const status = leaveToCancel.status.toLowerCase();
 
     // 1) PENDING → DELETE
-    if (status === "pending") {
-      await fetch(`/api/leave-requests/by-staff/${leaveToCancel.id}`, {
-        method: "DELETE",
-        credentials: "include"
-      });
+    if (leaveToCancel.status === "Pending") {
+  await fetch(`/api/leave-requests/${leaveToCancel.uuid}`, {
+    method: "DELETE",
+    credentials: "include"
+  });
 
-      leaves = leaves.filter(l => l.uuid !== leaveToCancel.uuid);
-    }
+  // remove from UI
+  leaves = leaves.filter(l => l.uuid !== leaveToCancel.uuid);
+}
 
     // 2) APPROVED → cancellation_pending
     if (status === "approved") {

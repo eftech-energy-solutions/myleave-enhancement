@@ -192,15 +192,16 @@ function handleEdit(l) {
   // ================================
   // 1) If PENDING → DELETE from DB
   // ================================
-  if (leaveToCancel.status === "Pending") {
-    await fetch(`/api/leave-requests/by-staff/${leaveToCancel.id}`, {
-      method: "DELETE",
-      credentials: "include"
-    });
+if (leaveToCancel.status === "Pending") {
+  console.log("DELETE ONE LEAVE UUID →", leaveToCancel.uuid); // debug
 
-    // remove from UI
-    leaves = leaves.filter(l => l.uuid !== leaveToCancel.uuid);
-  }
+  await fetch(`/api/leave-requests/${leaveToCancel.uuid}`, {
+    method: "DELETE",
+    credentials: "include"
+  });
+
+  leaves = leaves.filter(l => l.uuid !== leaveToCancel.uuid);
+}
 
   // ==========================================
   // 2) If APPROVED → SET cancellation_pending
@@ -295,10 +296,6 @@ function onUntilChange() {
   if (duration === "Half") return;
   totalDays = autoCalc(leaveType, dateFrom, dateUntil, duration);
 }
-
-
-
-
 </script>
 <!-- ===== Confirmation Modal ===== -->
 {#if showConfirmationModal}

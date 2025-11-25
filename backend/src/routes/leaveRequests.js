@@ -223,28 +223,36 @@ router.patch("/:id/edit", async (req, res) => {
 });
 
 /* ============================================================
-   4) DELETE ALL LEAVE REQUESTS FOR A STAFF
-   DELETE /api/leave-requests/by-staff/:staffId
+   DELETE ALL LEAVE REQUESTS FOR A STAFF  (PUT THIS FIRST)
    ============================================================ */
 router.delete("/by-staff/:staffId", async (req, res) => {
   try {
     const staffId = req.params.staffId;
-
-    const sql = `
-      DELETE FROM leave_requests
-      WHERE staff_id = $1;
-    `;
-
-    await pool.query(sql, [staffId]);
-
-    res.json({
-      success: true,
-      message: `All leave requests for staff ${staffId} deleted`
-    });
-
+    await pool.query(`DELETE FROM leave_requests WHERE staff_id = $1`, [staffId]);
+    res.json({ success: true });
   } catch (err) {
-    console.error("DELETE /by-staff error:", err);
-    res.status(500).json({ message: "Failed to delete staff leave requests" });
+    console.error("DELETE by-staff error:", err);
+    res.status(500).json({ message: "Failed to delete staff leaves" });
+  }
+});
+
+/* ============================================================
+   DELETE ONE LEAVE REQUEST (PUT THIS AFTER)
+   ============================================================ */
+router.delete("/:id", async (req, res) => {
+  try {
+    const leaveId = req.params.id;
+    const result = await pool.query(
+      `DELETE FROM leave_requests WHERE leave_id = $1 RETURNING *`,
+      [leaveId]
+    );
+
+    if (result.rowCount === 0) return res.status(404).json({ message: "Not found" });
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("DELETE leave error:", err);
+    res.status(500).json({ message: "Failed to delete leave" });
   }
 });
 
