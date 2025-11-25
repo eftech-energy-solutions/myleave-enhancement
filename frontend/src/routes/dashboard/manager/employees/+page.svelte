@@ -665,8 +665,8 @@ async function rejectCancellation(item) {
             <!-- Actions + Toggle -->
             <div class="actions">
               <div class="left">
-                <button class="btn-approve" on:click={() => approveCancellation(item)}>Approve Cancel</button>
-                <button class="btn-reject" on:click={() => rejectCancellation(item)}>Reject Cancel</button>
+                <button class="btn-approve" on:click={() => approveCancellation(item)}>Approve</button>
+                <button class="btn-reject" on:click={() => rejectCancellation(item)}>Reject</button>
               </div>
 
               <div style="display:flex; align-items:center; gap:10px;">

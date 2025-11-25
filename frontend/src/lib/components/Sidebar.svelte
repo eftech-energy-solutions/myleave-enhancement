@@ -667,190 +667,231 @@
   .eye-btn{ position:absolute; right:10px; height:32px; min-width:32px; display:grid; place-items:center; border:none; background:transparent; cursor:pointer; border-radius:8px; color:#0c4a6e; }
   .eye-btn:hover{ background:#f3f4f6; }
 
-  /* ============================
-   FIXED ROLE SETTINGS (NEW)
-   ============================ */
+/* ========= ROLE LIST SECTION ONLY ========== */
 
-/* Wrapper list of roles (Admin / Manager / Staff) */
-.role-fixed-list {
+/* whole list container */
+.role-list {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  max-height: 420px;
-  overflow-y: auto;
+  margin-top: 10px;
 }
 
-/* Single role card */
-.role-fixed-card {
+/* wrapper with accordion + edit button */
+.role-item-wrapper {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 14px 16px;
   background: #f9fafb;
   border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  padding: 14px 18px;
+  border-radius: 14px;
 }
 
-/* Role name (Admin / Manager / Staff) */
-.role-fixed-title {
-  font-weight: 700;
+/* accordion summary (Admin / Manager) */
+.role-item summary {
   font-size: 16px;
-  margin-bottom: 10px;
+  font-weight: 700;
   color: #0c4a6e;
+  cursor: pointer;
+  margin-top: 6px;
+
 }
 
-/* Staff list inside role */
-.role-staff-list {
+/* make the arrow cleaner */
+.role-item summary::-webkit-details-marker {
+  display: none;
+}
+
+/* OUR CUSTOM ARROW */
+.role-item[open] summary::before {
+  content: "▼";
+  position: absolute;
+  left: 0;
+  top: 1px;
+  color: #0c4a6e;
+  font-size: 14px;
+}
+.role-item summary::before {
+  content: "▶";          /* Arrow closed */
+  position: absolute;
+  left: 0;
+  top: 1px;
+  color: #0c4a6e;
+  font-size: 14px;
+  font-weight: 700;
+}
+/* Input styling */
+.input-lg {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  font-size: 15px;
+  box-sizing: border-box;
+  transition: 0.15s;
+}
+
+.input-lg:focus {
+  border-color: #49bdb3;
+  box-shadow: 0 0 0 3px rgba(73, 189, 179, 0.25);
+  outline: none;
+}
+
+/* Input + Add button row */
+.add-email-row {
+  display: flex;
+  gap: 12px;
+  margin-top: 4px;
+  align-items: center;
+}
+.add-email-row button:hover {
+  filter: brightness(0.92);
+}
+
+/* ==================== INPUT PANJANG + ADD BUTTON KECIK ==================== */
+.add-email-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.add-email-row .input-lg {
+  flex: 3;                  /* 👉 lebih panjang ke kanan */
+  height: 42px;
+  font-size: 14px;
+  padding: 10px 14px;
+  color: #000;              /* 👉 email input text hitam */
+}
+
+.add-email-row button {
+  height: 34px;             /* 👉 lagi kecil */
+  padding: 0 12px;          /* 👉 kecilkan width */
+  font-size: 13px;
+  border-radius: 8px;
+  background: #49bdb3;
+  color: #fff;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+}
+
+/* ==================== LABEL STYLE LAGI BOLD + WARNA SAMA ==================== */
+
+.row > label,
+.role-form-row > label {
+  font-size: 15px;
+  font-weight: 750;         /* 👉 boldkan lagi */
+  color: #0c4a6e;           /* 👉 sama dengan input placeholder color */
+}
+
+/* ==================== EMAIL CHIP STYLING NEW ==================== */
+
+.email-chip-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.email-chip {
+  display: flex;                 /* penting */
+  justify-content: space-between;/* email kiri, X kanan */
+  align-items: center;
+  
+  padding: 10px 14px;
+  background: #f0f0f0;
+  border-radius: 16px;
+
+  font-size: 14px;
+  color: #000;
+  font-weight: 600;
+
+  width: 300px;                   /* biar fleksibel */
+  max-width: 320px;              /* optional */
+}
+
+.email-chip .chip-x {
+  background: transparent;
+  border: none;
+  color: #999;
+  font-size: 16px;
+  padding: 0 4px;
+  cursor: pointer;
+}
+
+.email-chip .chip-x:hover {
+  color: #555;           /* slightly darker on hover */
+  background: transparent;
+}
+
+/* ==================== CLEANER LOOK ==================== */
+
+.role-details-content {
+  margin-top: 10px;
+  padding-left: 28px;
+  font-size: 14px;
+  color: #334155;
+}
+
+
+/* staff list inside */
+.staff-list {
+  margin-top: 6px;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding-left: 4px;
 }
 
-.role-staff-item {
-  background: #eefaf9;
-  border: 1px solid #d1f0ee;
-  padding: 8px 12px;
-  border-radius: 10px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 14px;
-  color: #0c4a6e;
-}
-
-/* Remove staff button */
-.remove-staff-btn {
-  background: #e34040;
-  color: white;
+/* edit button */
+.btn-edit {
+  background: #49bdb3;
+  color: #fff;
   border: none;
-  border-radius: 6px;
-  padding: 4px 8px;
-  font-size: 13px;
+  padding: 8px 14px;
+  font-weight: 700;
+  border-radius: 10px;
   cursor: pointer;
-  font-weight: 600;
-}
-.remove-staff-btn:hover {
-  background: #cc2f2f;
+  margin-left: 10px;
 }
 
-/* Add staff section in Edit modal */
-.add-staff-row {
+.btn-edit:hover {
+  filter: brightness(.92);
+}
+/* Row for input + Add button */
+.add-email-row {
   display: flex;
   gap: 10px;
-  margin-bottom: 10px;
+  align-items: center; /* ensure perfect vertical alignment */
 }
 
-.add-staff-row input {
-  flex: 1;
-  border-radius: 10px;
-  padding: 12px 14px;
-  border: 1px solid #d1d5db;
+/* Input */
+.add-email-row .input-lg {
+  height: 42px;          /* match clean height */
+  font-size: 14px;
+  padding: 10px 14px;
 }
 
-.add-staff-row button {
+/* Add button (smaller + aligned) */
+.add-email-row button {
+  height: 38px;          /* smaller height */
+  padding: 0 16px;       /* smaller width */
+  font-size: 14px;       /* smaller text */
+  border-radius: 8px;
   background: #49bdb3;
-  color: white;
-  font-weight: 600;
-  border: none;
-  padding: 0 18px;
-  border-radius: 10px;
+  color: #fff;
+  font-weight: 700;
   cursor: pointer;
-}
-.add-staff-row button:hover {
-  background: #3ea9a1;
-}
-
-/* Email tags inside modal */
-.edit-email-chip {
-  display: inline-flex;
+  border: none;
+  display: flex;
   align-items: center;
-  gap: 6px;
-  background: #eefaf9;
-  border: 1px solid #d1f0ee;
-  padding: 8px 12px;
-  border-radius: 999px;
-  font-size: 13px;
-  color: #0c4a6e;
-  font-weight: 600;
+  justify-content: center; /* center the text */
 }
 
-.edit-email-chip .chip-x {
-  color: #0c4a6e;
-  border-radius: 5px;
-  padding: 0 4px;
+.add-email-row button:hover {
+  filter: brightness(.92);
 }
-.edit-email-chip .chip-x:hover {
-  background: #dff2f1;
-}
-
-
-  /* Email chips (Tidak berubah) */
-  .add-email-row {
-    display: flex;
-    gap: 10px;
-    align-items: stretch; /* match height */
-  }
-  .add-email-btn {
-    background: #49bdb3;
-    color: #fff;
-    border: none;
-    border-radius: 10px;
-    font-weight: 600;
-    padding: 0 18px;
-    cursor: pointer;
-    font-size: 15px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background 0.2s ease;
-  }
-  .add-email-btn:hover {
-    background: #3ea9a1; /* slightly darker on hover */
-  }
-  .email-chip-wrap {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 8px;
-  }
-  .email-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    background: #eefaf9;
-    color: #0c4a6e;
-    border: 1px solid #d1f0ee;
-    padding: 6px 10px;
-    border-radius: 999px;
-    font-size: 13px;
-    font-weight: 600;
-  }
-  .chip-x {
-    border: none;
-    background: transparent;
-    cursor: pointer;
-    font-size: 14px;
-    line-height: 1;
-    color: #0c4a6e;
-    padding: 0 2px;
-    border-radius: 6px;
-  }
-  .chip-x:hover {
-    background: #dff2f1;
-  }
-
-  /* NEW: Danger button */
-  .btn-danger{
-    padding:6px 12px;
-    font-size:13px;
-    font-weight:700;
-    background:#e30707;
-    color:#ffff;
-    border:1px solid #f1b3af;
-    border-radius:8px;
-    cursor:pointer;
-  }
-  .btn-danger:hover{
-    background:#d10606;
-  }
 
   @media (max-width:768px){
     .settings-form-layout{ grid-template-columns:1fr; }

@@ -8,9 +8,77 @@
   let selectedStatus = "All";
   let selectedMonth = "All";
   let selectedYear = "All";
+  let showEditModal = false;
+  let editingLeave = null;
 
   let showConfirmationModal = false;
   let leaveToCancel = null;
+
+  // ===== Edit Modal State (same as staff) =====
+let modal; 
+let isEdit = false;
+let editingUuid = null;
+
+// ===== Fixed leave durations (same as staff) =====
+const fixedDurations = {
+  MAT : 98,
+  PAT : 7,
+  "COMP_A": 3,
+  "COMP_B": 1,
+  MAR : 3
+};
+
+let leaveType = "AL";
+let duration = "Full";
+let dateFrom = "";
+let dateUntil = "";
+let totalDays = 0;
+let reason = "";
+let attachmentFiles = null;
+
+// Dashboard helper functions
+const atStartOfDay = (d) => { const x = new Date(d); x.setHours(0,0,0,0); return x; };
+const parseLocalISO = (iso) => {
+  if (!iso) return null;
+  const [y,m,d] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d);
+};
+const localISO = (d) => {
+  const x = atStartOfDay(d);
+  return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}-${String(x.getDate()).padStart(2,"0")}`;
+};
+
+const diffDays = (from, until) => {
+  if (!from) return 0;
+  const a = atStartOfDay(from);
+  const b = atStartOfDay(until || from);
+  return Math.max(1, Math.floor((b - a) / 86400000) + 1);
+};
+
+const addDaysISO = (iso, days) => {
+  const d = parseLocalISO(iso);
+  d.setDate(d.getDate() + (days - 1));
+  return localISO(d);
+};
+
+// ===== Auto-calc totalDays (same as dashboard) =====
+$: {
+  
+  if (!dateFrom) {
+    totalDays = 0;
+  }
+  else if (duration === "Half") {
+    totalDays = 0.5;
+    dateUntil = dateFrom;
+  }
+  else if (fixedDurations[leaveType]) {
+    totalDays = fixedDurations[leaveType];
+    dateUntil = addDaysISO(dateFrom, totalDays);
+  }
+  else {
+    totalDays = diffDays(parseLocalISO(dateFrom), parseLocalISO(dateUntil || dateFrom));
+  }
+}
 
   const statuses = ["All", "Approved", "Pending", "Rejected", "Cancellation Pending"];
   const months = [
@@ -38,10 +106,10 @@
   onMount(async () => {
     try {
       // SAME AS STAFF
-      const meRes = await fetch("/api/me/photo", {
-        credentials: "include",
-      });
-      user = await meRes.json();
+      const meRes = await fetch("http://localhost:5000/api/me", { credentials: "include" });
+      user = { ...(await meRes.json()) };
+      console.log("HOSP DATA — entitlement:", user?.hosp_entitlement, "balance:", user?.hosp_balance);
+      console.log("USER:", user);
 
       await loadLeaveHistory();
     } catch (err) {
@@ -51,13 +119,13 @@
 
   async function loadLeaveHistory() {
     try {
-      const res = await fetch("/api/leave-requests", {
+      const res = await fetch("http://localhost:5000/api/leave-requests", {
         credentials: "include"
       });
       const all = await res.json();
 
       // ⭐ Manager ONLY sees his own leave
-        leaves = all.filter(l => l.staff_id === user.staffId)
+        leaves = all.filter(l => l.staff_id === user.staff_id)
         .map(l => ({
           uuid: l.leave_id,
           id: l.staff_id,
@@ -66,6 +134,8 @@
           dateTo: l.date_until,
           totalDays: l.total_days,
           type: l.leave_type,
+          reason: l.reason,          // ADD THIS
+          duration: l.duration,  
 
           status:
             l.status === "pending" ? "Pending" :
@@ -115,44 +185,136 @@ $: filteredLeaves = leaves
     leaveToCancel = null;
     showConfirmationModal = false;
   }
+  function handleEdit(l) {
+  if (l.status !== "Pending") return;
+
+  isEdit = true;
+  editingUuid = l.uuid;
+
+  leaveType = l.type;
+  duration = l.totalDays === 0.5 ? "Half" : l.duration || "Full";
+  dateFrom = l.dateFrom.slice(0,10);
+dateUntil = l.dateTo.slice(0,10);
+
+  // Auto-set fixed leave types
+  if (fixedDurations[leaveType]) {
+    const days = fixedDurations[leaveType];
+    const start = new Date(dateFrom);
+    const end = new Date(start);
+    end.setDate(start.getDate() + (days - 1));
+    dateUntil = end.toISOString().slice(0, 10);
+  }
+  
+  reason = l.reason || "";
+
+  if (modal) modal.showModal();
+
+}
+
 
   async function confirmCancellation() {
-    if (!leaveToCancel) return;
+  if (!leaveToCancel) return;
 
-    const status = leaveToCancel.status.toLowerCase();
+  const status = leaveToCancel.status.toLowerCase();
 
-    // 1) PENDING → DELETE
-    if (status === "pending") {
-      await fetch(`/api/leave-requests/by-staff/${leaveToCancel.id}`, {
-        method: "DELETE",
-        credentials: "include"
-      });
+  // 1) PENDING → DELETE
+  if (leaveToCancel.status === "Pending") {
+    await fetch(`http://localhost:5000/api/leave-requests/${leaveToCancel.uuid}`, {
+      method: "DELETE",
+      credentials: "include"
+    });
 
-      leaves = leaves.filter(l => l.uuid !== leaveToCancel.uuid);
-    }
+    // remove from UI
+    leaves = leaves.filter(l => String(l.uuid) !== String(leaveToCancel.uuid));
 
-    // 2) APPROVED → cancellation_pending
-    if (status === "approved") {
-      await fetch(`/api/leave-requests/${leaveToCancel.uuid}`, {
-        method: "PATCH",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "cancellation_pending" })
-      });
-
-      leaves = leaves.map(l =>
-        l.uuid === leaveToCancel.uuid
-          ? { ...l, status: "Cancellation Pending" }
-          : l
-      );
-    }
-
-    closeConfirmationModal();
-    await loadLeaveHistory();
   }
+
+  // 2) APPROVED → change to cancellation_pending
+  if (status === "approved") {
+    await fetch(`http://localhost:5000/api/leave-requests/${leaveToCancel.uuid}`, {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "cancellation_pending" })
+    });
+
+    leaves = leaves.map(l =>
+      l.uuid === leaveToCancel.uuid
+        ? { ...l, status: "Cancellation Pending" }
+        : l
+    );
+  }
+
+  closeConfirmationModal();
+  await loadLeaveHistory();
+}
+
+  async function submitLeave(event) {
+  event.preventDefault();
+
+  const payload = {
+  leave_type: leaveType,
+  duration,
+  date_from: dateFrom,
+  date_until: duration === "Half" ? dateFrom : dateUntil,
+  total_days: totalDays,
+  reason,
+  request_type: "update"    // 🔥 TAMBAH LINE INI
+};
+
+
+  try {
+    await fetch(`http://localhost:5000/api/leave-requests/${editingUuid}/edit`, {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    // Update UI instantly
+    const idx = leaves.findIndex(x => String(x.uuid) === String(editingUuid));
+
+    if (idx !== -1) {
+      leaves[idx].type = leaveType;
+      leaves[idx].dateFrom = dateFrom;
+      leaves[idx].dateTo = payload.date_until;
+      leaves[idx].totalDays = totalDays;
+      leaves[idx].reason = reason;
+      leaves = [...leaves];
+    }
+
+    closeEditModal();
+  } catch (err) {
+    console.error("Error updating:", err);
+  }
+}
+function closeEditModal() {
+  try {
+    if (modal?.open) modal.close();
+  } catch (e) {}
+
+  isEdit = false;
+  editingUuid = null;
+}
+function onFromChange() {
+  if (!dateFrom) return;
+
+  if (duration === "Half") {
+    dateUntil = dateFrom;
+    return;
+  }
+
+  if (fixedDurations[leaveType]) {
+    dateUntil = addDaysISO(dateFrom, fixedDurations[leaveType]);
+  }
+}
+
+function onUntilChange() {
+  if (duration === "Half") return;
+}
+
+
 </script>
-
-
 
 <!-- ===== Confirmation Modal ===== -->
 {#if showConfirmationModal}
@@ -200,6 +362,84 @@ $: filteredLeaves = leaves
   </div>
 </div>
 
+<dialog bind:this={modal} class="leave-modal">
+
+  <form class="leave-form" on:submit={submitLeave}>
+    <button type="button" class="close-btn" on:click={closeEditModal}>✕</button>
+
+    <h2 class="title">{isEdit ? "Edit Leave Application" : "Leave Application Form"}</h2>
+
+    <!-- Leave Type -->
+    <label>
+      <span>Type</span>
+      <select bind:value={leaveType} required>
+        <option value="AL">Annual / Emergency</option>
+        <option value="MC">Medical</option>
+        <option value="MAT">Maternity</option>
+        <option value="PAT">Paternity</option>
+        <option value="COMP_A">Compassionate A (Parent/Child/Spouse)</option>
+        <option value="COMP_B">Compassionate B (Grandparent/Sibling)</option>
+        <option value="MAR">Marriage</option>
+        <option value="HOSP">Hospitalization</option>
+      </select>
+    </label>
+
+    <!-- Duration -->
+    <div class="duration">
+      <span>Leave Duration</span>
+      <label><input type="radio" value="Full" bind:group={duration}> Full Day</label>
+      <label><input type="radio" value="Half" bind:group={duration}> Half Day</label>
+    </div>
+
+   <div class="dates">
+  <!-- DATE FROM -->
+  <label>
+    <span>Date From</span>
+    <input 
+      type="date" 
+      bind:value={dateFrom} 
+      on:change={onFromChange}
+    />
+  </label>
+
+  <!-- DATE UNTIL -->
+  <label>
+    <span>Date Until</span>
+    <input 
+      type="date" 
+      bind:value={dateUntil}
+      on:change={onUntilChange}
+      disabled={duration === "Half"}
+      readonly={duration === "Half"}
+    />
+  </label>
+</div>
+
+
+    <!-- Total -->
+    <label>
+      <span>Total Days</span>
+      <input type="number" bind:value={totalDays} readonly />
+    </label>
+
+    <!-- Reason -->
+    <label>
+      <span>Reason</span>
+      <textarea rows="3" bind:value={reason} required></textarea>
+    </label>
+
+    <!-- Attachment -->
+    <label>
+      <span>Attachment</span>
+      <input type="file" bind:files={attachmentFiles} />
+    </label>
+
+    <button type="submit" class="submit-btn">
+  {isEdit ? "SAVE" : "SUBMIT"}
+</button>
+
+  </form>
+</dialog>
 <!-- ===== TABLE ===== -->
 <table class="leave-table">
   <thead>
@@ -229,15 +469,33 @@ $: filteredLeaves = leaves
         <td>
           <span class="badge {l.status.toLowerCase().replace(' ', '-')}">{l.status}</span>
         </td>
-        <td class="center">
-          {#if l.status === 'Approved' || l.status === 'Pending'}
-            <button class="delete-btn" on:click={() => requestCancellation(l)} title="Cancel Application">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                <path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.58.22-2.365.468a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clip-rule="evenodd" />
-              </svg>
-            </button>
-          {/if}
-        </td>
+    <td class="center">
+  <div class="action-wrapper">
+
+    <!-- SLOT 1: Pencil -->
+    <div class="slot">
+      {#if l.status === 'Pending'}
+        <button class="icon-btn" on:click={() => handleEdit(l)} title="Edit Application">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1.003 1.003 0 0 0 0-1.42l-2.34-2.34a1.003 1.003 0 0 0-1.42 0L15 4.59l3.75 3.75 1.96-1.3z"/>
+          </svg>
+        </button>
+      {/if}
+    </div>
+
+    <!-- SLOT 2: Trash -->
+    <div class="slot">
+      {#if l.status === 'Pending' || l.status === 'Approved'}
+        <button class="icon-btn delete" on:click={() => requestCancellation(l)} title="Cancel Application">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M6 7h12v12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7zm3-4h6l1 1h4v2H4V4h4l1-1z"/>
+          </svg>
+        </button>
+      {/if}
+    </div>
+
+  </div>
+</td>
       </tr>
     {/each}
   </tbody>
@@ -374,6 +632,133 @@ $: filteredLeaves = leaves
   }
   .btn-secondary { background: #e5e7eb; color: #1f2937; }
   .btn-danger { background: #ef4444; color: white; }
+
+ .action-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+}
+
+.slot {
+  width: 24px;          /* fixed width slot */
+  display: flex;
+  justify-content: center;
+}
+
+
+.icon-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  color: #217859;
+}
+
+.icon-btn svg {
+  width: 18px;
+  height: 18px;
+  fill: #217859;
+}
+
+.icon-btn:hover {
+  background: #dcfce7;
+}
+
+ /* Modal Styles */
+  .leave-modal {
+    border: 1px solid var(--ring);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    padding: 0;
+    max-width: 500px;
+    width: 90%;
+  }
+  .leave-modal::backdrop {
+    background: rgba(0,0,0,0.2);
+    backdrop-filter: blur(2px);
+  }
+  .leave-form {
+    padding: 18px 22px 22px;
+    display: grid;
+    gap: 12px;
+  }
+  .leave-form .title { margin: 0 0 4px; }
+  .leave-form label {
+    display: grid;
+    gap: 6px;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .leave-form input, .leave-form select, .leave-form textarea {
+    font-size: 14px;
+    font-weight: 400;
+    border: 1px solid var(--ring);
+    border-radius: 8px;
+    padding: 8px 10px;
+  }
+  .leave-form input[required]:invalid, .leave-form textarea[required]:invalid {
+    border-color: #ef4444;
+  }
+  
+  /* --- Keep radios inline/left without changing their markup position --- */
+  .leave-form .duration {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+    align-items: flex-start;
+  }
+  .leave-form .duration label {
+    display: inline-flex;
+    flex-direction: row;
+    align-items: center;
+    gap: .5rem;
+    cursor: pointer;
+    text-align: left;
+    font-weight: 400; /* label weight normal */
+  }
+  .leave-form .duration input[type="radio"] {
+    accent-color: #3FADA4; /* slightly darker than #49bdb3 */
+    width: 16px;
+    height: 16px;
+    margin: 0;
+  }
+
+  /* Greyed-out look for locked fields */
+  .leave-form input[readonly],
+  .leave-form input:disabled {
+    background:#f3f4f6;
+    color:#6b7280;
+    cursor:not-allowed;
+  }
+
+  /* helper text */
+  .help { color:#6b7280; font-size:12px; display:block; margin-top:4px; font-weight: 400; }
+  .help.warn { color:#b45309; }
+  
+  .submit-btn {
+    background: #3FADA4;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 14px;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 14px;
+    margin-top: 8px;
+  }
+  .submit-btn:hover { opacity: .9; }
+  
+  .close-btn{ 
+    position:absolute; 
+    right:10px; top:8px; 
+    border:none; background:transparent; 
+    font-size:20px; 
+    cursor:pointer; 
+    padding: 4px;
+  }
+
 
   /* ===== Responsive (keep filters usable) ===== */
   @media (max-width: 640px) {

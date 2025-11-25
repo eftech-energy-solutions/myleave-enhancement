@@ -8,11 +8,11 @@ const router = express.Router();
 const upload = multer({ dest: "uploads/leave_attachments/" });
 
 /* ============================================================
-   1) CREATE NEW LEAVE REQUEST  (POST /api/leave-requests)
+   1) CREATE NEW LEAVE REQUEST
+   POST /api/leave-requests
    ============================================================ */
 router.post("/", upload.single("attachment"), async (req, res) => {
   try {
-    // data dari FormData (frontend)
     const {
       type,
       requestType,
@@ -23,21 +23,19 @@ router.post("/", upload.single("attachment"), async (req, res) => {
       reason
     } = req.body;
 
-// Wajib ada req.user yang valid
-const user = req.user;
+    const user = req.user;
 
-if (!user || !user.staff_id) {
-  return res.status(401).json({ message: "User not attached to request" });
-}
+    if (!user || !user.staff_id) {
+      return res.status(401).json({ message: "User not attached to request" });
+    }
 
-const staffId       = user.staff_id;
-const staffName     = user.full_name;
-const department    = user.department || null;
-const requesterRole = user.role || "Staff";
-const requesterPosition = user.position;
-const attachmentPath = req.file ? req.file.path : null;
+    const staffId = user.staff_id;
+    const staffName = user.full_name;
+    const department = user.department || null;
+    const requesterRole = user.role || "Staff";
+    const requesterPosition = user.position;
+    const attachmentPath = req.file ? req.file.path : null;
 
-    // simple validation
     if (!type || !dateFrom || !dateUntil || !totalDays || !reason) {
       return res.status(400).json({ message: "Missing required fields" });
     }
@@ -95,7 +93,8 @@ const attachmentPath = req.file ? req.file.path : null;
 });
 
 /* ============================================================
-   2) GET LEAVE REQUESTS  (GET /api/leave-requests?status=pending)
+   2) GET LEAVE REQUESTS
+   GET /api/leave-requests?status=pending
    ============================================================ */
 router.get("/", async (req, res) => {
   try {
@@ -108,7 +107,6 @@ router.get("/", async (req, res) => {
         p.department AS profile_department,
         p.position AS profile_position,
         p.employment_date,
-        p.department AS profile_department,
         lr.department AS staff_department,
         p.confirmation_date,
         p.termination_date,
@@ -126,21 +124,70 @@ router.get("/", async (req, res) => {
     `;
 
     const params = status ? [status] : [];
-
     const result = await pool.query(sql, params);
+
     res.json(result.rows);
   } catch (err) {
     console.error("GET /api/leave-requests error:", err);
     res.status(500).json({ message: "Failed to load leave requests" });
   }
 });
+/* ============================================================
+   4) EDIT LEAVE DETAILS
+   PATCH /api/leave-requests/:id/edit
+   ============================================================ */
+router.patch("/:id/edit", async (req, res) => {
+  try {
+    const leaveId = req.params.id;
+
+    const {
+      leave_type,
+      duration,
+      date_from,
+      date_until,
+      total_days,
+      reason
+    } = req.body;
+
+    const sql = `
+      UPDATE leave_requests
+      SET
+        leave_type = $1,
+        duration = $2,
+        date_from = $3,
+        date_until = $4,
+        total_days = $5,
+        reason = $6
+      WHERE leave_id = $7
+      RETURNING *;
+    `;
+
+    const params = [
+      leave_type,
+      duration,
+      date_from,
+      date_until,
+      total_days,
+      reason,
+      leaveId
+    ];
+
+    const result = await pool.query(sql, params);
+
+    if (!result.rowCount) {
+      return res.status(404).json({ message: "Leave request not found" });
+    }
+
+    res.json(result.rows[0]);
+
+  } catch (err) {
+    console.error("PATCH /api/leave-requests/:id/edit error:", err);
+    res.status(500).json({ message: "Failed to update leave details" });
+  }
+});
 
 /* ============================================================
-   3) UPDATE STATUS (APPROVE / REJECT)
-   PATCH /api/leave-requests/:id
-   ============================================================ */
-/* ============================================================
-   3) UPDATE STATUS (APPROVE / REJECT)
+   3) UPDATE STATUS (APPROVE / REJECT / CANCELLATION)
    PATCH /api/leave-requests/:id
    ============================================================ */
 router.patch("/:id", async (req, res) => {
@@ -153,17 +200,15 @@ router.patch("/:id", async (req, res) => {
     }
 
     /* ============================================================
-       👉 NEW LOGIC: ONLY RUN WHEN APPROVED
+       ✔ APPROVAL LOGIC (ONLY RUN WHEN APPROVED)
     ============================================================ */
     if (status === "approved") {
-
-      // 1️⃣ Get the leave request details
       const leaveRes = await pool.query(
         `SELECT * FROM leave_requests WHERE leave_id = $1 LIMIT 1`,
         [leaveId]
       );
 
-      if (leaveRes.rowCount === 0) {
+      if (!leaveRes.rows.length) {
         return res.status(404).json({ message: "Leave request not found" });
       }
 
@@ -172,69 +217,59 @@ router.patch("/:id", async (req, res) => {
       const leaveType = leave.leave_type;
       const days = Number(leave.total_days);
 
-    /* ============================================================
-      CASE A — Annual Leave / Emergency Leave (AL / EL)
-      CF FIRST → Then AL → CF Expires After 31 Mar
-      Uses leave date, NOT today()
-    ============================================================ */
-    if (leaveType === "AL" || leaveType === "EL") {
-      const p = await pool.query(
-        `SELECT leave_entitlement_annual, carry_forward_balance, carry_forward_expiry
-        FROM profiles
-        WHERE staff_id = $1`,
-        [staffId]
-      );
+      /* ============================================================
+         A — Annual Leave / Emergency Leave (AL / EL)
+      ============================================================ */
+      if (leaveType === "AL" || leaveType === "EL") {
+        const p = await pool.query(
+          `SELECT leave_entitlement_annual, carry_forward_balance, carry_forward_expiry
+           FROM profiles
+           WHERE staff_id = $1`,
+          [staffId]
+        );
 
-      let {
-        leave_entitlement_annual,
-        carry_forward_balance,
-        carry_forward_expiry
-      } = p.rows[0];
+        let {
+          leave_entitlement_annual,
+          carry_forward_balance,
+          carry_forward_expiry
+        } = p.rows[0];
 
-      // ⚠️ Use leave date, NOT today's date
-      const leaveDate = new Date(leave.date_from);
-      carry_forward_expiry = carry_forward_expiry ? new Date(carry_forward_expiry) : null;
+        const leaveDate = new Date(leave.date_from);
+        carry_forward_expiry = carry_forward_expiry ? new Date(carry_forward_expiry) : null;
 
-      // Check if CF expired at time of leave
-      // If CF expired for this leave, just treat CF as unusable for this deduction
-      if (carry_forward_expiry && leaveDate > carry_forward_expiry) {
-        carry_forward_balance = 0; // ONLY for this deduction, do NOT update DB yet
-      }
-
-
-      let deductCF = 0;
-      let deductAL = 0;
-
-      // If leave date is BEFORE expiry, use CF first
-      if (carry_forward_balance > 0 && leaveDate <= carry_forward_expiry) {
-        if (carry_forward_balance >= days) {
-          deductCF = days;
-        } else {
-          deductCF = carry_forward_balance;
-          deductAL = days - carry_forward_balance;
+        if (carry_forward_expiry && leaveDate > carry_forward_expiry) {
+          carry_forward_balance = 0;
         }
-      } else {
-        deductAL = days;
+
+        let deductCF = 0;
+        let deductAL = 0;
+
+        if (carry_forward_balance > 0 && leaveDate <= carry_forward_expiry) {
+          if (carry_forward_balance >= days) {
+            deductCF = days;
+          } else {
+            deductCF = carry_forward_balance;
+            deductAL = days - carry_forward_balance;
+          }
+        } else {
+          deductAL = days;
+        }
+
+        if (deductAL > leave_entitlement_annual) {
+          return res.status(400).json({ message: "Insufficient Annual Leave balance" });
+        }
+
+        await pool.query(
+          `UPDATE profiles
+           SET carry_forward_balance = carry_forward_balance - $1,
+               leave_entitlement_annual = leave_entitlement_annual - $2
+           WHERE staff_id = $3`,
+          [deductCF, deductAL, staffId]
+        );
       }
-
-      // Prevent negative AL
-      if (deductAL > leave_entitlement_annual) {
-        return res.status(400).json({ message: "Insufficient Annual Leave balance" });
-      }
-
-      // Apply deduction
-      await pool.query(
-        `UPDATE profiles
-        SET carry_forward_balance = carry_forward_balance - $1,
-            leave_entitlement_annual = leave_entitlement_annual - $2
-        WHERE staff_id = $3`,
-        [deductCF, deductAL, staffId]
-      );
-    }
-
 
       /* ============================================================
-         CASE B — Medical Leave (MC)
+         B — Medical Leave (MC)
       ============================================================ */
       else if (leaveType === "MC") {
         const m = await pool.query(
@@ -255,7 +290,7 @@ router.patch("/:id", async (req, res) => {
       }
 
       /* ============================================================
-         CASE C — Special Leaves (HOSP, MAT, PAT, COMP_A, COMP_B, MAR)
+         C — Special Leave (HOSP, MAT, PAT, MAR, COMP_A, COMP_B)
       ============================================================ */
       else {
         const e = await pool.query(
@@ -282,8 +317,7 @@ router.patch("/:id", async (req, res) => {
     }
 
     /* ============================================================
-       4️⃣ ORIGINAL CODE — DO NOT TOUCH
-       Update leave_requests table EXACTLY as before
+       UPDATE leave_requests STATUS
     ============================================================ */
     const sql = `
       UPDATE leave_requests
@@ -294,7 +328,7 @@ router.patch("/:id", async (req, res) => {
 
     const result = await pool.query(sql, [status, leaveId]);
 
-    if (result.rowCount === 0) {
+    if (!result.rowCount) {
       return res.status(404).json({ message: "Leave request not found" });
     }
 
@@ -306,31 +340,49 @@ router.patch("/:id", async (req, res) => {
   }
 });
 
+
 /* ============================================================
-   4) DELETE ALL LEAVE REQUESTS FOR A STAFF
+   5) DELETE ALL LEAVE REQUESTS FOR A STAFF
    DELETE /api/leave-requests/by-staff/:staffId
    ============================================================ */
 router.delete("/by-staff/:staffId", async (req, res) => {
   try {
     const staffId = req.params.staffId;
 
-    const sql = `
-      DELETE FROM leave_requests
-      WHERE staff_id = $1;
-    `;
+    await pool.query(
+      "DELETE FROM leave_requests WHERE staff_id = $1",
+      [staffId]
+    );
 
-    await pool.query(sql, [staffId]);
-
-    res.json({
-      success: true,
-      message: `All leave requests for staff ${staffId} deleted`
-    });
-
+    res.json({ success: true });
   } catch (err) {
-    console.error("DELETE /by-staff error:", err);
-    res.status(500).json({ message: "Failed to delete staff leave requests" });
+    console.error("DELETE by-staff error:", err);
+    res.status(500).json({ message: "Failed to delete staff leaves" });
   }
 });
 
+/* ============================================================
+   6) DELETE ONE LEAVE REQUEST
+   DELETE /api/leave-requests/:id
+   ============================================================ */
+router.delete("/:id", async (req, res) => {
+  try {
+    const leaveId = req.params.id;
+
+    const result = await pool.query(
+      "DELETE FROM leave_requests WHERE leave_id = $1 RETURNING *",
+      [leaveId]
+    );
+
+    if (!result.rowCount)
+      return res.status(404).json({ message: "Not found" });
+
+    res.json({ success: true });
+
+  } catch (err) {
+    console.error("DELETE leave error:", err);
+    res.status(500).json({ message: "Failed to delete leave" });
+  }
+});
 
 export default router;
