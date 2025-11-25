@@ -694,6 +694,8 @@
   font-weight: 700;
   color: #0c4a6e;
   cursor: pointer;
+  margin-top: 6px;
+
 }
 
 /* make the arrow cleaner */
