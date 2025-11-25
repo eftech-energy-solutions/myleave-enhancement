@@ -3,13 +3,6 @@
   // ----- state -----
   let loading = true;
   let error = "";
-
-  // ----- donuts -----
-  const donuts = [
-    { title: 'Annual Leave Summary',        spent: 1,  total: 14, carryForward: 0 },
-    { title: 'Medical Leave Summary',         spent: 0,  total: 14 },
-    { title: 'Hospitalization Leave Summary', spent: 0,  total: 60 }
-  ];
   const pct = (s, t) => Math.min(100, Math.max(0, Math.round((s / t) * 100)));
 
   // ======= Pengurusan Cuti (Digabung dari API)
@@ -21,6 +14,7 @@
   // ---- Local ISO helper to avoid UTC off-by-one (CRITICAL FIX) ----
   const atStartOfDay = (d) => { const x = new Date(d); x.setHours(0,0,0,0); return x; };
   const sameDay = (a, b) => atStartOfDay(a).getTime() === atStartOfDay(b).getTime();
+  const formatCF = (x) => Number(x || 0).toString().replace(".0", "");
 
   const localISO = (d) => {
     const x = atStartOfDay(d);
@@ -250,9 +244,10 @@
 let user = null;
 
   onMount(async () => {
-  // 1) Load staff profile
-  const meRes = await fetch("/api/me/photo", { credentials: "include" });
-  user = await meRes.json();
+  // 1) Load staff profile (FULL data)
+  const meRes = await fetch("/api/me", { credentials: "include" });
+  user = { ...(await meRes.json()) };
+  console.log("USER DATA", user);   // <= letak sini
 
   // 2) Load holidays
   await loadHolidays();
@@ -260,6 +255,34 @@ let user = null;
   // 3) Load recent applications
   await loadRecent();
 });
+
+
+// Reactive donut values once user is loaded
+$: donuts = user ? [
+  {
+    title: "Annual Leave Summary",
+    total: user.leave_entitlement_annual_original ?? 14,
+    spent: (user.leave_entitlement_annual_original ?? 14)
+         - (user.leave_entitlement_annual ?? 14),
+    carryForward: user.carry_forward_balance ?? 0
+  },
+
+  {
+    title: "Medical Leave Summary",
+    total: 14,
+    spent: 14 - (user.leave_entitlement_medical ?? 14)
+  },
+
+  {
+    title: "Hospitalization Leave Summary",
+    total: user.hosp_entitlement ?? 60,
+    spent: (user.hosp_entitlement ?? 60) - (user.hosp_balance ?? 60)
+  }
+
+
+
+] : [];
+
 
 
   // ===== navigation (prev/next + jump to today) =====
@@ -301,22 +324,32 @@ let user = null;
   }
 
   // ===== Leave form state =====
-  let leaveType = 'Annual';
+  let leaveType = 'AL';
   let duration = 'Full';       // 'Full' | 'Half'
   let dateFrom = '';
   let dateUntil = '';
   let totalDays = 1;
   let requestType = "new";
+  let endLocked = false;
 
   // ---- Medical: attachment required ----
   let attachmentFiles;   // FileList
   let fileInputEl;       // <input type="file">
   $: showAttachmentReminder =
-    (leaveType === 'Medical') && (!attachmentFiles || attachmentFiles.length === 0);
+    (leaveType === 'MC') && (!attachmentFiles || attachmentFiles.length === 0);
+
+    const fixedDurations = {
+      MAT : 98,
+      PAT : 7,
+      "COMP_A": 3,
+      "COMP_B": 1,
+      MAR : 3
+    };
+
 
   $: {
     if (fileInputEl) {
-      const needs = (leaveType === 'Medical');
+      const needs = (leaveType === 'MC');
       fileInputEl.required = needs;
       if (needs && (!attachmentFiles || attachmentFiles.length === 0)) {
         fileInputEl.setCustomValidity('For Medical leave, please attach your medical certificate.');
@@ -334,10 +367,22 @@ let user = null;
     const b = parseLocalISO(until || from);
     return Math.max(1, Math.floor((b - a) / dayMs) + 1); // inclusive
   };
+   const addDaysISO = (iso, days) => {
+    const d = parseLocalISO(iso); // Guna parseLocalISO
+    d.setDate(d.getDate() + (days - 1)); // -1 sebab 'inclusive'
+    return localISO(d);
+  };
 
   // keep until >= from
   $: if (dateFrom && dateUntil && parseLocalISO(dateUntil) < parseLocalISO(dateFrom)) {
     dateUntil = dateFrom;
+  }
+  $: {
+    const n = fixedDurations[leaveType];
+    endLocked = Boolean(n);
+    if (dateFrom && endLocked) {
+      dateUntil = addDaysISO(dateFrom, n);
+    }
   }
 
   // auto-calc total
@@ -356,7 +401,7 @@ let user = null;
 
   async function openLeaveForm(date) {
     const iso = localISO(date);
-    leaveType = 'Annual';
+    leaveType = 'AL';
     duration  = 'Full';
     dateFrom  = iso;
     dateUntil = iso;
@@ -413,10 +458,20 @@ async function loadRecent() {
       credentials: "include"
     });
 
+    if (!res.ok) {
+      console.error("GET /api/leave-requests failed:", res.status);
+      return;
+    }
+
     const all = await res.json();
 
+    if (!user || !user.staff_id) {
+      console.error("❌ user.staff_id not found!", user);
+      return;
+    }
+
     recent = all
-      .filter(l => l.staff_id.toLowerCase() === user.staffId.toLowerCase())
+      .filter(l => String(l.staff_id).toLowerCase() === String(user.staff_id).toLowerCase())
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
       .slice(0, 4)
       .map(l => ({
@@ -465,7 +520,7 @@ async function loadRecent() {
 
         {#if d.title === 'Annual Leave Summary'}
           <div class="cf-line">
-            Carry forward: {d.carryForward ?? 0}/7
+            Carry forward: {formatCF(d.carryForward)}/7
             <button type="button" class="info-btn" aria-describedby={"cf-tip-" + d.title} tabindex="0">ⓘ</button>
             <span class="tooltip" id={"cf-tip-" + d.title} role="tooltip">
               Carry-forward is capped at 7 days and expires before April (start of April).
@@ -582,16 +637,17 @@ async function loadRecent() {
     <h2 id="leave-title" class="title">Leave Application Form</h2>
 
     <label>
-      <span>Type</span>
+      <span>Leave Type</span>
       <select name="type" bind:value={leaveType} required>
-        <option value="Annual">Annual / Emergency</option>
-        <option value="Medical">Medical</option>
-        <option value="Maternity">Maternity</option>
-        <option value="Paternity">Paternity</option>
-        <option value="CompassionateA">Compassionate A (Death of parent, children, husband, wife)</option>
-        <option value="CompassionateB">Compassionate B (Death of grandparent, sibling)</option>
-        <option value="Marriage">Marriage</option>
-        <option value="Hospitalization">Hospitalization</option>
+        <option value="AL">Annual / Emergency</option>
+        <option value="MC">Medical</option>
+        <option value="MAT">Maternity</option>
+        <option value="PAT">Paternity</option>
+        <option value="COMP_A">Compassionate A (Parent/Child/Spouse)</option>
+        <option value="COMP_B">Compassionate B (Grandparent/Sibling)</option>
+        <option value="MAR">Marriage</option>
+        <option value="HOSP">Hospitalization</option>
+
       </select>
     </label>
 
@@ -652,7 +708,7 @@ async function loadRecent() {
         name="attachment"
         bind:this={fileInputEl}
         bind:files={attachmentFiles}
-        required={leaveType === 'Medical'}
+        required={leaveType === 'MC'}
         on:change={() => fileInputEl?.setCustomValidity('')}
       />
       {#if showAttachmentReminder}
