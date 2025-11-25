@@ -33,9 +33,9 @@ await loadRecent();
   // ----- donuts (demo) -----
   // 'data' telah dibuang, jadi kita guna nilai lalai secara terus.
   const donuts = [
-    { title: 'Team Annual Leave',        spent: 12, total: 60, carryForward: 5 },
-    { title: 'Team Medical Leave',         spent:  4, total: 60 },
-    { title: 'Team Hospitalization Leave', spent:  0, total: 300 }
+    { title: 'Annual Leave Summary',        spent: 12, total: 60, carryForward: 5 },
+    { title: 'Medical Leave Summary',         spent:  4, total: 60 },
+    { title: 'Hospitalization Leave Summary', spent:  0, total: 300 }
   ];
   const pct = (s, t) => Math.min(100, Math.max(0, Math.round((s / t) * 100)));
 

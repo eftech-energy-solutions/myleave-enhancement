@@ -621,35 +621,39 @@ pending = pendingRequests;
   }
 
   async function deleteEmployee() {
-    if (!employeeToDelete) return;
+  if (!employeeToDelete) return;
 
-    const empId =
-      employeeToDelete.empId || employeeToDelete.id;
+  const empId = employeeToDelete.empId || employeeToDelete.id;
 
-    try {
-      const res = await fetch(
-        `http://localhost:5000/api/employee/${empId}`,
-        { method: "DELETE" }
-      );
+  try {
+    // 1) DELETE leave requests dulu
+    await fetch(`/api/leave-requests/by-staff/${empId}`, {
+      method: "DELETE",
+      credentials: "include"
+    });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to delete employee");
-      // DELETE ALL LEAVE REQUESTS BELONGING TO THIS STAFF
-      await fetch(`http://localhost:5000/api/leave-requests/by-staff/${empId}`, {
-      method: "DELETE"
-});
+    // 2) DELETE employee (DALAM profile.js dia delete entitlements juga)
+    const res = await fetch(`/api/employee/${empId}`, {
+      method: "DELETE",
+      credentials: "include"
+    });
 
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Failed to delete employee");
 
-      employees = employees.filter((e) => e.id !== empId);
-      delete detailsById[empId];
+    // Update UI
+    employees = employees.filter(e => e.id !== empId);
+    delete detailsById[empId];
 
-      showDeleteConfirm = false;
-      detailsOpen = false;
-      employeeToDelete = null;
-    } catch (err) {
-      console.error("❌ Error deleting employee:", err);
-    }
+    showDeleteConfirm = false;
+    detailsOpen = false;
+    employeeToDelete = null;
+
+  } catch (err) {
+    console.error("❌ Error deleting employee:", err);
   }
+}
+
   async function approveCancellation(item) {
   const id = item.leave_id;
 

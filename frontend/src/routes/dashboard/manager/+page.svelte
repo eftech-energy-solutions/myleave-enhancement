@@ -15,9 +15,9 @@
 
   // donuts — keep
   const donuts = [
-    { title: 'Annual Leave Summary', spent: 1, total: 14 },
-    { title: 'Medical Leave Summary', spent: 0, total: 14 },
-    { title: 'Hospitalization Leave Summary', spent: 0, total: 60 }
+    { title: 'Staff Annual Leave Summary', spent: 1, total: 14 },
+    { title: 'Staff Medical Leave Summary', spent: 0, total: 14 },
+    { title: 'Staff Hospitalization Leave Summary', spent: 0, total: 60 }
   ];
   const pct = (s, t) => (t > 0 ? Math.round((s/t)*100) : 0);
 

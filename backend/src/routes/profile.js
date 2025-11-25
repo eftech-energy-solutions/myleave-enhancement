@@ -363,20 +363,16 @@ router.delete("/:staff_id", async (req, res) => {
   try {
     const staffId = req.params.staff_id;
 
-    const result = await pool.query(
-      "DELETE FROM profiles WHERE staff_id = $1",
-      [staffId]
-    );
+    await pool.query("DELETE FROM leave_requests WHERE staff_id = $1", [staffId]);
+    await pool.query("DELETE FROM leave_entitlements WHERE staff_id = $1", [staffId]);
+    await pool.query("DELETE FROM profiles WHERE staff_id = $1", [staffId]);
+    await pool.query("DELETE FROM employees WHERE staff_id = $1", [staffId]);
 
-    if (!result.rowCount) {
-      return res.status(404).json({ error: "Employee not found." });
-    }
-
-    res.json({ success: true, message: "Employee deleted successfully." });
+    return res.json({ success: true, message: "Employee deleted fully." });
 
   } catch (err) {
     console.error("Error deleting employee:", err);
-    res.status(500).json({ error: "Failed to delete employee." });
+    res.status(500).json({ error: err.message });
   }
 });
 
