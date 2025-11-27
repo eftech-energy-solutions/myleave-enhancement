@@ -298,7 +298,7 @@
     $page.url.pathname === roleBase
       ? 'Dashboard'
       : $page.url.pathname.startsWith('/dashboard/admin/history')
-      ? 'Leave Timeline'
+      ? 'Leave History'
       : $page.url.pathname.startsWith('/dashboard/admin/employees')
       ? 'Employees'
       : 'My Dashboard';

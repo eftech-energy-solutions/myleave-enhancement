@@ -12,19 +12,26 @@
   let showConfirmationModal = false;
   let leaveToCancel = null;
 
-  // ========== Leave Form / Edit State ==========
-let modal;            // bind:this
-let isEdit = false;   // toggle edit/create mode
+  // ---------- Form State (Unified Same As Leave Application Form) ----------
+let modal;
+let isEdit = false;
 let editingUuid = null;
 
-// form fields
-let leaveType = "Annual";
+let leaveType = "AL";
 let duration = "Full";
 let dateFrom = "";
 let dateUntil = "";
 let totalDays = 0;
 let reason = "";
 let attachmentFiles = null;
+
+const fixedDurations = {
+  MAT: 98,
+  PAT: 7,
+  COMP_A: 3,
+  COMP_B: 1,
+  MAR: 3
+};
 
   const statuses = ["All", "Approved", "Pending", "Rejected", "Cancellation Pending"];
   const months = [
@@ -33,6 +40,27 @@ let attachmentFiles = null;
   ];
   const currentYear = new Date().getFullYear();
   const years = ["All", ...Array.from({ length: 10 }, (_, i) => currentYear - i)];
+const leaveLabels = {
+  AL: "Annual / Emergency",
+  MC: "Medical",
+  MAT: "Maternity",
+  PAT: "Paternity",
+  COMP_A: "Compassionate A",
+  COMP_B: "Compassionate B",
+  MAR: "Marriage",
+  HOSP: "Hospitalization"
+};
+const leaveCodes = {
+  "Annual / Emergency": "AL",
+  "Medical": "MC",
+  "Maternity": "MAT",
+  "Paternity": "PAT",
+  "Compassionate A": "COMP_A",
+  "Compassionate B": "COMP_B",
+  "Marriage": "MAR",
+  "Hospitalization": "HOSP"
+};
+
 
   // =========== HELPERS ============
   const fmt = (iso) =>
@@ -71,26 +99,24 @@ let attachmentFiles = null;
       // Filter leaves for this logged-in staff only
       leaves = data
   .filter((l) => l.staff_id === me.staffId)
-  .map((l) => ({
+  .map(l => ({
     uuid: l.leave_id,
     id: l.staff_id,
     name: l.staff_name,
-
-    // REQUIRED FIELDS FOR EDIT:
     dateFrom: l.date_from,
     dateTo: l.date_until,
     totalDays: l.total_days,
-    type: l.leave_type,
-    reason: l.reason,        // ← YOU MISSED THIS EARLIER
-    duration: l.duration,    // ← YOU ALSO MISSED THIS
-
+    type: leaveCodes[l.leave_type] || l.leave_type,
+    reason: l.reason,
+    duration: l.duration,
     status:
       l.status === "pending" ? "Pending" :
       l.status === "approved" ? "Approved" :
       l.status === "rejected" ? "Rejected" :
       l.status === "cancellation_pending" ? "Cancellation Pending" :
       l.status
-  }));
+}))
+
 
 
     } catch (err) {
@@ -122,13 +148,7 @@ let attachmentFiles = null;
     leaveToCancel = null;
     showConfirmationModal = false;
   }
-  const fixedDurations = {
-  Maternity: 98,
-  Paternity: 7,
-  "Compassionate A": 3,
-  "Compassionate B": 1,
-  Marriage: 3
-};
+
 $: if (leaveType && dateFrom) {
   if (fixedDurations[leaveType]) {
     const days = fixedDurations[leaveType];
@@ -137,9 +157,9 @@ $: if (leaveType && dateFrom) {
     end.setDate(start.getDate() + (days - 1));
     dateUntil = end.toISOString().slice(0, 10);
   }
+
   totalDays = autoCalc(leaveType, dateFrom, dateUntil, duration);
 }
-
 
 function autoCalc(type, from, until, duration) {
   if (!from) return 0;
@@ -154,8 +174,6 @@ function autoCalc(type, from, until, duration) {
 
   return diff > 0 ? diff : 1;
 }
-
-
 function handleEdit(l) {
   if (l.status !== "Pending") return;
 
@@ -163,27 +181,26 @@ function handleEdit(l) {
   editingUuid = l.uuid;
 
   leaveType = l.type;
-  duration = l.duration === "Half" || l.totalDays === 0.5 ? "Half" : "Full";
+  duration = l.totalDays === 0.5 ? "Half" : l.duration || "Full";
 
-  dateFrom = l.dateFrom;
-  dateUntil = l.dateTo;
-
-  // auto set fixed leave types
+  dateFrom = l.dateFrom.slice(0, 10);
+  
+  // fixed leave auto-set end date
   if (fixedDurations[leaveType]) {
     const days = fixedDurations[leaveType];
     const start = new Date(dateFrom);
     const end = new Date(start);
     end.setDate(start.getDate() + (days - 1));
     dateUntil = end.toISOString().slice(0, 10);
+  } else {
+    dateUntil = l.dateTo.slice(0, 10);
   }
 
   totalDays = autoCalc(leaveType, dateFrom, dateUntil, duration);
-
   reason = l.reason || "";
-  attachmentFiles = null;
-  modal?.showModal?.();
-}
 
+  modal.showModal();
+}
 
 
   async function confirmCancellation() {
@@ -192,16 +209,17 @@ function handleEdit(l) {
   // ================================
   // 1) If PENDING → DELETE from DB
   // ================================
-if (leaveToCancel.status === "Pending") {
+ if (leaveToCancel.status === "Pending") {
   console.log("DELETE ONE LEAVE UUID →", leaveToCancel.uuid); // debug
 
-  await fetch(`/api/leave-requests/${leaveToCancel.uuid}`, {
+  await fetch(`http://localhost:5000/api/leave-requests/${leaveToCancel.uuid}`, {
     method: "DELETE",
     credentials: "include"
   });
 
   leaves = leaves.filter(l => l.uuid !== leaveToCancel.uuid);
 }
+
 
   // ==========================================
   // 2) If APPROVED → SET cancellation_pending
@@ -229,16 +247,17 @@ async function submitLeave(event) {
 
   const payload = {
     leave_type: leaveType,
-    duration: duration,
+    duration,
     date_from: dateFrom,
     date_until: duration === "Half" ? dateFrom : dateUntil,
     total_days: totalDays,
-    reason
+    reason,
+    request_type: isEdit ? "update" : "new"
   };
 
   try {
+    // ---- EDIT MODE ----
     if (isEdit && editingUuid) {
-      // PATCH → update DB
       await fetch(`/api/leave-requests/${editingUuid}/edit`, {
         method: "PATCH",
         credentials: "include",
@@ -246,41 +265,66 @@ async function submitLeave(event) {
         body: JSON.stringify(payload)
       });
 
-      // Update UI entry (tanpa reload page)
-      const idx = leaves.findIndex(x => x.uuid === editingUuid);
+      // ⭐ UPDATE UI WITHOUT REFRESH
+      const idx = leaves.findIndex(l => l.uuid === editingUuid);
+
       if (idx !== -1) {
-        leaves[idx].type = leaveType;
-        leaves[idx].dateFrom = dateFrom;
-        leaves[idx].dateTo = payload.date_until;
-        leaves[idx].totalDays = totalDays;
-        leaves[idx].reason = reason;
-        leaves = [...leaves];  // trigger reactive update
+        leaves[idx] = {
+          ...leaves[idx],
+          type: leaveType,
+          dateFrom: dateFrom,
+          dateTo: payload.date_until,
+          totalDays: totalDays,
+          reason: reason,
+          duration: duration
+        };
+
+        leaves = [...leaves]; // trigger reactive update
       }
     }
 
+    // ---- NEW APPLICATION (OPTIONAL) ----
+    else {
+      await fetch(`/api/leave-requests`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+    }
+
     closeEditModal();
-    
+
   } catch (err) {
     console.error("Error updating:", err);
   }
 }
+
+
 function closeEditModal() {
-  try { 
-    if (modal?.open) modal.close();
-  } catch (e) {
-    console.error("Modal cannot close:", e);
-  }
+  if (modal?.open) modal.close();
 
   isEdit = false;
   editingUuid = null;
+
+  leaveType = "AL";
+  duration = "Full";
+  dateFrom = "";
+  dateUntil = "";
+  totalDays = 0;
+  reason = "";
+  attachmentFiles = null;
 }
+
 
 function onFromChange() {
   if (!dateFrom) return;
 
+  // Half day → same day
   if (duration === "Half") {
     dateUntil = dateFrom;
   } 
+  // Fixed duration → auto compute end date
   else if (fixedDurations[leaveType]) {
     const days = fixedDurations[leaveType];
     const start = new Date(dateFrom);
@@ -289,6 +333,7 @@ function onFromChange() {
     dateUntil = end.toISOString().slice(0, 10);
   }
 
+  // Auto-calc total
   totalDays = autoCalc(leaveType, dateFrom, dateUntil, duration);
 }
 
@@ -297,6 +342,7 @@ function onUntilChange() {
   totalDays = autoCalc(leaveType, dateFrom, dateUntil, duration);
 }
 </script>
+
 <!-- ===== Confirmation Modal ===== -->
 {#if showConfirmationModal}
   <div class="modal-backdrop">
@@ -353,14 +399,15 @@ function onUntilChange() {
     <label>
       <span>Type</span>
       <select bind:value={leaveType} required>
-        <option value="Annual">Annual / Emergency</option>
-        <option value="Medical">Medical</option>
-        <option value="Maternity">Maternity</option>
-        <option value="Paternity">Paternity</option>
-        <option value="Compassionate A">Compassionate A</option>
-        <option value="Compassionate B">Compassionate B</option>
-        <option value="Marriage">Marriage</option>
-        <option value="Hospitalization">Hospitalization</option>
+        <option value="AL">Annual / Emergency</option>
+        <option value="MC">Medical</option>
+        <option value="MAT">Maternity</option>
+        <option value="PAT">Paternity</option>
+        <option value="COMP_A">Compassionate A (Parent/Child/Spouse)</option>
+        <option value="COMP_B">Compassionate B (Grandparent/Sibling)</option>
+        <option value="MAR">Marriage</option>
+        <option value="HOSP">Hospitalization</option>
+
       </select>
     </label>
 

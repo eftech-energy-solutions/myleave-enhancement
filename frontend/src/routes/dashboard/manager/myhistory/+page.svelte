@@ -19,8 +19,16 @@ let modal;
 let isEdit = false;
 let editingUuid = null;
 
-// ===== Form fields (same layout as staff) =====
-let leaveType = "Annual";
+// ===== Fixed leave durations (same as staff) =====
+const fixedDurations = {
+  MAT : 98,
+  PAT : 7,
+  "COMP_A": 3,
+  "COMP_B": 1,
+  MAR : 3
+};
+
+let leaveType = "AL";
 let duration = "Full";
 let dateFrom = "";
 let dateUntil = "";
@@ -28,24 +36,48 @@ let totalDays = 0;
 let reason = "";
 let attachmentFiles = null;
 
-// ===== Fixed leave durations (same as staff) =====
-const fixedDurations = {
-  Maternity: 98,
-  Paternity: 7,
-  "Compassionate A": 3,
-  "Compassionate B": 1,
-  Marriage: 3
+// Dashboard helper functions
+const atStartOfDay = (d) => { const x = new Date(d); x.setHours(0,0,0,0); return x; };
+const parseLocalISO = (iso) => {
+  if (!iso) return null;
+  const [y,m,d] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d);
+};
+const localISO = (d) => {
+  const x = atStartOfDay(d);
+  return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}-${String(x.getDate()).padStart(2,"0")}`;
 };
 
-function autoCalc(type, from, until, duration) {
+const diffDays = (from, until) => {
   if (!from) return 0;
-  if (duration === "Half") return 0.5;
-  if (fixedDurations[type]) return fixedDurations[type];
+  const a = atStartOfDay(from);
+  const b = atStartOfDay(until || from);
+  return Math.max(1, Math.floor((b - a) / 86400000) + 1);
+};
 
-  const d1 = new Date(from);
-  const d2 = new Date(until || from);
-  const diff = (d2 - d1) / (1000 * 60 * 60 * 24) + 1;
-  return diff > 0 ? diff : 1;
+const addDaysISO = (iso, days) => {
+  const d = parseLocalISO(iso);
+  d.setDate(d.getDate() + (days - 1));
+  return localISO(d);
+};
+
+// ===== Auto-calc totalDays (same as dashboard) =====
+$: {
+  
+  if (!dateFrom) {
+    totalDays = 0;
+  }
+  else if (duration === "Half") {
+    totalDays = 0.5;
+    dateUntil = dateFrom;
+  }
+  else if (fixedDurations[leaveType]) {
+    totalDays = fixedDurations[leaveType];
+    dateUntil = addDaysISO(dateFrom, totalDays);
+  }
+  else {
+    totalDays = diffDays(parseLocalISO(dateFrom), parseLocalISO(dateUntil || dateFrom));
+  }
 }
 
   const statuses = ["All", "Approved", "Pending", "Rejected", "Cancellation Pending"];
@@ -74,10 +106,10 @@ function autoCalc(type, from, until, duration) {
   onMount(async () => {
     try {
       // SAME AS STAFF
-      const meRes = await fetch("/api/me/photo", {
-        credentials: "include",
-      });
-      user = await meRes.json();
+      const meRes = await fetch("http://localhost:5000/api/me", { credentials: "include" });
+      user = { ...(await meRes.json()) };
+      console.log("HOSP DATA — entitlement:", user?.hosp_entitlement, "balance:", user?.hosp_balance);
+      console.log("USER:", user);
 
       await loadLeaveHistory();
     } catch (err) {
@@ -87,13 +119,13 @@ function autoCalc(type, from, until, duration) {
 
   async function loadLeaveHistory() {
     try {
-      const res = await fetch("/api/leave-requests", {
+      const res = await fetch("http://localhost:5000/api/leave-requests", {
         credentials: "include"
       });
       const all = await res.json();
 
       // ⭐ Manager ONLY sees his own leave
-        leaves = all.filter(l => l.staff_id === user.staffId)
+        leaves = all.filter(l => l.staff_id === user.staff_id)
         .map(l => ({
           uuid: l.leave_id,
           id: l.staff_id,
@@ -102,6 +134,8 @@ function autoCalc(type, from, until, duration) {
           dateTo: l.date_until,
           totalDays: l.total_days,
           type: l.leave_type,
+          reason: l.reason,          // ADD THIS
+          duration: l.duration,  
 
           status:
             l.status === "pending" ? "Pending" :
@@ -159,8 +193,8 @@ $: filteredLeaves = leaves
 
   leaveType = l.type;
   duration = l.totalDays === 0.5 ? "Half" : l.duration || "Full";
-  dateFrom = l.dateFrom;
-  dateUntil = l.dateTo;
+  dateFrom = l.dateFrom.slice(0,10);
+dateUntil = l.dateTo.slice(0,10);
 
   // Auto-set fixed leave types
   if (fixedDurations[leaveType]) {
@@ -170,63 +204,67 @@ $: filteredLeaves = leaves
     end.setDate(start.getDate() + (days - 1));
     dateUntil = end.toISOString().slice(0, 10);
   }
-
-  totalDays = autoCalc(leaveType, dateFrom, dateUntil, duration);
+  
   reason = l.reason || "";
 
-  modal?.showModal?.();
+  if (modal) modal.showModal();
+
 }
 
 
   async function confirmCancellation() {
-    if (!leaveToCancel) return;
+  if (!leaveToCancel) return;
 
-    const status = leaveToCancel.status.toLowerCase();
+  const status = leaveToCancel.status.toLowerCase();
 
-    // 1) PENDING → DELETE
-    if (leaveToCancel.status === "Pending") {
-  await fetch(`/api/leave-requests/${leaveToCancel.uuid}`, {
-    method: "DELETE",
-    credentials: "include"
-  });
+  // 1) PENDING → DELETE
+  if (leaveToCancel.status === "Pending") {
+    await fetch(`http://localhost:5000/api/leave-requests/${leaveToCancel.uuid}`, {
+      method: "DELETE",
+      credentials: "include"
+    });
 
-  // remove from UI
-  leaves = leaves.filter(l => l.uuid !== leaveToCancel.uuid);
+    // remove from UI
+    leaves = leaves.filter(l => String(l.uuid) !== String(leaveToCancel.uuid));
+
+  }
+
+  // 2) APPROVED → change to cancellation_pending
+  if (status === "approved") {
+    await fetch(`http://localhost:5000/api/leave-requests/${leaveToCancel.uuid}`, {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "cancellation_pending" })
+    });
+
+    leaves = leaves.map(l =>
+      l.uuid === leaveToCancel.uuid
+        ? { ...l, status: "Cancellation Pending" }
+        : l
+    );
+  }
+
+  closeConfirmationModal();
+  await loadLeaveHistory();
 }
 
-    // 2) APPROVED → cancellation_pending
-    if (status === "approved") {
-      await fetch(`/api/leave-requests/${leaveToCancel.uuid}`, {
-        method: "PATCH",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "cancellation_pending" })
-      });
-
-      leaves = leaves.map(l =>
-        l.uuid === leaveToCancel.uuid
-          ? { ...l, status: "Cancellation Pending" }
-          : l
-      );
-    }
-
-    closeConfirmationModal();
-    await loadLeaveHistory();
-  }
   async function submitLeave(event) {
   event.preventDefault();
 
   const payload = {
-    leave_type: leaveType,
-    duration,
-    date_from: dateFrom,
-    date_until: duration === "Half" ? dateFrom : dateUntil,
-    total_days: totalDays,
-    reason
-  };
+  leave_type: leaveType,
+  duration,
+  date_from: dateFrom,
+  date_until: duration === "Half" ? dateFrom : dateUntil,
+  total_days: totalDays,
+  reason,
+  request_type: "update"    // 🔥 TAMBAH LINE INI
+};
+
 
   try {
-    await fetch(`/api/leave-requests/${editingUuid}/edit`, {
+    await fetch(`http://localhost:5000/api/leave-requests/${editingUuid}/edit`, {
       method: "PATCH",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
@@ -234,7 +272,8 @@ $: filteredLeaves = leaves
     });
 
     // Update UI instantly
-    const idx = leaves.findIndex(x => x.uuid === editingUuid);
+    const idx = leaves.findIndex(x => String(x.uuid) === String(editingUuid));
+
     if (idx !== -1) {
       leaves[idx].type = leaveType;
       leaves[idx].dateFrom = dateFrom;
@@ -262,21 +301,18 @@ function onFromChange() {
 
   if (duration === "Half") {
     dateUntil = dateFrom;
-  } else if (fixedDurations[leaveType]) {
-    const days = fixedDurations[leaveType];
-    const start = new Date(dateFrom);
-    const end = new Date(start);
-    end.setDate(start.getDate() + (days - 1));
-    dateUntil = end.toISOString().slice(0, 10);
+    return;
   }
 
-  totalDays = autoCalc(leaveType, dateFrom, dateUntil, duration);
+  if (fixedDurations[leaveType]) {
+    dateUntil = addDaysISO(dateFrom, fixedDurations[leaveType]);
+  }
 }
 
 function onUntilChange() {
   if (duration === "Half") return;
-  totalDays = autoCalc(leaveType, dateFrom, dateUntil, duration);
 }
+
 
 </script>
 
@@ -337,14 +373,14 @@ function onUntilChange() {
     <label>
       <span>Type</span>
       <select bind:value={leaveType} required>
-        <option value="Annual">Annual / Emergency</option>
-        <option value="Medical">Medical</option>
-        <option value="Maternity">Maternity</option>
-        <option value="Paternity">Paternity</option>
-        <option value="Compassionate A">Compassionate A</option>
-        <option value="Compassionate B">Compassionate B</option>
-        <option value="Marriage">Marriage</option>
-        <option value="Hospitalization">Hospitalization</option>
+        <option value="AL">Annual / Emergency</option>
+        <option value="MC">Medical</option>
+        <option value="MAT">Maternity</option>
+        <option value="PAT">Paternity</option>
+        <option value="COMP_A">Compassionate A (Parent/Child/Spouse)</option>
+        <option value="COMP_B">Compassionate B (Grandparent/Sibling)</option>
+        <option value="MAR">Marriage</option>
+        <option value="HOSP">Hospitalization</option>
       </select>
     </label>
 
@@ -553,10 +589,7 @@ function onUntilChange() {
     background: #dcfce7;
     color: #166534;
   }
-  .delete-btn svg {
-    width: 18px;
-    height: 18px;
-  }
+
 
   /* ===== MODAL ===== */
   .modal-backdrop {
@@ -662,9 +695,6 @@ function onUntilChange() {
     border-radius: 8px;
     padding: 8px 10px;
   }
-  .leave-form input[required]:invalid, .leave-form textarea[required]:invalid {
-    border-color: #ef4444;
-  }
   
   /* --- Keep radios inline/left without changing their markup position --- */
   .leave-form .duration {
@@ -731,4 +761,3 @@ function onUntilChange() {
     th, td { padding: 8px 10px; }
   }
 </style>
-

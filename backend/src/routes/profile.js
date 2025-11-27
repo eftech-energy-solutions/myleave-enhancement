@@ -58,7 +58,16 @@ router.post('/', async (req, res) => {
       position
     ]
   );
-
+      await pool.query(`
+            INSERT INTO leave_entitlements (staff_id, leave_type, entitlement, balance, year)
+            VALUES 
+            ($1, 'HOSP', 60, 60, $2),
+            ($1, 'MAT', 98, 98, $2),
+            ($1, 'PAT', 7, 7, $2),
+            ($1, 'COMP_A', 3, 3, $2),
+            ($1, 'COMP_B', 1, 1, $2),
+            ($1, 'MAR', 3, 3, $2)
+          `, [empId, new Date().getFullYear()]);
 
     const transporter = nodemailer.createTransport({
       host: "mail.eftech.com.my",
@@ -93,8 +102,6 @@ router.post('/', async (req, res) => {
     res.status(500).json({ error: 'Database or email error' });
   }
 });
-
-
 /* ============================================================
    2) GET ALL EMPLOYEES
 ============================================================ */

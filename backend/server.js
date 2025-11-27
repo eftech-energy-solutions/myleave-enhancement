@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import bcrypt from 'bcryptjs';
+import cron from "node-cron";  
 
 import pool from './src/db.js';
 import profileRoutes from './src/routes/profile.js';
@@ -205,6 +206,72 @@ app.get('/api/me/photo', async (req, res) => {
 // ============================
 // WHO AM I (BASIC)
 // ============================
+
+app.get('/api/me', async (req, res) => {
+  try {
+    const token = req.cookies["auth_token"];
+    if (!token) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+
+    const me = JSON.parse(token);
+
+    // 1) Get basic profile info
+    const profileQ = await pool.query(
+      `SELECT 
+        staff_id,
+        full_name,
+        email,
+        role,
+        position,
+        department,
+        photourl,
+        leave_entitlement_annual,
+        leave_entitlement_annual_original,
+        leave_entitlement_medical,
+        carry_forward_balance,
+        carry_forward_original,
+        carry_forward_expiry
+      FROM profiles
+      WHERE staff_id = $1
+      LIMIT 1`,
+      [me.staffId]
+    );
+
+    if (!profileQ.rows.length) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const profile = profileQ.rows[0];
+
+    // 2) Get hospitalization leave from leave_entitlements table
+    const hospQ = await pool.query(
+      `SELECT entitlement, balance
+       FROM leave_entitlements
+       WHERE staff_id = $1 AND leave_type = 'HOSP'
+       LIMIT 1`,
+      [me.staffId]
+    );
+
+    const hosp = hospQ.rows.length
+      ? hospQ.rows[0]
+      : { entitlement: 60, balance: 60 }; // fallback if not exist
+
+    // 3) Combine and return all data
+    return res.json({
+      ...profile,
+      hosp_entitlement: hosp.entitlement,
+      hosp_balance: hosp.balance
+    });
+
+  } catch (err) {
+    console.error("GET /api/me error:", err);
+    return res.status(500).json({ error: "Failed to fetch user data" });
+  }
+});
+
+
+
 // ============================
 // CHANGE PASSWORD (by staffId)  <-- HOTFIX
 // ============================
@@ -270,6 +337,48 @@ app.put('/api/employee/:staffId/password', async (req, res) => {
     return res.status(500).json({ error: 'Server error' });
   }
 });
+
+// ============================
+// CARRY FORWARD CRON JOB 
+// ============================
+
+// // cron.schedule("0 0 1 1 *", async () => {
+
+//   // ⚠️ TEST MODE — runs every minute
+// cron.schedule("* * * * *", async () => {
+//   console.log("🎉 Running carry-forward generator...");
+
+//   try {
+//     const currentYear = new Date().getFullYear();
+
+//     const employees = await pool.query(`
+//       SELECT staff_id, leave_entitlement_annual
+//       FROM profiles
+//     `);
+
+//     for (const emp of employees.rows) {
+//       const remaining = Number(emp.leave_entitlement_annual);
+//       const carry = remaining > 7 ? 7 : remaining;
+
+//       await pool.query(`
+//         UPDATE profiles
+//         SET 
+//           carry_forward_original = $1,
+//           carry_forward_balance = $1,
+//           carry_forward_expiry = $2
+//         WHERE staff_id = $3
+//       `, [
+//         carry,
+//         `${currentYear}-03-31`,
+//         emp.staff_id
+//       ]);
+//     }
+
+//     console.log("🎉 Carry forward generation completed");
+//   } catch (err) {
+//     console.error("❌ CF generator error:", err);
+//   }
+// });
 
 // ============================
 // START SERVER

@@ -368,7 +368,7 @@
         {:else if $page.url.pathname.startsWith('/dashboard/manager/employees')}
           <h1 class="page-title">Employees</h1>
         {:else}
-          <h1 class="page-title">My Dashboard</h1>
+          <h1 class="page-title">Dashboard</h1>
         {/if}
       </div>
 

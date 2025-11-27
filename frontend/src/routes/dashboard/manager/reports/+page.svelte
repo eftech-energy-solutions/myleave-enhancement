@@ -5,38 +5,62 @@
   // ----- state -----
   let loading = true;
   let error = "";
-let recent = [];
+  let recent = [];
+  const formatCF = (x) => Number(x || 0).toString().replace(".0", "");
 
   // ----- user/profile -----
   // 'data' telah dibuang, jadi kita guna nilai lalai secara terus.
   let user = null;
   onMount(async () => {
-  const meRes = await fetch("/api/me/photo", { credentials: "include" });
-  user = await meRes.json();
-console.log("USER FROM BACKEND:", user);
-console.log("STAFF ID:", user.staffId);
+    try {
+      loading = true;
 
-await loadRecent();
+      // 1) USER
+      const meRes = await fetch("/api/me", { credentials: "include" });
+      user = { ...(await meRes.json()) };
+      console.log("HOSP DATA — entitlement:", user?.hosp_entitlement, "balance:", user?.hosp_balance);
+      console.log("USER:", user);
 
+      // 2) HOLIDAYS
+      await loadHolidays();
 
-  await loadRecent();
-});
+      // 3) RECENT (depends on user)
+      await loadRecent();
 
-  const initials = (name) => (name || 'A B').split(' ').map(x => x[0]).slice(0,2).join('').toUpperCase();
-  let profileMenuOpen = false;
-  function clickOutside(node) {
-    const onClick = (e) => { if (!node.contains(e.target)) profileMenuOpen = false; };
-    document.addEventListener('click', onClick);
-    return { destroy: () => document.removeEventListener('click', onClick) };
+    } catch (err) {
+      console.error("onMount FAILED:", err);
+      error = "Failed to load dashboard.";
+    } finally {
+      loading = false;
+    }
+  });
+
+  // ----------- DONUT SUMMARY (FIXED) -----------
+$: donuts = user ? [
+  {
+    title: "Annual Leave Summary",
+    total: user.leave_entitlement_annual_original ?? 14,
+    spent: (user.leave_entitlement_annual_original ?? 14)
+         - (user.leave_entitlement_annual ?? 14),
+    carryForward: user.carry_forward_balance ?? 0
+  },
+
+  {
+    title: "Medical Leave Summary",
+    total: 14,
+    spent: 14 - (user.leave_entitlement_medical ?? 14)
+  },
+
+  {
+    title: "Hospitalization Leave Summary",
+    total: user.hosp_entitlement ?? 60,
+    spent: (user.hosp_entitlement ?? 60) - (user.hosp_balance ?? 60)
   }
 
-  // ----- donuts (demo) -----
-  // 'data' telah dibuang, jadi kita guna nilai lalai secara terus.
-  const donuts = [
-    { title: 'Annual Leave Summary',        spent: 12, total: 60, carryForward: 5 },
-    { title: 'Medical Leave Summary',         spent:  4, total: 60 },
-    { title: 'Hospitalization Leave Summary', spent:  0, total: 300 }
-  ];
+] : [];
+
+
+
   const pct = (s, t) => Math.min(100, Math.max(0, Math.round((s / t) * 100)));
 
   // ======= Pengurusan Cuti (Digabung dari API)
@@ -109,7 +133,9 @@ async function loadRecent() {
 
     // Filter: recent 5 leave requests for this manager
     recent = all
-      .filter(l => l.staff_id.toLowerCase() === user.staffId.toLowerCase())
+      .filter(l =>
+  String(l.staff_id).toLowerCase() === String(user?.staff_id).toLowerCase()
+)
 
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
       .slice(0, 4)
@@ -326,10 +352,6 @@ async function loadRecent() {
     holidayDescsByYear = newHolidayDescsByYear; // BARU
   }
 
-  onMount(async () => {
-    await loadHolidays(); // Ganti 'buildMonth' dengan 'loadHolidays'
-  });
-
   // Nav
   function prevMonth() {
     if (!canGoPrev()) return;
@@ -370,21 +392,21 @@ async function loadRecent() {
   let dateUntil = '';
   let totalDays = 1;
 
-  let leaveType = 'Annual';
+  let leaveType = 'AL';
   let requestType = "new";  // default apply leave
   let endLocked = false;
 
   let attachmentFiles; // FileList
   let fileInputEl;     // <input type="file">
   $: showAttachmentReminder =
-    (leaveType === 'Medical') && (!attachmentFiles || attachmentFiles.length === 0);
+    (leaveType === 'MC') && (!attachmentFiles || attachmentFiles.length === 0);
 
   const fixedDurations = {
-    Maternity: 98,
-    Paternity: 7,
-    'Compassionate A': 3,
-    'Compassionate B': 1,
-    Marriage: 3
+      MAT : 98,
+      PAT : 7,
+      "COMP_A": 3,
+      "COMP_B": 1,
+      MAR : 3
   };
 
   const dayMs = 24 * 60 * 60 * 1000;
@@ -429,7 +451,7 @@ async function loadRecent() {
 
   async function openLeaveForm(date) {
     const iso = localISO(date);
-    leaveType = 'Annual';
+    leaveType = 'AL';
     duration  = 'Full';
     dateFrom  = iso;
     dateUntil = iso;
@@ -505,7 +527,7 @@ async function submitLeave(e) {
 
         {#if d.title.toLowerCase().includes('annual')}
           <div class="cf-line">
-            Carry forward: {d.carryForward ?? 0}/7
+            Carry forward: {formatCF(d.carryForward)}/7
             <button type="button" class="info-btn" aria-describedby={"cf-tip-" + i} tabindex="0">ⓘ</button>
             <span class="tooltip" id={"cf-tip-" + i} role="tooltip">
               Carry-forward is capped at 7 days and expires before April (start of April).
@@ -623,14 +645,14 @@ async function submitLeave(e) {
     <label>
       <span>Type</span>
       <select name="type" bind:value={leaveType} required>
-        <option value="Annual">Annual / Emergency</option>
-        <option value="Medical">Medical</option>
-        <option value="Maternity">Maternity</option>
-        <option value="Paternity">Paternity</option>
-        <option value="Compassionate A">Compassionate A (Death of parent, children, husband, wife)</option>
-        <option value="Compassionate B">Compassionate B (Death of grandparent, sibling)</option>
-        <option value="Marriage">Marriage</option>
-        <option value="Hospitalization">Hospitalization</option>
+        <option value="AL">Annual / Emergency</option>
+        <option value="MC">Medical</option>
+        <option value="MAT">Maternity</option>
+        <option value="PAT">Paternity</option>
+        <option value="COMP_A">Compassionate A (Parent/Child/Spouse)</option>
+        <option value="COMP_B">Compassionate B (Grandparent/Sibling)</option>
+        <option value="MAR">Marriage</option>
+        <option value="HOSP">Hospitalization</option>
       </select>
     </label>
 
@@ -677,7 +699,7 @@ async function submitLeave(e) {
         name="attachment"
         bind:this={fileInputEl}
         bind:files={attachmentFiles}
-        required={leaveType === 'Medical'}
+        required={leaveType === 'MC'}
         on:change={() => fileInputEl?.setCustomValidity('')}
       />
       {#if showAttachmentReminder}
