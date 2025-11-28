@@ -8,6 +8,54 @@ const router = express.Router();
 const upload = multer({ dest: "uploads/leave_attachments/" });
 
 /* ============================================================
+   🔄 AUTO-RECALCULATION FUNCTION
+   ============================================================ */
+async function recalcAnnualLeave(staffId) {
+  try {
+    // 1. Ambil entitlement asal & carry forward
+    const profile = await pool.query(
+      `SELECT 
+          leave_entitlement_annual_original,
+          carry_forward_balance
+       FROM profiles
+       WHERE staff_id = $1`,
+      [staffId]
+    );
+
+    if (!profile.rows.length) return;
+
+    const original = Number(profile.rows[0].leave_entitlement_annual_original || 0);
+    const carryForward = Number(profile.rows[0].carry_forward_balance || 0);
+    const totalEntitlement = original + carryForward;
+
+    // 2. Kira total AL + EL approved
+    const takenQuery = await pool.query(
+      `SELECT COALESCE(SUM(total_days), 0) AS taken
+       FROM leave_requests
+       WHERE staff_id = $1
+       AND status = 'approved'
+       AND (leave_type = 'AL' OR leave_type = 'EL')`,
+      [staffId]
+    );
+
+    const taken = Number(takenQuery.rows[0].taken || 0);
+    const newBalance = totalEntitlement - taken;
+
+    // 3. Update balik profiles
+    await pool.query(
+      `UPDATE profiles
+       SET leave_entitlement_annual = $1
+       WHERE staff_id = $2`,
+      [newBalance, staffId]
+    );
+
+    return newBalance;
+
+  } catch (err) {
+    console.error("❌ recalcAnnualLeave error:", err);
+  }
+}
+/* ============================================================
    1) CREATE NEW LEAVE REQUEST
    POST /api/leave-requests
    ============================================================ */
@@ -132,6 +180,7 @@ router.get("/", async (req, res) => {
     res.status(500).json({ message: "Failed to load leave requests" });
   }
 });
+
 /* ============================================================
    4) EDIT LEAVE DETAILS
    PATCH /api/leave-requests/:id/edit
@@ -178,6 +227,11 @@ router.patch("/:id/edit", async (req, res) => {
       return res.status(404).json({ message: "Leave request not found" });
     }
 
+    const staffId = result.rows[0].staff_id;
+
+    // 🟡 AUTO RECALC bila user edit total_days / tarikh
+    await recalcAnnualLeave(staffId);
+
     res.json(result.rows[0]);
 
   } catch (err) {
@@ -185,7 +239,6 @@ router.patch("/:id/edit", async (req, res) => {
     res.status(500).json({ message: "Failed to update leave details" });
   }
 });
-
 /* ============================================================
    3) UPDATE STATUS (APPROVE / REJECT / CANCELLATION)
    PATCH /api/leave-requests/:id
@@ -332,15 +385,22 @@ router.patch("/:id", async (req, res) => {
       return res.status(404).json({ message: "Leave request not found" });
     }
 
-    res.json(result.rows[0]);
+    const updatedLeave = result.rows[0];
+    const staffId = updatedLeave.staff_id;
+
+    /* ============================================================
+       🔄 AUTO RECALCULATE AFTER STATUS CHANGE
+       (Approve / Reject / Cancel)
+    ============================================================ */
+    await recalcAnnualLeave(staffId);
+
+    res.json(updatedLeave);
 
   } catch (err) {
     console.error("PATCH /api/leave-requests error:", err);
     res.status(500).json({ message: "Failed to update leave request" });
   }
 });
-
-
 /* ============================================================
    5) DELETE ALL LEAVE REQUESTS FOR A STAFF
    DELETE /api/leave-requests/by-staff/:staffId
@@ -353,6 +413,9 @@ router.delete("/by-staff/:staffId", async (req, res) => {
       "DELETE FROM leave_requests WHERE staff_id = $1",
       [staffId]
     );
+
+    // 🔄 Recalculate AL balance after mass delete
+    await recalcAnnualLeave(staffId);
 
     res.json({ success: true });
   } catch (err) {
@@ -369,6 +432,18 @@ router.delete("/:id", async (req, res) => {
   try {
     const leaveId = req.params.id;
 
+    // We need to know which staff_id belongs to this leave
+    const find = await pool.query(
+      "SELECT staff_id FROM leave_requests WHERE leave_id = $1",
+      [leaveId]
+    );
+
+    if (!find.rows.length) {
+      return res.status(404).json({ message: "Not found" });
+    }
+
+    const staffId = find.rows[0].staff_id;
+
     const result = await pool.query(
       "DELETE FROM leave_requests WHERE leave_id = $1 RETURNING *",
       [leaveId]
@@ -377,11 +452,37 @@ router.delete("/:id", async (req, res) => {
     if (!result.rowCount)
       return res.status(404).json({ message: "Not found" });
 
+    // 🔄 Auto recalc AL after delete
+    await recalcAnnualLeave(staffId);
+
     res.json({ success: true });
 
   } catch (err) {
     console.error("DELETE leave error:", err);
     res.status(500).json({ message: "Failed to delete leave" });
+  }
+});
+/* ============================================================
+   7) FORCE RECALCULATE ANNUAL LEAVE BALANCE
+   POST /api/leave-requests/recalculate/:staffId
+   ============================================================ */
+router.post("/recalculate/:staffId", async (req, res) => {
+  try {
+    const staffId = req.params.staffId;
+
+    // Call our recalc function
+    const newBalance = await recalcAnnualLeave(staffId);
+
+    res.json({
+      success: true,
+      message: "Annual leave recalculated successfully",
+      staffId: staffId,
+      newBalance: newBalance
+    });
+
+  } catch (err) {
+    console.error("RECALCULATE error:", err);
+    res.status(500).json({ message: "Failed to recalculate leave" });
   }
 });
 

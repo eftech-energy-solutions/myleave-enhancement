@@ -117,7 +117,10 @@ const leaveCodes = {
       l.status
 }))
 
-
+  if (sessionStorage.getItem("forceDashboardRefresh") === "true") {
+        leaves = [...leaves];     // force UI to update
+        sessionStorage.removeItem("forceDashboardRefresh");
+      }
 
     } catch (err) {
       console.error("Failed to load leave history:", err);
@@ -216,6 +219,8 @@ function handleEdit(l) {
     method: "DELETE",
     credentials: "include"
   });
+  
+  sessionStorage.setItem("forceDashboardRefresh", "true");
 
   leaves = leaves.filter(l => l.uuid !== leaveToCancel.uuid);
 }
@@ -231,6 +236,7 @@ function handleEdit(l) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "cancellation_pending" })
     });
+    sessionStorage.setItem("forceDashboardRefresh", "true");
 
     // update UI after backend success
     const index = leaves.findIndex(l => l.uuid === leaveToCancel.uuid);
@@ -264,6 +270,8 @@ async function submitLeave(event) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
+      
+      sessionStorage.setItem("forceDashboardRefresh", "true");
 
       // ⭐ UPDATE UI WITHOUT REFRESH
       const idx = leaves.findIndex(l => l.uuid === editingUuid);

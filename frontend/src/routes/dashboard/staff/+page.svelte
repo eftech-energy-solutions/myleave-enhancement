@@ -243,18 +243,21 @@
   }
 let user = null;
 
-  onMount(async () => {
-  // 1) Load staff profile (FULL data)
+onMount(async () => {
   const meRes = await fetch("/api/me", { credentials: "include" });
   user = { ...(await meRes.json()) };
-  console.log("USER DATA", user);   // <= letak sini
 
-  // 2) Load holidays
   await loadHolidays();
-
-  // 3) Load recent applications
   await loadRecent();
+
+  // 🔥 PATCH 1: If staffhistory changed something, force reload dashboard recent
+  if (sessionStorage.getItem("forceDashboardRefresh") === "true") {
+    await loadRecent();
+    recent = [...recent];          // 🔥 force UI update
+    sessionStorage.removeItem("forceDashboardRefresh");
+  }
 });
+
 
 
 // Reactive donut values once user is loaded
@@ -487,7 +490,7 @@ async function loadRecent() {
           l.status === "cancellation_pending" ? "Cancellation Pending" :
           l.status
       }));
-
+    recent = [...recent];
   } catch (err) {
     console.error("Failed to load recent staff leaves:", err);
   }
