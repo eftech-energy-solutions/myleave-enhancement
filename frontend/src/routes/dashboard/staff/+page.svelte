@@ -266,9 +266,10 @@ $: donuts = user ? [
     title: "Annual Leave Summary",
     total: user.leave_entitlement_annual_original ?? 14,
     spent: (user.leave_entitlement_annual_original ?? 14)
-         - (user.leave_entitlement_annual ?? 14),
+        - (user.leave_entitlement_annual ?? 14),
     carryForward: user.carry_forward_balance ?? 0
   },
+
 
   {
     title: "Medical Leave Summary",

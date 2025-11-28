@@ -206,29 +206,21 @@ function handleEdit(l) {
 }
 
 
-  async function confirmCancellation() {
+async function confirmCancellation() {
   if (!leaveToCancel) return;
 
-  // ================================
-  // 1) If PENDING → DELETE from DB
-  // ================================
- if (leaveToCancel.status === "Pending") {
-  console.log("DELETE ONE LEAVE UUID →", leaveToCancel.uuid); // debug
+  // 1) Pending → DELETE
+  if (leaveToCancel.status === "Pending") {
+    await fetch(`/api/leave-requests/${leaveToCancel.uuid}`, {
+      method: "DELETE",
+      credentials: "include"
+    });
 
-  await fetch(`http://localhost:5000/api/leave-requests/${leaveToCancel.uuid}`, {
-    method: "DELETE",
-    credentials: "include"
-  });
-  
-  sessionStorage.setItem("forceDashboardRefresh", "true");
+    sessionStorage.setItem("forceDashboardRefresh", "true");
+    leaves = leaves.filter(l => l.uuid !== leaveToCancel.uuid);
+  }
 
-  leaves = leaves.filter(l => l.uuid !== leaveToCancel.uuid);
-}
-
-
-  // ==========================================
-  // 2) If APPROVED → SET cancellation_pending
-  // ==========================================
+  // 2) Approved → Send cancellation request
   else if (leaveToCancel.status === "Approved") {
     await fetch(`/api/leave-requests/${leaveToCancel.uuid}`, {
       method: "PATCH",
@@ -236,9 +228,10 @@ function handleEdit(l) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "cancellation_pending" })
     });
+
     sessionStorage.setItem("forceDashboardRefresh", "true");
 
-    // update UI after backend success
+    // update UI
     const index = leaves.findIndex(l => l.uuid === leaveToCancel.uuid);
     if (index !== -1) {
       leaves[index].status = "Cancellation Pending";
@@ -248,6 +241,7 @@ function handleEdit(l) {
 
   closeConfirmationModal();
 }
+
 async function submitLeave(event) {
   event.preventDefault();
 

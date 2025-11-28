@@ -13,12 +13,87 @@
     return { destroy: () => document.removeEventListener('click', onClick) };
   }
 
-  // donuts — keep
-  const donuts = [
-    { title: 'Staff Annual Leave Summary', spent: 1, total: 14 },
-    { title: 'Staff Medical Leave Summary', spent: 0, total: 14 },
-    { title: 'Staff Hospitalization Leave Summary', spent: 0, total: 60 }
-  ];
+let hoveredDonut = null;
+let hoveredSlice = null;
+
+const donuts = [
+  { 
+    title: "Staff Annual Leave Summary",
+    key: "annual",
+    canvas: null
+  },
+  { 
+    title: "Staff Medical Leave Summary",
+    key: "medical",
+    canvas: null
+  },
+  { 
+    title: "Staff Hospitalization Leave Summary",
+    key: "hospital",
+    canvas: null
+  }
+];
+
+const staffLeaveData = {
+  annual: {
+    taken: [
+      { name: "Alya", days: 3 },
+      { name: "Azira", days: 4 },
+      { name: "Nur", days: 7 }
+    ],
+    remaining: [
+      { name: "Alya", days: 5 },
+      { name: "Azira", days: 3 },
+      { name: "Nur", days: 1 }
+    ],
+    carry: [
+      { name: "Alya", days: 2 },
+      { name: "Azira", days: 1 },
+      { name: "Nur", days: 0 }
+    ]
+  },
+  medical: {
+    taken: [
+      { name: "Alya", days: 1 },
+      { name: "Azira", days: 0 },
+      { name: "Nur", days: 3 }
+    ],
+    remaining: [
+      { name: "Alya", days: 13 },
+      { name: "Azira", days: 14 },
+      { name: "Nur", days: 11 }
+    ],
+    carry: [
+      { name: "Alya", days: 0 },
+      { name: "Azira", days: 0 },
+      { name: "Nur", days: 0 }
+    ]
+  },
+  hospital: {
+    taken: [
+      { name: "Alya", days: 10 },
+      { name: "Azira", days: 2 },
+      { name: "Nur", days: 0 }
+    ],
+    remaining: [
+      { name: "Alya", days: 50 },
+      { name: "Azira", days: 58 },
+      { name: "Nur", days: 60 }
+    ],
+    carry: [
+      { name: "Alya", days: 7 },
+      { name: "Azira", days: 5 },
+      { name: "Nur", days: 0 }
+    ]
+  }
+};
+
+function getKey(title) {
+  if (title.includes("Annual")) return "annual";
+  if (title.includes("Medical")) return "medical";
+  if (title.includes("Hospital")) return "hospital";
+}
+
   const pct = (s, t) => (t > 0 ? Math.round((s/t)*100) : 0);
 
   // ======= Employees Overview State =======
@@ -33,82 +108,147 @@
     "#C9E4DE", "#DBCDF0", "#E2F0CB"
   ];
 
-  // ===== FETCH DEPT DATA + RENDER CHART =====
-  onMount(async () => {
-    try {
-      const res = await fetch("http://localhost:5000/api/employee/department-summary");
-      if (!res.ok) throw new Error("Failed to load");
+ // ===== FETCH DEPT DATA + RENDER CHART =====
+onMount(async () => {
+  try {
+    const res = await fetch("http://localhost:5000/api/employee/department-summary");
+    if (!res.ok) throw new Error("Failed to load");
 
-      const json = await res.json();
+    const json = await res.json();
 
-      // fill your array (same as admin)
-      dataByDept = json.departments.map((d, i) => ({
-        name: d.name,
-        count: d.count,
-        color: palette[i % palette.length]
-      }));
+    dataByDept = json.departments.map((d, i) => ({
+      name: d.name,
+      count: d.count,
+      color: palette[i % palette.length]
+    }));
 
-      // calculate totals
-      totalEmployees = dataByDept.reduce((a,b)=>a+b.count, 0);
+    totalEmployees = dataByDept.reduce((a,b)=>a+b.count, 0);
 
-      // now draw chart
-      await tick();
-      if (canvasEl) {
-        new Chart(canvasEl, {
-          type: 'bar',
-          data: {
-            labels: dataByDept.map(d=>d.name),
-            datasets: [{
-              label: 'Active Employees',
-              data: dataByDept.map(d=>d.count),
-              backgroundColor: dataByDept.map(d=>d.color),
-              borderColor: dataByDept.map(d=>d.color),
-              borderWidth: 1,
-              borderRadius: 8
-            }]
+    await tick();
+
+    // ✅ BAR CHART
+    if (canvasEl) {
+      new Chart(canvasEl, {
+        type: 'bar',
+        data: {
+          labels: dataByDept.map(d=>d.name),
+          datasets: [{
+            label: 'Active Employees',
+            data: dataByDept.map(d=>d.count),
+            backgroundColor: dataByDept.map(d=>d.color),
+            borderColor: dataByDept.map(d=>d.color),
+            borderWidth: 1,
+            borderRadius: 8
+          }]
+        },
+        options: {
+          responsive:true,
+          maintainAspectRatio:false,
+          plugins:{ legend:{ display:false }},
+          scales:{
+            x:{ ticks:{ autoSkip:false, maxRotation:40, minRotation:0 }},
+            y:{ beginAtZero:true }
+          }
+        }
+      });
+    }
+
+    // ✅ DONUT CHARTS
+    donuts.forEach(d => {
+      const data = staffLeaveData[d.key];
+
+      const totalTaken = data.taken.reduce((a,b)=>a+b.days,0);
+      const totalRemaining = data.remaining.reduce((a,b)=>a+b.days,0);
+      const totalCarry = data.carry.reduce((a,b)=>a+b.days,0);
+
+      new Chart(d.canvas, {
+        type: 'doughnut',
+        data: {
+          labels: ['Taken Leave', 'Remaining Leave', 'Carry-forward Leave'],
+          datasets: [{
+            data: [1, 1, 1],   // ✅ semua slice sama besar
+            backgroundColor: ['#ef4444', '#3b82f6', '#10b981'],
+            hoverOffset: 10,
+            borderWidth: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '65%',
+          layout: {
+            padding: { right: 24 }
           },
-          options: {
-            responsive:true,
-            maintainAspectRatio:false,
-            plugins:{ legend:{ display:false }},
-            scales:{
-              x:{ ticks:{ autoSkip:false, maxRotation:40, minRotation:0 }},
-              y:{ beginAtZero:true }
+          plugins: {
+            tooltip: {
+              displayColors: false,
+              callbacks: {
+                title: (items) => items[0].label,
+                label: (ctx) => {
+                  const slice =
+                    ctx.label.includes('Taken') ? 'taken' :
+                    ctx.label.includes('Remaining') ? 'remaining' : 'carry';
+
+                  const list = staffLeaveData[d.key][slice];
+                  return list.map(s => `${s.name}: ${s.days}`);
+                }
+              }
+            },
+            legend: {
+              display: false
             }
           }
-        });
-      }
+        }
+      });
+    });
 
-      loading = false;
+    loading = false;
 
-    } catch (err) {
-      console.error(err);
-      error = "Failed to load employee overview";
-      loading = false;
-    }
-  });
+  } catch (err) {
+    console.error(err);
+    error = "Failed to load employee overview";
+    loading = false;
+  }
+});
+
 </script>
 
 <main class="main">
 
-  <!-- GRID -->
-  <div class="grid">
-    <!-- donuts -->
-    {#each donuts as d}
-      <div class="card" style="grid-column: span 4;">
-        <h3 class="donut-title">{d.title}</h3>
-        <div class="donut fancy"
-          style="--size:110px; --spent:{pct(d.spent,d.total)}; --spent-color: var(--spentRed); --rest-color: var(--restBlue);">
-        </div>
-        <div class="legend-row">
-          <div class="legend-item"><span class="chip spent"></span><span>Spent Leave</span></div>
-          <div class="legend-item"><span class="chip unspent"></span><span>Unspent Leave</span></div>
-        </div>
-        <div class="total-line">Total spent: {d.spent}/{d.total}</div>
-      </div>
-    {/each}
+<div class="grid">
+ {#each donuts as d}
+  <div class="card" style="grid-column: span 4;">
+    <h3 class="donut-title">{d.title}</h3>
 
-    <!-- chart -->
+    <div class="donut-container">
+  <canvas bind:this={d.canvas}></canvas>
+    </div>
+    <!-- ✅ CUSTOM INDICATOR BAWAH SETIAP DONUT -->
+    <div class="legend-custom">
+        <div class="legend-row-top">
+          <div class="legend-item">
+            <span class="chip" style="background:#ef4444"></span>
+            <span>Taken Leave</span>
+          </div>
+
+          <div class="legend-item">
+            <span class="chip" style="background:#3b82f6"></span>
+            <span>Remaining Leave</span>
+          </div>
+        </div>
+
+        <div class="legend-row-bottom">
+          <div class="legend-item">
+            <span class="chip" style="background:#10b981"></span>
+            <span>Carry-forward Leave</span>
+          </div>
+        </div>
+      </div>
+  </div>
+{/each}
+
+
+    <!-- CHART -->
     <div class="card" style="grid-column: span 6;">
       <h3>Total Active Employees</h3>
       <div style="height: 360px;">
@@ -116,7 +256,7 @@
       </div>
     </div>
 
-    <!-- numbers -->
+    <!-- EMPLOYEE NUMBERS -->
     <div class="card" style="grid-column: span 6;">
       <h3>Employees Overview</h3>
       <div class="stats">
@@ -124,14 +264,21 @@
           <div class="label">Total Employees</div>
           <div class="value">{totalEmployees}</div>
         </div>
+
         {#each dataByDept as d (d.name)}
           <div class="stat">
-            <div class="label"><span class="dot" style="background:{d.color}"></span>{d.name}</div>
+            <div class="label">
+              <span class="dot" style="background:{d.color}"></span>
+              {d.name}
+            </div>
             <div class="value">{d.count}</div>
           </div>
         {/each}
       </div>
-      <a class="numbers-link" href="/dashboard/admin/employees">View employees</a>
+
+      <a class="numbers-link" href="/dashboard/admin/employees">
+        View employees
+      </a>
     </div>
   </div>
 </main>
@@ -147,22 +294,51 @@
 
   /* donut */
   :global(:root){ --spentRed:#ef4444; --restBlue:#3b82f6; }
-  .donut.fancy{
-    height: var(--size, 110px); width: var(--size, 110px);
-    border-radius:9999px; margin:6px auto 8px;
-    background: conic-gradient(var(--spent-color, #ef4444) calc(var(--spent) * 1%), var(--rest-color, #3b82f6) 0);
-    display:grid; place-items:center; box-shadow:var(--shadow); position: relative;
-  }
-  .donut.fancy::after{
-    content:""; height:66%; width:66%; background:#fff; border-radius:9999px; box-shadow:inset 0 0 0 1px var(--ring);
-  }
-  .donut-title{ font-size:14px; font-weight:700; color:#374151; margin:0 0 6px; }
-  .legend-row{ display:flex; gap:18px; justify-content:center; align-items:center; margin:6px 0 2px; font-size:12px; color:#6b7280; }
-  .legend-item{ display:flex; align-items:center; gap:8px; }
-  .chip{ display:inline-block; width:24px; height:8px; border-radius:4px; }
-  .chip.spent{ background: var(--spentRed); }
-  .chip.unspent{ background: var(--restBlue); }
-  .total-line{ text-align:center; font-size:12px; color:#6b7280; margin-top:4px; }
+
+ .donut-container {
+  width: 140px;
+  height: 140px;
+  margin: 6px auto 2px auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: translateY(-10px);
+  margin-left: 135px;
+}
+
+  .legend-custom {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  transform: translateY(-15px);
+  margin-top: 0px;
+}
+
+.legend-row-top {
+  display: flex;
+  gap: 18px;
+}
+
+.legend-row-bottom {
+  display: flex;
+  justify-content: center;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+
+.chip {
+  width: 22px;
+  height: 8px;
+  border-radius: 4px;
+}
 
   /* numbers panel */
   .stats{ display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:10px; margin-top:8px; } /*grid employee overview*/

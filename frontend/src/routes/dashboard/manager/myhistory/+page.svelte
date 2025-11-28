@@ -589,10 +589,7 @@ function onUntilChange() {
     background: #dcfce7;
     color: #166534;
   }
-  .delete-btn svg {
-    width: 18px;
-    height: 18px;
-  }
+
 
   /* ===== MODAL ===== */
   .modal-backdrop {
@@ -698,9 +695,6 @@ function onUntilChange() {
     border-radius: 8px;
     padding: 8px 10px;
   }
-  .leave-form input[required]:invalid, .leave-form textarea[required]:invalid {
-    border-color: #ef4444;
-  }
   
   /* --- Keep radios inline/left without changing their markup position --- */
   .leave-form .duration {
@@ -767,4 +761,3 @@ function onUntilChange() {
     th, td { padding: 8px 10px; }
   }
 </style>
-

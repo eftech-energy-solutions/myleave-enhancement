@@ -3,97 +3,101 @@
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&display=swap" rel="stylesheet" />
 
 <script>
-  // ——— Demo data (with dateFrom/dateTo) ———
-  const rows = [
-    { month: 'January', employees: [
-      { id: 'EMP001', name: 'Afiq Mikail',   department: 'Engineering', totalDays: 2, leaveType: 'Annual',    status: 'Approved', dateFrom: '2025-01-05', dateTo: '2025-01-06' },
-      { id: 'EMP014', name: 'Nur Aisyah',    department: 'Finance',     totalDays: 1, leaveType: 'Emergency', status: 'Approved', dateFrom: '2025-01-12', dateTo: '2025-01-12' },
-    ]},
-    { month: 'February', employees: [
-      { id: 'EMP006', name: 'Daniel Tan',    department: 'Sales',       totalDays: 2, leaveType: 'Annual',    status: 'Approved', dateFrom: '2025-02-03', dateTo: '2025-02-04' },
-      { id: 'EMP007', name: 'Sophia Lim',    department: 'Marketing',   totalDays: 1, leaveType: 'Sick',      status: 'Pending',  dateFrom: '2025-02-18', dateTo: '2025-02-18' },
-    ]},
-    { month: 'March', employees: [
-      { id: 'EMP009', name: 'Jason Ong',     department: 'Engineering', totalDays: 1, leaveType: 'Annual',    status: 'Cancelled', dateFrom: '2025-03-02', dateTo: '2025-03-02' }, // Example of a cancelled leave
-      { id: 'EMP011', name: 'Puteri',        department: 'Operations',  totalDays: 2, leaveType: 'Annual',    status: 'Approved', dateFrom: '2025-03-10', dateTo: '2025-03-11' },
-      { id: 'EMP012', name: 'Farah Zahra',   department: 'HR',          totalDays: 1, leaveType: 'Sick',      status: 'Rejected', dateFrom: '2025-03-15', dateTo: '2025-03-15' },
-      { id: 'EMP015', name: 'Amirul Hakim',  department: 'Support',     totalDays: 3, leaveType: 'Annual',    status: 'Approved', dateFrom: '2025-03-25', dateTo: '2025-03-27' },
-    ]},
-    { month: 'April', employees: [
-      { id: 'EMP017', name: 'Nabila Rahman', department: 'Design',      totalDays: 1, leaveType: 'Unpaid',    status: 'Approved', dateFrom: '2025-04-08', dateTo: '2025-04-08' },
-      { id: 'EMP018', name: 'Hakim Rahman',  department: 'Engineering', totalDays: 2, leaveType: 'Annual',    status: 'Pending',  dateFrom: '2025-04-20', dateTo: '2025-04-21' },
-    ]},
-    { month: 'May', employees: [
-      { id: 'EMP021', name: 'Ariana Wong',   department: 'Legal',       totalDays: 2, leaveType: 'Annual',    status: 'Approved', dateFrom: '2025-05-06', dateTo: '2025-05-07' },
-      { id: 'EMP022', name: 'John Lee',      department: 'Finance',     totalDays: 1, leaveType: 'Sick',      status: 'Approved', dateFrom: '2025-05-16', dateTo: '2025-05-16' },
-    ]},
-    { month: 'June', employees: [] },
-    { month: 'July', employees: [
-      { id: 'EMP025', name: 'Hafiz Rahman',  department: 'Support',     totalDays: 2, leaveType: 'Annual',    status: 'Approved', dateFrom: '2025-07-03', dateTo: '2025-07-04' },
-      { id: 'EMP014', name: 'Nur Aisyah',    department: 'Finance',     totalDays: 1, leaveType: 'Emergency', status: 'Approved', dateFrom: '2025-07-19', dateTo: '2025-07-19' },
-    ]},
-    { month: 'August', employees: [
-      { id: 'EMP006', name: 'Daniel Tan',    department: 'Sales',       totalDays: 1, leaveType: 'Sick',      status: 'Approved', dateFrom: '2025-08-11', dateTo: '2025-08-11' },
-      { id: 'EMP007', name: 'Sophia Lim',    department: 'Marketing',   totalDays: 2, leaveType: 'Annual',    status: 'Approved', dateFrom: '2025-08-24', dateTo: '2025-08-25' },
-    ]},
-    { month: 'September', employees: [
-      { id: 'EMP001', name: 'Afiq Mikail',   department: 'Engineering', totalDays: 1, leaveType: 'Annual',    status: 'Approved', dateFrom: '2025-09-05', dateTo: '2025-09-05' },
-      { id: 'EMP017', name: 'Nabila Rahman', department: 'Design',      totalDays: 2, leaveType: 'Unpaid',    status: 'Pending',  dateFrom: '2025-09-20', dateTo: '2025-09-21' },
-    ]},
-    { month: 'October', employees: [
-      { id: 'EMP009', name: 'Jason Ong',     department: 'Engineering', totalDays: 1, leaveType: 'Annual',    status: 'Approved', dateFrom: '2025-10-09', dateTo: '2025-10-09' },
-    ]},
-    { month: 'November', employees: [
-      { id: 'EMP011', name: 'Puteri',        department: 'Operations',  totalDays: 1, leaveType: 'Sick',      status: 'Approved', dateFrom: '2025-11-04', dateTo: '2025-11-04' },
-      { id: 'EMP012', name: 'Farah Zahra',   department: 'HR',          totalDays: 2, leaveType: 'Annual',    status: 'Approved', dateFrom: '2025-11-18', dateTo: '2025-11-19' },
-    ]},
-    { month: 'December', employees: [
-      { id: 'EMP001', name: 'Afiq Mikail',   department: 'Engineering', totalDays: 2, leaveType: 'Annual',    status: 'Approved', dateFrom: '2025-12-02', dateTo: '2025-12-03' },
-      { id: 'EMP007', name: 'Sophia Lim',    department: 'Marketing',   totalDays: 1, leaveType: 'Sick',      status: 'Approved', dateFrom: '2025-12-12', dateTo: '2025-12-12' },
-      { id: 'EMP022', name: 'John Lee',      department: 'Finance',     totalDays: 2, leaveType: 'Annual',    status: 'Approved', dateFrom: '2025-12-20', dateTo: '2025-12-21' },
-    ]},
-  ];
+  import { onMount } from "svelte";
 
-  // modal state
+  let rows = [];
   let showModal = false;
-  let selected = null;    // {month, employees}
+  let selected = null;
   let showAll = false;
+
+  const months = [
+    "January","February","March","April","May","June",
+    "July","August","September","October","November","December"
+  ];
+  const monthShort = ['All','Jan','Feb','Mar','Apr','May','June','July','Aug','Sept','Oct','Nov','Dec'];
+  const railTabs = [{ label: 'All', value: 'All' }, ...months.map((m,i)=>({label:monthShort[i+1], value:m}))];
+
+  let statusFilter = "";
+  let deptFilter = "";
+  let q = "";
+  let monthFilter = "All";
+
+  let allDepartments = [];
+
+  // ===== Fetch Manager-filtered data =====
+  onMount(async () => {
+    const res = await fetch("/api/leave-requests/history/all");
+    const data = await res.json();
+
+    // group by month (same as dummy data)
+    rows = groupByMonth(data);
+
+    // dynamic department list from DB
+    allDepartments = Array.from(
+      new Set(data.map(e => e.department).filter(Boolean))
+    ).sort();
+  });
+function groupByMonth(list) {
+  const out = months.map(m => ({ month: m, employees: [] }));
+
+  list.forEach(item => {
+    if (!item.date_from || !item.date_until) return;
+
+    const start = new Date(item.date_from);
+    const end   = new Date(item.date_until);
+
+    let startMonth = start.getMonth();
+    let endMonth   = end.getMonth();
+
+    // If same month → push once
+    if (startMonth === endMonth) {
+      out[startMonth].employees.push(makeEmployeeRecord(item));
+    } 
+    // If spans multiple months → push into ALL involved months
+    else {
+      for (let m = startMonth; m <= endMonth; m++) {
+        out[m].employees.push(makeEmployeeRecord(item));
+      }
+    }
+  });
+
+  // 🔥 SORT employees inside each month by earliest date_from
+  out.forEach(monthObj => {
+    monthObj.employees.sort((a, b) => {
+      const da = new Date(a.dateFrom);
+      const db = new Date(b.dateFrom);
+      return da - db;  // earliest → latest
+    });
+  });
+
+  return out;
+}
+
+function makeEmployeeRecord(item) {
+  return {
+    id: item.staff_id,
+    name: item.staff_name,
+    department: item.department,
+    totalDays: item.total_days,
+    leaveType: item.leave_type,
+    status: item.status.charAt(0).toUpperCase() + item.status.slice(1),
+    dateFrom: item.date_from,
+    dateTo: item.date_until
+  };
+}
+
+
+
+  // ===== UI handlers =====
+  const count = row =>
+    row.employees.filter(e =>
+      e.status === "Approved" || e.status === "Pending"
+    ).length;
 
   function onDetails(row){ selected = row; resetFiltersForMonthView(); showModal = true; }
   function closeModal(){ showModal = false; selected = null; showAll = false; }
-
   function handleKey(e){ if(e.key === 'Escape') closeModal(); }
 
-  // Count only 'Approved' and 'Pending' leaves for the card display
-  const count = (row) => row.employees.filter(e => e.status === 'Approved' || e.status === 'Pending').length;
-
-  // months + ALL tab for the rail
-  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-  const monthShort = ['All','Jan','Feb','Mar','Apr','May','June','July','Aug','Sept','Oct','Nov','Dec'];
-  const railTabs = [{ label: 'All', value: 'All' }, ...months.map((m, i) => ({ label: monthShort[i+1], value: m }))];
-
-  function jumpToMonth(m){
-    if (m === 'All') { selectAllMonths(); return; }
-    const found = rows.find(r => r.month === m);
-    if(found){ selected = found; resetFiltersForMonthView(); }
-  }
-
-  // dates formatting
-  const fmt = (iso) => new Date(iso).toLocaleDateString(undefined,{day:'numeric', month:'short', year:'numeric'});
-  const dateRange = (a,b) => a===b ? fmt(a) : `${fmt(a)} – ${fmt(b)}`;
-
-  // ======== Top-right filters ========
-  let statusFilter = '';   // '', 'Approved', 'Pending', 'Rejected', 'Cancelled'
-  let deptFilter = '';     // '', or department name
-  let q = '';              // search Name/ID
-  let monthFilter = 'All'; // 'All' or one of months (used in ALL view)
-
-  // Unique departments (for dropdown)
-  const allDepartments = Array.from(new Set(
-    rows.flatMap(r => r.employees.map(e => e.department))
-  )).sort();
-
-  // Flatten all employees with their month for ALL view
   $: allCombined = rows.flatMap(r => r.employees.map(e => ({ ...e, _month: r.month })));
 
   function selectAllMonths(){
@@ -101,10 +105,16 @@
     monthFilter = 'All';
   }
 
+  function jumpToMonth(m){
+    if (m === 'All') return selectAllMonths();
+    const found = rows.find(r => r.month === m);
+    if(found){ selected = found; resetFiltersForMonthView(); }
+  }
+
   function onMonthFilterChange(value){
     if (!selected) return;
-    if (value === 'All') { selectAllMonths(); return; }
-    if (months.includes(value)) { jumpToMonth(value); }
+    if (value === 'All') return selectAllMonths();
+    if (months.includes(value)) jumpToMonth(value);
   }
 
   function resetFiltersForMonthView(){
@@ -112,28 +122,41 @@
     showAll = false;
   }
 
-  // Apply filters to the selected list
+  function fmt(iso){
+    return new Date(iso).toLocaleDateString(undefined,{
+      day:'numeric', month:'short', year:'numeric'
+    });
+  }
+
+  const dateRange = (a,b) => a===b ? fmt(a) : `${fmt(a)} – ${fmt(b)}`;
+
   const applyFilters = (list=[]) => {
     let out = list;
-    if (selected?.month === 'All' && monthFilter && monthFilter !== 'All') {
+
+    if (selected?.month === 'All' && monthFilter !== 'All')
       out = out.filter(e => e._month === monthFilter);
-    }
-    if (statusFilter) {
-      const s = statusFilter.toLowerCase();
-      out = out.filter(e => (e.status || '').toLowerCase() === s);
-    }
-    if (deptFilter) out = out.filter(e => e.department === deptFilter);
+
+    if (statusFilter)
+      out = out.filter(e => e.status.toLowerCase() === statusFilter.toLowerCase());
+
+    if (deptFilter)
+      out = out.filter(e => e.department === deptFilter);
+
     if (q.trim()) {
       const term = q.trim().toLowerCase();
-      out = out.filter(e => e.name.toLowerCase().includes(term) || e.id.toLowerCase().includes(term));
+      out = out.filter(e =>
+        e.name.toLowerCase().includes(term) ||
+        e.id.toLowerCase().includes(term)
+      );
     }
+
     return out;
   };
 
-  // reactive derived lists
   $: filtered = selected ? applyFilters(selected.employees) : [];
   $: total = filtered.length;
 </script>
+
 
 <svelte:window on:keydown={handleKey}/>
 
