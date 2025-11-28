@@ -202,7 +202,7 @@ async function loadRecent() {
     start.setDate(first.getDate() - ((first.getDay() + 6) % 7));
 
     const arr = [];
-    for (let i = 0; i < 42; i++) {
+    for (let i = 0; i < 35; i++) {
       const d = new Date(start);
       d.setDate(start.getDate() + i);
       const iso = localISO(d);
@@ -513,8 +513,25 @@ async function submitLeave(e) {
   <!-- POKOK 'if loading' DIBUANG DARI SINI UNTUK MEMASTIKAN UI SENTIASA KELIHATAN -->
   <div class="grid">
     {#each donuts as d, i}
-      <div class="card" style="grid-column: span 4;">
+    <div class="card chart-card" style="grid-column: span 4;">
+            <!-- <div class="card" style="grid-column: span 4;"> -->
+              <div class="card-header">
         <h3 class="donut-title">{d.title}</h3>
+
+        {#if d.title.toLowerCase().includes('annual')}
+          <div class="cf-top">
+        <span>Carry forward: {formatCF(d.carryForward)}/7</span>
+
+        <div class="cf-tip-wrap">
+          <button class="info-btn tiny">ⓘ</button>
+          <span class="tooltip">
+            Carry-forward is capped at 7 days and expires before 1st of April.
+          </span>
+        </div>
+      </div>
+
+        {/if}
+      </div>
         <div
           class="donut fancy"
           style="--size:110px; --spent:{pct(d.spent,d.total)}; --spent-color: var(--spentRed); --rest-color: var(--restBlue);"
@@ -524,21 +541,11 @@ async function submitLeave(e) {
           <div class="legend-item"><span class="chip unspent"></span><span>Remaining Leave</span></div>
         </div>
         <div class="total-line">Total spent: {d.spent}/{d.total}</div>
-
-        {#if d.title.toLowerCase().includes('annual')}
-          <div class="cf-line">
-            Carry forward: {formatCF(d.carryForward)}/7
-            <button type="button" class="info-btn" aria-describedby={"cf-tip-" + i} tabindex="0">ⓘ</button>
-            <span class="tooltip" id={"cf-tip-" + i} role="tooltip">
-              Carry-forward is capped at 7 days and expires before April (start of April).
-            </span>
-          </div>
-        {/if}
       </div>
     {/each}
 
     <!-- Calendar -->
-    <div class="card" style="grid-column: span 4;">
+    <div class="card calendar-card" style="grid-column: span 4;">
       <h3>Leave Application</h3>
       {#if loading}
         <p>Loading holidays...</p>
@@ -614,7 +621,7 @@ async function submitLeave(e) {
     </div>
 
     <!-- Recent -->
-    <div class="card" style="grid-column: span 8;">
+    <div class="card recent-card small-card" style="grid-column: span 8;">
       <h3>Recent Application</h3>
       <div class="recent-wrap">
         {#each recent as r}
@@ -625,7 +632,6 @@ async function submitLeave(e) {
               <div><div class="muted">Leave Type:</div><div>{r.type}</div></div>
               <div><div class="muted">Status:</div><div>{r.status}</div></div>
             </div>
-            <a class="link" href={`/dashboard/manager/myhistory`}>Details</a>
           </div>
         {/each}
       </div>
@@ -714,11 +720,6 @@ async function submitLeave(e) {
 <style>
   .main { padding: 18px; }
 
-  .donut-row-header{
-    display:flex; justify-content:flex-end; align-items:center;
-    margin: 8px 0 6px;
-  }
-
   .sw-blue{ background:#71c0f5; border:1px solid #71c0f5; }
   .sw-today{ background:#fff; border:1px solid #49bdb3; }
   .legend.small{
@@ -726,10 +727,14 @@ async function submitLeave(e) {
   }
   .swatch{ display:inline-block; width:14px; height:9px; border-radius:3px; margin-right:6px; vertical-align:middle; }
 
-  .grid{ margin-top:6px; display:grid; gap:10px; grid-template-columns:repeat(12, minmax(0,1fr)); }
+  .grid{ margin-top:-35px; display:grid; gap:10px; grid-template-columns:repeat(12, minmax(0,1fr)); }
 
   :global(:root){ --spentRed:#ef4444; --restBlue:#3b82f6; --ring:#e5e7eb; --shadow:0 2px 12px rgba(0,0,0,.06); }
-  .card{ border:1px solid var(--ring); border-radius:12px; padding:12px; background:#fff; box-shadow:var(--shadow); }
+  html, body {
+  overflow: hidden;
+  height: 100%;
+}
+  .card{ border:1px solid var(--ring); border-radius:12px; padding:8px; background:#fff; box-shadow:var(--shadow); overflow: visible; }
   .text-red-600 { color: #dc2626; }
 
   .donut.fancy{
@@ -742,18 +747,79 @@ async function submitLeave(e) {
     content:""; height:66%; width:66%; background:#fff; border-radius:9999px; box-shadow:inset 0 0 0 1px var(--ring);
   }
   .donut-title{ font-size:14px; font-weight:700; color:#374151; margin:0 0 6px; }
-  .legend-row{ display:flex; gap:18px; justify-content:center; align-items:center; margin:6px 0 2px; font-size:12px; color:#6b7280; }
-  .legend-item{ display:flex; align-items:center; gap:8px; }
+  .legend-row{ display:flex; gap:18px; justify-content:center; align-items:center; margin:6px 0 2px; font-size:12px; color:#6b7280;  }
+  .legend-item{ display:flex; align-items:center; gap:8px;  }
   .chip{ display:inline-block; width:24px; height:8px; border-radius:4px; }
   .chip.spent{ background: var(--spentRed); }
   .chip.unspent{ background: var(--restBlue); }
   .total-line{ text-align:center; font-size:12px; color:#6b7280; margin-top:4px; }
 
   /* carry-forward line + tooltip (added) */
-  .cf-line{
-    margin-top:6px; text-align:center; font-size:12px; color:#6b7280;
-    position:relative; display:flex; align-items:center; justify-content:center; gap:6px;
-  }
+  .card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+.cf-top {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+}
+
+/* wrap ensures hover works */
+.cf-tip-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+.cf-tip-wrap .tooltip {
+  position: absolute;
+  bottom: -55px; /* boleh adjust */
+  left: 50%;
+  transform: translateX(-50%);
+  background: #111827;
+  color: #fff;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 10px;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  box-shadow: 0 4px 18px rgba(0,0,0,.2);
+  transition: opacity .15s ease;
+  z-index: 50;
+  white-space: normal;      /* allow multiple lines */
+width: max-content;       /* expand naturally */
+max-width: 150px;         /* optional — so it wraps instead of going super long */
+
+}
+
+.cf-tip-wrap .tooltip::after {
+  content: "";
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-bottom-color: #111827;
+}
+
+/* Hover logic */
+.cf-tip-wrap:hover .tooltip,
+.cf-tip-wrap:focus-within .tooltip {
+  opacity: 1;
+  visibility: visible;
+}
+
+
+.info-btn.tiny {
+  width: 14px;
+  height: 14px;
+  font-size: 10px;
+}
+
   .info-btn {
   border: none;
   background: none;      /* remove blue background */
@@ -791,6 +857,30 @@ async function submitLeave(e) {
   color: #1d4ed8;
 }
 
+.chart-card {
+  padding: 8px 10px;         /* kecilkan padding card */
+}
+
+.chart-card .donut.fancy {
+  --size: 90px !important;   /* donut kecil (default 110px) */
+}
+
+.chart-card .donut-title {
+  font-size: 13px !important;
+  margin-bottom: 4px;
+}
+
+.chart-card .legend-row {
+  font-size: 11px !important;
+  margin: 4px 0;
+}
+
+.chart-card .total-line {
+  font-size: 11px !important;
+  margin-top: 2px;
+}
+
+
   .tooltip{
     position:absolute; bottom:130%; left:50%; transform:translateX(-50%);
     background:#111827; color:#fff; padding:6px 8px; border-radius:6px; font-size:12px; white-space:nowrap;
@@ -803,12 +893,12 @@ async function submitLeave(e) {
   }
   .info-btn:hover + .tooltip, .info-btn:focus + .tooltip{ opacity:1; visibility:visible; }
 
-  .calendar-small{ max-width:360px; margin:0 auto; }
+  .calendar-small{ max-width:370px; margin:0 auto; }
   .calendar .month{
     display:flex; align-items:center; justify-content:space-between;
-    font-weight:700; margin-bottom:6px; gap:8px;
+    font-weight:700; margin-bottom:2px; gap:8px;margin-top: -10px; height: 60px;
   }
-  .calendar .month > span { text-align:center; min-width:160px; }
+  .calendar-card {height: 390px;}
 
   /* --- BARU: Style untuk Dropdown Bulan/Tahun --- */
   /* (Rupa ini disesuaikan agar sepadan dengan .nav-btn manager) */
@@ -817,18 +907,18 @@ async function submitLeave(e) {
     gap: 6px;
     flex-grow: 1; /* Benarkan wrapper membesar */
     justify-content: center; /* Pusatkan dropdowns */
-    min-width: 170px; /* Pastikan ia ada ruang */
+    min-width: 120px; /* Pastikan ia ada ruang */
   }
   .month-select {
     border: none;
     background: #eef2ff;
-    padding: 6px 10px; /* Sesuai dengan .nav-btn manager */
+    padding: 4px 8px; /* Sesuai dengan .nav-btn manager */
     border-radius: 8px;
     cursor: pointer;
     font-weight: 700;
     line-height: 1.4; /* Ketinggian lebih baik untuk <select> */
-    /* font-size: 12px; */ /* Biar default, sama seperti .nav-btn */
-    
+    font-size: 12px; /* Biar default, sama seperti .nav-btn */
+    min-height: 26px;
     /* Overrides khusus untuk <select> */
     padding-right: 28px; /* Ruang untuk arrow */
     appearance: none;
@@ -836,33 +926,37 @@ async function submitLeave(e) {
     background-repeat: no-repeat;
     background-position: right 0.5rem center;
     background-size: 1.25em 1.25em;
-    
     text-align: center;
     flex-grow: 1; /* Bulan ambil baki ruang */
+    padding:3px 8px;
   }
   .month-select:hover {
     background: #e5e7eb;
   }
   .month-select.year-select {
     flex-grow: 0; /* Tahun tidak perlu membesar */
-    min-width: 80px; /* Lebar tetap untuk tahun */
+    min-width: 65px; /* Lebar tetap untuk tahun */
     padding-left: 10px;
     text-align: left;
+    
   }
   /* --- Tamat Style Dropdown --- */
 
   .calendar .month .nav{ display:flex; gap:6px; flex-wrap:wrap; }
   .calendar .month .nav-btn{
-    border:none; background:#eef2ff; padding:6px 10px; border-radius:8px; cursor:pointer;
-    font-weight:700; line-height:1;
+    border:none; background:#eef2ff; padding:3px 8px; border-radius:4px; cursor:pointer;
+    font-weight:700; line-height:1; font-size: 10px;
   }
   .calendar .month .nav-btn:hover{ background:#e5e7eb; }
   .nav-btn:disabled{ opacity:.5; cursor:not-allowed; }
 
-  .weekdays{ display:grid; grid-template-columns:repeat(7,1fr); gap:4px; font-size:12px; color:#6b7280; margin-bottom:4px; }
-  .days{ display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
+  .weekdays{ display:grid; grid-template-columns:repeat(7,1fr); gap:4px; font-size:12px; color:#6b7280; margin-bottom:2px; }
+  .days{ display:grid; grid-template-columns:repeat(7,1fr); gap:2px; }
   .days button{
-    border:1px solid var(--ring); border-radius:8px; background:#fff; cursor:pointer; padding:6px;
+  height: 43px; /* ✅ kawal tinggi */
+  width: 50px;   
+  font-size: 13px;
+  padding: 4px 4px;
   }
   .days button.today {
     border: 2px solid #49bdb3; font-weight: 700; color: #111827; background: #ffff;
@@ -880,20 +974,13 @@ async function submitLeave(e) {
     cursor: not-allowed; opacity: .75;
   }
 
-  .recent-wrap{ display:grid; gap:12px; }
-  .recent-item{ border:1px solid var(--ring); border-radius:12px; padding:12px; display:grid; gap:6px; background:#f9fafb; }
-  .recent-item .when{ font-weight:700; color:#111827; }
-  .recent-item .cols{ display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; font-size:12px; }
+  .recent-wrap{ display:grid; gap: 6px;  }
+  .recent-card { height: 390px;}
+  .recent-item{ border:1px solid var(--ring); border-radius:12px; padding:10px; display:grid; gap:6px; background:#f9fafb; }
+  .recent-item .when{ font-weight:700; color:#111827; font-size: 13.5px;}
+  .recent-item .cols{ display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; font-size:11px; }
   .recent-item .muted{ color:#6b7280; }
 
-  .link { 
-    font-size: 12px; 
-    color: #2563eb; 
-    text-decoration: none; 
-    font-weight: 600;
-    justify-self: start;
-  }
-  .link:hover { text-decoration: underline; }
 
   /* Modal Styles */
   .leave-modal {

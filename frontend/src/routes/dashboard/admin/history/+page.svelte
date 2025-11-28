@@ -404,6 +404,7 @@ function makeEmployeeRecord(item) {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
     gap: 1rem;
+    margin-top: -38px;
   }
 
   .month-card {
@@ -415,6 +416,7 @@ function makeEmployeeRecord(item) {
     transition: transform 0.2s, box-shadow 0.2s;
     text-align: center;
     box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+    height: 175px;
 
   }
   .month-card:hover {
@@ -442,6 +444,7 @@ function makeEmployeeRecord(item) {
     font-size: 2.5rem;
     font-weight: bold;
     color: #49bdb3;
+    margin-top: -10px;
   }
 
 

@@ -513,25 +513,86 @@ function handlePhotoFile(e) {
   .bottom{ margin-top:auto; }
   .signout{ color:#e34040; display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:12px; }
   .signout:hover{ background:#feecec; }
-
-  /* Topbar */
-  .topbar{
-    display:flex; align-items:flex-end; justify-content:space-between;
-    gap:10px; padding:20px 24px; background:transparent;
-    border-bottom:1px solid rgba(255,255,255,.08); color:#fff;
+/* Header */
+  .topbar {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   }
-  .title-wrap{ display:flex; flex-direction:column; gap:.5px; color:#fff; }
-  .hello{ font-size:18px; font-weight:400; opacity:.95; margin:0; color:#fff; }
-  .page-title{ margin:0; font-size:55px; line-height:1.1; font-weight:700; color:#fff; }
+  .title-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5px;
+    color: #fff;
+  }
+  .hello {
+    font-size: 18px;
+    font-weight: 400;
+    opacity: 0.95;
+    margin: 0;
+    color: #fff;
+  }
+  .page-title {
+    margin: 0;
+    font-size: 55px;
+    line-height: 1.1;
+    font-weight: 700;
+    color: #fff;
+  }
 
-  .profile{ position:relative; display:flex; align-items:center; gap:10px; }
-  .icon-btn{ border:none; background:transparent; cursor:pointer; font-size:18px; line-height:1; padding:6px; border-radius:8px; color:#fff; }
-  .icon-btn:hover{ background:rgba(255,255,255,.12); }
-  .caret{ font-size:16px; }
-  .profile-info{ display:flex; align-items:center; gap:10px; color:#fff; }
-  .avatar-img{ height:70px; width:70px; border-radius:9999px; object-fit:cover; box-shadow:0 0 0 2px rgba(255,255,255,.25); }
-  .who .name{ font-size:14px; font-weight:700; }
-  .who .sub{ font-size:12px; opacity:.95; }
+  .logo img {
+    height: 38px;
+    display: block;
+    margin: auto;
+  }
+
+  /* Profile Dropdown */
+  .profile {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .icon-btn {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 18px;
+    line-height: 1;
+    padding: 6px;
+    border-radius: 8px;
+    color: #fff;
+  }
+  .icon-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+  }
+  .caret {
+    font-size: 16px;
+  }
+  .profile-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #fff;
+  }
+  .avatar-img {
+    height: 70px;
+    width: 70px;
+    border-radius: 9999px;
+    object-fit: cover;
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25);
+  }
+  .who .name {
+    font-size: 14px;
+    font-weight: 700;
+  }
+  .who .sub {
+    font-size: 12px;
+    opacity: 0.95;
+  }
 
   .menu{
     position:absolute; right:0; top:calc(100% + 8px);
