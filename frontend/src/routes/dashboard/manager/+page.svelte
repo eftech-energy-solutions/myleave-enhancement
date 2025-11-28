@@ -175,7 +175,7 @@ onMount(async () => {
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          cutout: '65%',
+          cutout: '62%',
           layout: {
             padding: { right: 24 }
           },
@@ -217,7 +217,7 @@ onMount(async () => {
 
 <div class="grid">
  {#each donuts as d}
-  <div class="card" style="grid-column: span 4;">
+  <div class="card donut-card" style="grid-column: span 4;">
     <h3 class="donut-title">{d.title}</h3>
 
     <div class="donut-container">
@@ -249,16 +249,21 @@ onMount(async () => {
 
 
     <!-- CHART -->
-    <div class="card" style="grid-column: span 6;">
-      <h3>Total Active Employees</h3>
-      <div style="height: 360px;">
-        <canvas bind:this={canvasEl}></canvas>
+    <div class="card employees-card" style="grid-column: span 6;">
+      <h3 class="left-title">Total Active Employees</h3>
+
+      <div class="chart-center">
+        <div style="height: 320px; width: 550px;">
+          <canvas bind:this={canvasEl}></canvas>
+        </div>
       </div>
     </div>
 
+
     <!-- EMPLOYEE NUMBERS -->
-    <div class="card" style="grid-column: span 6;">
+    <div class="card employee-card" style="grid-column: span 6;">
       <h3>Employees Overview</h3>
+      <div class="stats-wrap"></div>
       <div class="stats">
         <div class="stat total-tile">
           <div class="label">Total Employees</div>
@@ -288,22 +293,29 @@ onMount(async () => {
   .main { padding: 18px; }
 
   /* grid + cards */
-  .grid{ margin-top:6px; display:grid; gap:10px; grid-template-columns:repeat(12, minmax(0,1fr)); }
+  .grid{ margin-top:-35px; display:grid; gap:10px; grid-template-columns:repeat(12, minmax(0,1fr)); }
   .card{ background:#fff; border:1px solid var(--ring); border-radius:12px; padding:14px; box-shadow:var(--shadow); }
   h3{ margin:0 0 8px 0; }
 
   /* donut */
   :global(:root){ --spentRed:#ef4444; --restBlue:#3b82f6; }
 
+  .donut-title{ font-size:12px; font-weight:700; color:#374151; margin:0 0 6px; }
  .donut-container {
-  width: 140px;
-  height: 140px;
+  width: 110px;
+  height: 110px;
   margin: 6px auto 2px auto;
   display: flex;
   align-items: center;
   justify-content: center;
   transform: translateY(-10px);
-  margin-left: 135px;
+  margin-left: 145px;
+}
+.card.donut-card {
+  padding: 8px 10px !important;  /* smaller top/bottom */
+}
+.donut-card {
+  height: 180px;   /* adjust this */
 }
 
   .legend-custom {
@@ -329,25 +341,46 @@ onMount(async () => {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: 11px;
   color: #6b7280;
 }
-
 
 .chip {
   width: 22px;
   height: 8px;
   border-radius: 4px;
 }
+.employees-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.left-title {
+  text-align: left;     /* title kiri */
+}
+
+.chart-center {
+  display: flex;
+  justify-content: center;  /* center content horizontally */
+  width: 100%;              /* ensure full spanning */
+  margin-top: 6px;
+}
 
   /* numbers panel */
-  .stats{ display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:10px; margin-top:8px; } /*grid employee overview*/
+  .stats{ display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:10px; margin-top:8px; height: 20px; } /*grid employee overview*/
   @media (max-width:980px){ .stats{ grid-template-columns: repeat(2, minmax(0,1fr)); } }
   @media (max-width:580px){ .stats{ grid-template-columns: 1fr; } }
-  .stat{ background:#f9fafb; border:1px solid var(--ring); border-radius:12px; padding:14px; display:grid; gap:4px; }
+
+  .stats-wrap {
+  display: flex;
+  flex-direction: column;
+}
+  .stat{ background:#f9fafb; border:1px solid var(--ring); border-radius:12px; padding:20px; display:grid; gap:4px; }
   .stat .label{ color:#6b7280; font-size:12px; display:flex; align-items:center; gap:8px; }
-  .stat .value{ font-size:28px; font-weight:800; color:#111827; line-height:1; }
+  .stat .value{ font-size:25px; font-weight:800; color:#111827; line-height:1; }
   .dot{ width:10px; height:10px; border-radius:999px; display:inline-block; }
-  .numbers-link{ display:inline-block; margin-top:10px; font-weight:600; color:#2563eb; text-decoration:none; }
+  .numbers-link{ display:inline-block; margin-top:270px; font-weight:600; color:#2563eb; text-decoration:none;  margin-left: 463px; white-space: nowrap;  } /* RIGHT side */
   .numbers-link:hover{ text-decoration:underline; }
+
+
 </style>

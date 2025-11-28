@@ -578,9 +578,28 @@
   .settings-btn:hover{ background:#f3f4f6; }
   
   /* Topbar (Tidak berubah) */
-  .topbar{ display:flex; align-items:flex-end; justify-content:space-between; gap:10px; padding:20px 24px; background:transparent; border-bottom:1px solid rgba(255,255,255,.08); color:#fff; }
-  .title-wrap{ display:flex; flex-direction:column; gap:.5px; color:#fff; }
-  .hello{ font-size:18px; font-weight:400; opacity:.95; margin:0; color:#fff; }
+  /* Header */
+  .topbar {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .title-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5px;
+    color: #fff;
+  }
+  .hello {
+    font-size: 18px;
+    font-weight: 400;
+    opacity: 0.95;
+    margin: 0;
+    color: #fff;
+  }
   .page-title{ margin:0; font-size:55px; line-height:1.1; font-weight:700; color:#fff; }
 
   /* Profile Dropdown (Tidak berubah) */

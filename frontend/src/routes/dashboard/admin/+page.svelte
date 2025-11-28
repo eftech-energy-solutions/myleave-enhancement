@@ -167,7 +167,7 @@
     start.setDate(first.getDate() - ((first.getDay() + 6) % 7)); // Monday-start
 
     const arr = [];
-    for (let i = 0; i < 42; i++) {
+    for (let i = 0; i < 35; i++) {
       const d = new Date(start);
       d.setDate(start.getDate() + i);
       const iso = isoLocal(d);
@@ -670,9 +670,8 @@
   /* --- Global & Layout --- */
   :root{ --ring:#e5e7eb; --shadow:0 4px 12px rgba(0,0,0,.06); }
   .main { padding: 18px; }
-  .top-row{ display:flex; justify-content:flex-end; align-items:center; margin: 8px 0 6px; }
-  .grid{ margin-top:6px; display:grid; gap:10px; grid-template-columns:repeat(12, minmax(0,1fr)); }
-  .card{ background:#fff; border:1px solid var(--ring); border-radius:12px; padding:14px; box-shadow:var(--shadow); }
+  .grid{ margin-top:-35px; display:grid; gap:10px; grid-template-columns:repeat(12, minmax(0,1fr)); }
+  .card{ background:#fff; border:1px solid var(--ring); border-radius:12px; padding:8px; box-shadow:var(--shadow); }
   h3{ margin:0 0 8px 0; }
 
   /* --- Employees Overview Card --- */
@@ -680,12 +679,17 @@
   .mini-metrics { display: grid; grid-template-columns: repeat(6, 0.5fr); gap: 10px; align-items: stretch; }
   .mini { border: 1px solid var(--ring); background: #f9fafb; border-radius: 10px; padding: 8px; text-align: center; height: 75px; display: flex; flex-direction: column; justify-content: center; transition: all 0.2s ease; }
   .mini-val { font-size: 18px; font-weight: 800; color: #0f172a; line-height: 1.1; }
-  .mini-label { font-size: 11px; color: #0c4a6e; margin-top: 2px; display: flex; align-items: center; gap: 5px; justify-content: center; }
+  .mini-label { font-size: 12px; color: #0c4a6e; margin-top: 2px; display: flex; align-items: center; gap: 5px; justify-content: center; }
   .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
 
   /* --- Calendar Styles --- */
   .calendar-wide { max-width: 400px; margin: 0 auto; }
-  .calendar-wide .days button{ padding:10px; }
+ 
+  .calendar-wide .days button{ padding: 14px;      /* ✅ kecilkan kotak tarikh */
+  height: 45px; /* ✅ kawal tinggi */
+  width: 52px;   
+  font-size: 10px;  }
+
   .calendar .month{ display:flex; align-items:center; justify-content:space-between; font-weight:700; margin-bottom:6px; gap:6px; }
   
   /* --- BARU: Style untuk Dropdown Bulan/Tahun --- */
@@ -734,7 +738,7 @@
   .nav-btn:disabled{ opacity:.5; cursor:not-allowed; }
   .weekdays{ display:grid; grid-template-columns:repeat(7,1fr); gap:4px; font-size:11.5px; color:#6b7280; margin-bottom:4px; }
   .days{ display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
-  .days button{ border:1px solid var(--ring); border-radius:8px; background:#fff; cursor:pointer; font-size:12px; }
+  .days button{ border:1px solid var(--ring); border-radius:8px; background:#fff; cursor:pointer; font-size:13px; }
   .days button.today { border: 2px solid #49bdb3; font-weight: 700; color: #111827; background: #ffff; }
   .days button.muted{ opacity:.5; }
   .days button:disabled{ background:#f3f4f6; color:#9ca3af; cursor:not-allowed; }
@@ -747,7 +751,7 @@
   .sw-blue{ background:#71c0f5; border:1px solid #71c0f5; }
 
   /* --- Chart Styles --- */
-  .chart-box { display: flex; justify-content: center; align-items: center; height: 400px; margin-top: 75px; width: 670px; }
+  .chart-box { display: flex; justify-content: center; align-items: center; height: 320px; margin-left: 22px;  width: 650px; margin-top: 50px; }
   .chart-box canvas { max-height: 500px; width: 100%; }
 
   /* --- Modal Styles --- */
