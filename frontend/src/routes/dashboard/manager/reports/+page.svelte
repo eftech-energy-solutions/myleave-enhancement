@@ -487,7 +487,7 @@ async function loadAppliedLeave() {
   blockedDates = new Set();
 
   list.forEach(r => {
-    if (["pending", "approved"].includes(r.status)) {
+    if (["pending", "approved", "cancellation_pending"].includes(r.status)) {
       const start = new Date(r.date_from);
       const end = new Date(r.date_until);
 

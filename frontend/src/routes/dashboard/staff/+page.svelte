@@ -582,25 +582,18 @@ async function loadAppliedLeave() {
   blockedDates = new Set();
 
   list
-    .filter(r => String(r.staff_id) === String(user.staff_id))
-    .filter(r => {
-      const s = (r.status || "").toLowerCase().trim();
-
-      // ❌ NO pending
-      // ❌ NO cancellation_pending
-      // ❌ NO rejected
-
-      // ✅ ONLY APPROVED SHOULD BLOCK
-      return s === "approved";
-    })
+    .filter(r => r.staff_id === user.staff_id)
     .forEach(r => {
-      const start = new Date(r.date_from);
-      const end = new Date(r.date_until);
+      // Only block if these statuses
+      if (["pending", "approved", "cancellation_pending"].includes(r.status)) {
+        const start = new Date(r.date_from);
+        const end = new Date(r.date_until);
 
-      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-        blockedDates.add(localISO(d));
-      }
-    });
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+          blockedDates.add(localISO(d));
+        }
+      }
+    });
 }
 </script>
 <svelte:head>

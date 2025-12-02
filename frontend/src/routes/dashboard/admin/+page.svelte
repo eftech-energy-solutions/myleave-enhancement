@@ -474,14 +474,6 @@
   </style>
 </svelte:head>
 
-<svelte:head>
-  <style>
-    html, body, .right, .content-wrap {
-      overflow: hidden !important;
-    }
-  </style>
-</svelte:head>
-
 
 <!-- ======================= -->
 <!--       HTML / MARKUP       -->

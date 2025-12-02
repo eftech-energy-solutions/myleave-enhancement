@@ -242,14 +242,6 @@ function makeEmployeeRecord(item) {
   </style>
 </svelte:head>
 
-<svelte:head>
-  <style>
-    body {
-      overflow-y: hidden;
-    }
-  </style>
-</svelte:head>
-
 <svelte:window on:keydown={handleKey}/>
 
 <div class="page">

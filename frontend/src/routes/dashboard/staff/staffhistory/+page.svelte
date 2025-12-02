@@ -227,35 +227,24 @@ async function refreshDashboard() {
   leaves = [...leaves];
 }
 
-
-
 async function confirmCancellation() {
   if (!leaveToCancel) return;
-  const raw = leaveToCancel.status;
-
-  const status =
-    raw === "Approved" ? "approved" :
-    raw === "Pending" ? "pending" :
-    raw === "Cancellation Pending" ? "cancellation_pending" :
-    raw.toLowerCase();
 
   const id = leaveToCancel.uuid;
-  if (!id) return;
 
-  // Pending → delete
-  if (status === "pending") {
+  // ---------------- PENDING → DELETE ----------------
+  if (leaveToCancel.status === "Pending") {
     await fetch(`/api/leave-requests/${id}`, {
       method: "DELETE",
       credentials: "include"
     });
 
-    window.dispatchEvent(new Event("dashboardRefresh")); // ⭐ notify dashboard
-    closeConfirmationModal();
-    return;
+    window.location.reload(); 
+    return;       // ✅ valid
   }
 
-  // Approved → request cancellation
-  if (status === "approved") {
+  // ---------------- APPROVED → CANCELLATION PENDING ----------------
+  if (leaveToCancel.status === "Approved") {
     await fetch(`/api/leave-requests/${id}`, {
       method: "PATCH",
       credentials: "include",
@@ -263,9 +252,8 @@ async function confirmCancellation() {
       body: JSON.stringify({ status: "cancellation_pending" })
     });
 
-    window.dispatchEvent(new Event("dashboardRefresh")); // ⭐ notify dashboard
-    closeConfirmationModal();
-    return;
+    window.location.reload();
+    return;       // ✅ valid
   }
 
   alert("This leave cannot be cancelled.");
