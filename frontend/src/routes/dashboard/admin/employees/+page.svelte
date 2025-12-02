@@ -620,20 +620,19 @@ pending = pendingRequests;
     showDeleteConfirm = true;
   }
 
-  async function deleteEmployee() {
+async function deleteEmployee() {
   if (!employeeToDelete) return;
 
   const empId = employeeToDelete.empId || employeeToDelete.id;
 
   try {
-    // 1) DELETE leave requests dulu
-    await fetch(`/api/leave-requests/by-staff/${empId}`, {
+    // DELETE from backend
+    await fetch(`http://localhost:5000/api/leave-requests/by-staff/${empId}`, {
       method: "DELETE",
       credentials: "include"
     });
 
-    // 2) DELETE employee (DALAM profile.js dia delete entitlements juga)
-    const res = await fetch(`/api/employee/${empId}`, {
+    const res = await fetch(`http://localhost:5000/api/employee/${empId}`, {
       method: "DELETE",
       credentials: "include"
     });
@@ -641,18 +640,25 @@ pending = pendingRequests;
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Failed to delete employee");
 
-    // Update UI
-    employees = employees.filter(e => e.id !== empId);
-    delete detailsById[empId];
-
+    // CLOSE ALL MODALS FIRST
     showDeleteConfirm = false;
     detailsOpen = false;
+
+    // CLEAR ALL SELECTED DATA
+    selectedEmp = null;
+    detailsForm = null;
     employeeToDelete = null;
+
+    // UPDATE UI (remove card)
+    employees = employees.filter(e => e.id !== empId);
+    delete detailsById[empId];
 
   } catch (err) {
     console.error("❌ Error deleting employee:", err);
   }
 }
+
+
 
   async function approveCancellation(item) {
   const id = item.leave_id;
@@ -697,11 +703,11 @@ async function rejectCancellation(item) {
 
   /* ===== Layout ===== */
   .main{ padding:1.5rem; }
-  .toprow{ display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+  .toprow{ display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; margin-top: -35px; }
   .rightcol{ display:flex; align-items:center; gap:6px; }
 
   /* ===== Employees grid & card ===== */
-  .employees-grid{ display:grid; gap:1rem; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+  .employees-grid{ display:grid; gap:1rem; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));}
   .emp-box{ background:#fff; border-radius:12px; padding:1rem; color:#111; box-shadow:0 1px 3px rgba(0,0,0,.08); display:flex; flex-direction:column; min-height:240px; }
   .emp-top{ text-align:center; }
   .emp-box h3{ margin:0; font-size:15px; color:#217859; }

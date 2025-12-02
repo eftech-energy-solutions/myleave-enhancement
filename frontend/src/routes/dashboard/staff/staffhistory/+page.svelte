@@ -107,7 +107,7 @@ const leaveCodes = {
     dateFrom: l.date_from,
     dateTo: l.date_until,
     totalDays: l.total_days,
-    type: leaveCodes[l.leave_type] || l.leave_type,
+    type: l.leave_type,  // always keep AL/MC/MAT/PAT etc.
     reason: l.reason,
     duration: l.duration,
     status:
@@ -566,6 +566,7 @@ function onUntilChange() {
   .filter-bar {
     display: flex;
     justify-content: flex-end; /* push filters to the right */
+    padding-right: 20px;  
     margin-bottom: 1rem;
   }
   .filters {

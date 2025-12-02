@@ -309,7 +309,7 @@ pendingCancel = view.filter(
       6) APPROVE / REJECT
      ================================ */
 
-  async function approve(id) {
+   async function approve(id) {
     await fetch(`/api/leave-requests/${id}`, {
       method: "PATCH",
       headers: {
@@ -397,11 +397,9 @@ async function rejectCancellation(item) {
 
   /* ===== Layout ===== */
   .main{ padding:1.5rem; }
-  .toprow{ display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
-  .rightcol{ display:flex; align-items:center; gap:6px; }
 
   /* ===== Employees grid & card ===== */
-  .employees-grid{ display:grid; gap:1rem; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+  .employees-grid{ display:grid; gap:1rem; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); margin-top: -35px;}
   .emp-box{ background:#fff; border-radius:12px; padding:1rem; color:#111; box-shadow:0 1px 3px rgba(0,0,0,.08); display:flex; flex-direction:column; min-height:240px; }
   .emp-top{ text-align:center; }
   .emp-box h3{ margin:0; font-size:15px; color:#217859; }

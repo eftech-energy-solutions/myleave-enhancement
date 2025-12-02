@@ -210,7 +210,6 @@ onMount(async () => {
     loading = false;
   }
 });
-
 </script>
 <svelte:head>
   <style>

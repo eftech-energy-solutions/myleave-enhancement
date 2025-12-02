@@ -599,6 +599,32 @@ router.get("/history/all", async (req, res) => {
     res.status(500).json({ message: "Failed to load leave history" });
   }
 });
+/* ============================================================
+   GET LEAVE REQUESTS FOR LOGGED-IN USER ONLY
+   GET /api/leave-requests/me
+   ============================================================ */
+router.get("/me", async (req, res) => {
+  try {
+    const user = req.user;
+    if (!user || !user.staff_id) {
+      return res.status(401).json({ message: "Unauthorised" });
+    }
+
+    const result = await pool.query(
+      `SELECT *
+       FROM leave_requests
+       WHERE staff_id = $1
+       ORDER BY date_from ASC`,
+      [user.staff_id]
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error("GET /api/leave-requests/me error:", err);
+    res.status(500).json({ message: "Failed to load your leave data" });
+  }
+});
+
 
 router.get("/me", async (req, res) => {
   try {

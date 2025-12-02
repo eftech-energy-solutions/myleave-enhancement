@@ -30,6 +30,9 @@
       buildMonth(viewBase);
 
 
+      await loadAppliedLeave();
+      buildMonth(viewBase);
+      
     } catch (err) {
       console.error("onMount FAILED:", err);
       error = "Failed to load dashboard.";
@@ -223,7 +226,7 @@ async function loadRecent() {
         if (holDesc) title += ` - ${holDesc}`; // Gabung title dan desc
       }
 
-        arr.push({
+      arr.push({
           key: iso,
           label: d.getDate(),
           date: d,
@@ -235,7 +238,7 @@ async function loadRecent() {
           title: title || (hol ? 'Public Holiday' : null),
           outOfWindow,
           blocked: blockedDates?.has?.(iso) ?? false
-        });
+        });
     }
     // monthLabel = new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(first); // DIBUANG
     days = arr;
@@ -465,6 +468,36 @@ async function loadRecent() {
     await tick();
   }
 
+  let blockedDates = new Set();
+
+async function loadAppliedLeave() {
+  const res = await fetch("/api/leave-requests", {
+    credentials: "include"
+  });
+  if (!res.ok) return;
+
+  const all = await res.json();
+
+  // Manager: only his own leave requests
+  const list = all.filter(r =>
+    String(r.staff_id).toLowerCase() === String(user?.staff_id).toLowerCase()
+  );
+
+  // Reset first (avoid duplicates)
+  blockedDates = new Set();
+
+  list.forEach(r => {
+    if (["pending", "approved"].includes(r.status)) {
+      const start = new Date(r.date_from);
+      const end = new Date(r.date_until);
+
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        blockedDates.add(localISO(d));
+      }
+    }
+  });
+}
+
 async function submitLeave(e) {
   const formEl = e.currentTarget;
   e.preventDefault();
@@ -496,6 +529,10 @@ async function submitLeave(e) {
     const created = await res.json().catch(() => null);
     console.log("Leave created:", created);
 
+    alert("Your leave application has been successfully submitted!");
+
+    await loadAppliedLeave();
+    buildMonth(viewBase);
     modal?.close(); 
 
   } catch (err) {
@@ -510,35 +547,7 @@ async function submitLeave(e) {
     month: "short",
     year: "numeric"
   });
-let blockedDates = new Set();
 
-async function loadAppliedLeave() {
-  const res = await fetch("/api/leave-requests", {
-    credentials: "include"
-  });
-  if (!res.ok) return;
-
-  const all = await res.json();
-
-  // Manager: only his own leave requests
-  const list = all.filter(r =>
-    String(r.staff_id).toLowerCase() === String(user?.staff_id).toLowerCase()
-  );
-
-  // Reset first (avoid duplicates)
-  blockedDates = new Set();
-
-  list.forEach(r => {
-    if (r.status === "pending" || r.status === "approved") {
-      const start = new Date(r.date_from);
-      const end = new Date(r.date_until);
-
-      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-        blockedDates.add(localISO(d));
-      }
-    }
-  });
-}
 </script>
 <svelte:head>
   <style>
@@ -658,6 +667,7 @@ async function loadAppliedLeave() {
           <span><i class="swatch sw-blue"></i> Public / Additional leave</span>
           <span><i class="swatch sw-applied"></i> Applied Leave</span>
           <span><i class="swatch sw-today"></i> Today</span>
+
         </div>
       </div>
       {/if}
@@ -684,6 +694,7 @@ async function loadAppliedLeave() {
     </div>
   </div>
 </main>
+
 
 <!-- Modal -->
 <dialog bind:this={modal} class="leave-modal" aria-labelledby="leave-title">

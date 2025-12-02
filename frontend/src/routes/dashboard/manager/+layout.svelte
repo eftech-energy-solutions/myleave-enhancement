@@ -3,6 +3,8 @@
   export let data;
 </script>
 
-<ManagerSidebar {data}>
-  <slot />
-</ManagerSidebar>
+<div class="no-x-scroll">
+  <ManagerSidebar {data}>
+    <slot />
+  </ManagerSidebar>
+</div>

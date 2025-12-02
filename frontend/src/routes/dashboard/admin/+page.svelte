@@ -474,10 +474,19 @@
   </style>
 </svelte:head>
 
+<svelte:head>
+  <style>
+    html, body, .right, .content-wrap {
+      overflow: hidden !important;
+    }
+  </style>
+</svelte:head>
+
+
 <!-- ======================= -->
 <!--       HTML / MARKUP       -->
 <!-- ======================= -->
-<main class="main">
+  <main class="main">
   <!-- Top Bar -->
   <!-- Dashboard Grid -->
   <div class="grid">
@@ -799,4 +808,5 @@
   .danger-btn{ background:#dc2626; color:#fff; border:1px solid #fecaca; border-radius:8px; padding:9px 12px; cursor:pointer; font-weight:700; }
   .danger-btn:hover{ background:#b91c1c; }
   .close-btn{ position:absolute; right:10px; top:8px; border:none; background:transparent; font-size:16px; cursor:pointer; }
+
 </style>

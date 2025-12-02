@@ -43,6 +43,9 @@ buildMonth(viewBase);
         buildMonth(viewBase);
 
 
+      await loadAppliedLeave();
+      buildMonth(viewBase);
+
     } catch (err) {
       console.error("onMount FAILED:", err);
       error = "Failed to load dashboard.";
@@ -360,10 +363,10 @@ approvedHOSP = all
       processHolidayData();
       
       // Re-build the calendar view
-      if (!viewBase) {
-        viewBase = clampToWindowMonth(atStartOfDay(new Date()));
-      }
-      buildMonth(viewBase);
+      // if (!viewBase) {
+      //   viewBase = clampToWindowMonth(atStartOfDay(new Date()));
+      // }
+      // buildMonth(viewBase);
 
     } catch (e) {
       error = e.message || "Error";
@@ -549,6 +552,11 @@ async function submitLeave(e) {
     const created = await res.json().catch(() => null);
     console.log("Leave created:", created);
 
+    alert("Your leave application has been successfully submitted!");
+
+    await loadAppliedLeave();
+    buildMonth(viewBase);
+
     modal?.close(); 
 
   } catch (err) {
@@ -594,8 +602,6 @@ async function loadAppliedLeave() {
       }
     });
 }
-
-
 </script>
 <svelte:head>
   <style>
