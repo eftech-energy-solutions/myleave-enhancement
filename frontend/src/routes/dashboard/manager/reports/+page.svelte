@@ -6,6 +6,9 @@
   let loading = true;
   let error = "";
   let recent = [];
+  let approvedAL = 0;
+  let approvedMC = 0;
+  let approvedHOSP = 0;
   const formatCF = (x) => Number(x || 0).toString().replace(".0", "");
 
   // ----- user/profile -----
@@ -29,6 +32,11 @@
       await loadAppliedLeave();
       buildMonth(viewBase);
 
+      window.addEventListener("dashboardRefresh", async () => {
+        await loadRecent();
+        await loadAppliedLeave();
+      });
+
 
       await loadAppliedLeave();
       buildMonth(viewBase);
@@ -45,26 +53,23 @@
 $: donuts = user ? [
   {
     title: "Annual Leave Summary",
-    total: user.leave_entitlement_annual_original ?? 14,
-    spent: (user.leave_entitlement_annual_original ?? 14)
-         - (user.leave_entitlement_annual ?? 14),
-    carryForward: user.carry_forward_balance ?? 0
+    total: Number(user.leave_entitlement_annual_original ?? 14),
+    spent: Number(approvedAL || 0),
+    carryForward: Number(user.carry_forward_original ?? 0)
   },
 
   {
     title: "Medical Leave Summary",
     total: 14,
-    spent: 14 - (user.leave_entitlement_medical ?? 14)
+    spent: approvedMC
   },
 
   {
     title: "Hospitalization Leave Summary",
     total: user.hosp_entitlement ?? 60,
-    spent: (user.hosp_entitlement ?? 60) - (user.hosp_balance ?? 60)
+    spent: approvedHOSP
   }
-
 ] : [];
-
 
 
   const pct = (s, t) => Math.min(100, Math.max(0, Math.round((s / t) * 100)));
@@ -131,18 +136,44 @@ $: donuts = user ? [
   }
 async function loadRecent() {
   try {
-    const res = await fetch("/api/leave-requests", {
-      credentials: "include"
-    });
+    const meRes = await fetch("/api/me", { credentials: "include" });
+    const freshUser = await meRes.json();
+    user = { ...freshUser };
 
+    const res = await fetch("/api/leave-requests", { credentials: "include" });
     const all = await res.json();
 
-    // Filter: recent 5 leave requests for this manager
-    recent = all
+    approvedAL = all
       .filter(l =>
-  String(l.staff_id).toLowerCase() === String(user?.staff_id).toLowerCase()
-)
+        String(l.staff_id) === String(user.staff_id) &&
+        (
+          l.status?.toLowerCase() === "approved" ||
+          l.status?.toLowerCase() === "cancellation_pending"
+        ) &&
+        (l.leave_type === "AL" || l.leave_type === "EL")
+      )
+      .reduce((sum, l) => sum + Number(l.total_days || 0), 0);
 
+    approvedAL = Number(approvedAL || 0);
+
+    approvedMC = all
+      .filter(l =>
+        String(l.staff_id) === String(user.staff_id) &&
+        l.status?.toLowerCase() === "approved" &&
+        l.leave_type === "MC"
+      )
+      .reduce((sum, l) => sum + Number(l.total_days), 0);
+
+    approvedHOSP = all
+      .filter(l =>
+        String(l.staff_id) === String(user.staff_id) &&
+        l.status?.toLowerCase() === "approved" &&
+        l.leave_type === "HOSP"
+      )
+      .reduce((sum, l) => sum + Number(l.total_days), 0);
+
+    recent = all
+      .filter(l => String(l.staff_id) === String(user.staff_id))
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
       .slice(0, 4)
       .map(l => ({
@@ -160,9 +191,10 @@ async function loadRecent() {
       }));
 
   } catch (err) {
-    console.error("Failed to load recent leaves:", err);
+    console.error("loadRecent ERROR:", err);
   }
 }
+
 
   // ======= Logik Kalendar
   let minDate = new Date(new Date().getFullYear(), 0, 1);
@@ -474,29 +506,24 @@ async function loadAppliedLeave() {
   const res = await fetch("/api/leave-requests", {
     credentials: "include"
   });
-  if (!res.ok) return;
+  const list = await res.json();
 
-  const all = await res.json();
-
-  // Manager: only his own leave requests
-  const list = all.filter(r =>
-    String(r.staff_id).toLowerCase() === String(user?.staff_id).toLowerCase()
-  );
-
-  // Reset first (avoid duplicates)
   blockedDates = new Set();
 
-  list.forEach(r => {
-    if (["pending", "approved", "cancellation_pending"].includes(r.status)) {
-      const start = new Date(r.date_from);
-      const end = new Date(r.date_until);
+  list
+    .filter(r => r.staff_id === user.staff_id)
+    .forEach(r => {
+      if (["pending", "approved", "cancellation_pending"].includes(r.status)) {
+        const start = new Date(r.date_from);
+        const end = new Date(r.date_until);
 
-      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-        blockedDates.add(localISO(d));
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+          blockedDates.add(localISO(d));
+        }
       }
-    }
-  });
+    });
 }
+
 
 async function submitLeave(e) {
   const formEl = e.currentTarget;
