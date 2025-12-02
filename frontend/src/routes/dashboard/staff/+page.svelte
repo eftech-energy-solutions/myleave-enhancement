@@ -7,6 +7,10 @@
   let error = "";
   let recent = [];
   const formatCF = (x) => Number(x || 0).toString().replace(".0", "");
+  let approvedAL = 0;
+  let approvedMC = 0;
+  let approvedHOSP = 0;
+
 
   // ----- user/profile -----
   // 'data' telah dibuang, jadi kita guna nilai lalai secara terus.
@@ -26,6 +30,18 @@
 
       // 3) RECENT (depends on user)
       await loadRecent();
+      await loadAppliedLeave();
+
+      // 🔥 force donut refresh after cancellation
+      window.addEventListener("dashboardRefresh", async () => {
+      await loadRecent();
+      await loadAppliedLeave();
+});
+
+
+buildMonth(viewBase);
+        buildMonth(viewBase);
+
 
     } catch (err) {
       console.error("onMount FAILED:", err);
@@ -39,24 +55,30 @@
 $: donuts = user ? [
   {
     title: "Annual Leave Summary",
-    total: user.leave_entitlement_annual_original ?? 14,
-    spent: (user.leave_entitlement_annual_original ?? 14)
-         - (user.leave_entitlement_annual ?? 14),
-    carryForward: user.carry_forward_balance ?? 0
+
+    // ❌ Carry forward jangan campur quota
+    // ✔ TOTAL annual entitlement setahun = original sahaja
+    total: Number(user.leave_entitlement_annual_original ?? 14),
+
+    // ✔ Spent = approved AL + EL
+    spent: Number(approvedAL || 0),
+
+    // ✔ Show carry forward separately (for display only)
+    carryForward: Number(user.carry_forward_original ?? 0)
   },
 
+  
   {
     title: "Medical Leave Summary",
     total: 14,
-    spent: 14 - (user.leave_entitlement_medical ?? 14)
+    spent: approvedMC
   },
 
   {
     title: "Hospitalization Leave Summary",
     total: user.hosp_entitlement ?? 60,
-    spent: (user.hosp_entitlement ?? 60) - (user.hosp_balance ?? 60)
+    spent: approvedHOSP
   }
-
 ] : [];
 
 
@@ -125,18 +147,51 @@ $: donuts = user ? [
   }
 async function loadRecent() {
   try {
-    const res = await fetch("/api/leave-requests", {
-      credentials: "include"
-    });
+    // Reload latest user profile
+    const meRes = await fetch("/api/me", { credentials: "include" });
+    const freshUser = await meRes.json();
+    user = { ...freshUser };   // 🚀 SVELTE REACTIVE UPDATE
 
-    const all = await res.json();
+    // Reload leave records
+    // Reload leave records
+const res = await fetch("/api/leave-requests", { credentials: "include" });
+const all = await res.json();
 
-    // Filter: recent 5 leave requests for this manager
+// 🔻 PASTE HERE — APPROVED LEAVE CALCULATION
+approvedAL = all
+  .filter(l =>
+    String(l.staff_id) === String(user.staff_id) &&
+    (
+      l.status?.toLowerCase() === "approved" ||
+      l.status?.toLowerCase() === "cancellation_pending"
+    ) &&
+    (l.leave_type === "AL" || l.leave_type === "EL")
+  )
+  .reduce((sum, l) => sum + Number(l.total_days || 0), 0);
+
+// prevent NaN
+approvedAL = Number(approvedAL || 0);
+
+
+approvedMC = all
+  .filter(l =>
+    String(l.staff_id) === String(user.staff_id) &&
+    l.status?.toLowerCase() === "approved" &&
+    l.leave_type === "MC"
+  )
+  .reduce((sum, l) => sum + Number(l.total_days), 0);
+
+approvedHOSP = all
+  .filter(l =>
+    String(l.staff_id) === String(user.staff_id) &&
+    l.status?.toLowerCase() === "approved" &&
+    l.leave_type === "HOSP"
+  )
+  .reduce((sum, l) => sum + Number(l.total_days), 0);
+// 🔺 END OF INSERT
+
     recent = all
-      .filter(l =>
-  String(l.staff_id).toLowerCase() === String(user?.staff_id).toLowerCase()
-)
-
+      .filter(l => String(l.staff_id) === String(user.staff_id))
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
       .slice(0, 4)
       .map(l => ({
@@ -147,17 +202,18 @@ async function loadRecent() {
         type: l.leave_type,
         status:
           l.status === "pending" ? "Pending" :
-          l.status === "approved" ? "Approved" :
+          l.status?.toLowerCase() === "approved" ? "Approved" :
           l.status === "rejected" ? "Rejected" :
           l.status === "cancellation_pending" ? "Cancellation Pending" :
           l.status
       }));
 
+    recent = [...recent];  // force refresh
+
   } catch (err) {
-    console.error("Failed to load recent leaves:", err);
+    console.error("loadRecent ERROR:", err);
   }
 }
-
   // ======= Logik Kalendar
   let minDate = new Date(new Date().getFullYear(), 0, 1);
   let maxDate = new Date(new Date().getFullYear(), 11, 31);
@@ -229,9 +285,10 @@ async function loadRecent() {
         holiday: hol,
         holidayName: holName,
         holidayDescription: holDesc,
-        title: title, // Title attribute untuk hover
-        outOfWindow
-      });
+        title: title || (hol ? 'Public Holiday' : null),
+        outOfWindow,
+        blocked: blockedDates?.has?.(iso) ?? false
+      });
     }
     // monthLabel = new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(first); // DIBUANG
     days = arr;
@@ -506,9 +563,47 @@ async function submitLeave(e) {
     month: "short",
     year: "numeric"
   });
+let blockedDates = new Set();
+
+async function loadAppliedLeave() {
+  const res = await fetch("/api/leave-requests", {
+    credentials: "include"
+  });
+  const list = await res.json();
+
+  blockedDates = new Set();
+
+  list
+    .filter(r => String(r.staff_id) === String(user.staff_id))
+    .filter(r => {
+      const s = (r.status || "").toLowerCase().trim();
+
+      // ❌ NO pending
+      // ❌ NO cancellation_pending
+      // ❌ NO rejected
+
+      // ✅ ONLY APPROVED SHOULD BLOCK
+      return s === "approved";
+    })
+    .forEach(r => {
+      const start = new Date(r.date_from);
+      const end = new Date(r.date_until);
+
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        blockedDates.add(localISO(d));
+      }
+    });
+}
+
 
 </script>
-
+<svelte:head>
+  <style>
+    body {
+      overflow-y: hidden;
+    }
+  </style>
+</svelte:head>
 <main class="main">
   <!-- POKOK 'if loading' DIBUANG DARI SINI UNTUK MEMASTIKAN UI SENTIASA KELIHATAN -->
   <div class="grid">
@@ -603,17 +698,22 @@ async function submitLeave(e) {
               class:today={d.today}
               class:holiday={d.holiday}
               class:out={d.outOfWindow}
-              disabled={d.outOfWindow || d.holiday || (!d.today && atStartOfDay(d.date) < today)}
+              class:blocked={d.blocked}
+              disabled={
+                d.outOfWindow ||
+                d.blocked ||
+                d.holiday ||
+                (!d.today && atStartOfDay(d.date) < today)
+              }
               on:click={() => openLeaveForm(d.date)}
               aria-label={`Select ${d.date.toDateString()}`}
               title={d.title}
-            >
-              {d.label}
-            </button>
+            >{d.label}</button>
           {/each}
         </div>
         <div class="legend small">
           <span><i class="swatch sw-blue"></i> Public / Additional leave</span>
+          <span><i class="swatch sw-applied"></i> Applied Leave</span>
           <span><i class="swatch sw-today"></i> Today</span>
         </div>
       </div>
@@ -722,6 +822,10 @@ async function submitLeave(e) {
 
   .sw-blue{ background:#71c0f5; border:1px solid #71c0f5; }
   .sw-today{ background:#fff; border:1px solid #49bdb3; }
+  .sw-applied {
+  background: #fef08a;   /* yellow */
+  border: 1px solid #facc15;
+}
   .legend.small{
     display:flex; justify-content:center; gap:14px; margin-top:8px; font-size:11.5px; color:#6b7280;
   }
@@ -951,13 +1055,14 @@ max-width: 150px;         /* optional — so it wraps instead of going super lon
   .nav-btn:disabled{ opacity:.5; cursor:not-allowed; }
 
   .weekdays{ display:grid; grid-template-columns:repeat(7,1fr); gap:4px; font-size:12px; color:#6b7280; margin-bottom:2px; }
-  .days{ display:grid; grid-template-columns:repeat(7,1fr); gap:2px; }
+.days{ display:grid; grid-template-columns:repeat(7,1fr); gap:2px; }
   .days button{
-    height: 43px; /* ✅ kawal tinggi */
+  height: 43px; /* ✅ kawal tinggi */
   width: 50px;   
   font-size: 13px;
   padding: 4px 4px;
   }
+
   .days button.today {
     border: 2px solid #49bdb3; font-weight: 700; color: #111827; background: #ffff;
   }
@@ -973,6 +1078,14 @@ max-width: 150px;         /* optional — so it wraps instead of going super lon
     background: #f9fafb; color: #9ca3af; border-color: #e5e7eb;
     cursor: not-allowed; opacity: .75;
   }
+
+  .days button.blocked {
+  background: #fef08a !important;
+  border-color: #facc15 !important; 
+  color: #78350f !important;
+  cursor: not-allowed !important;
+  opacity: 1;
+}
 
   .recent-wrap{ display:grid; gap: 6px;  }
   .recent-card { height: 390px;}

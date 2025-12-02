@@ -568,11 +568,10 @@
 
 <style>
   /* CSS (KEKAL SAMA SEPERTI KOD SEBELUM INI) */
-  .container {
-    display: grid;
-    grid-template-columns: 220px 1fr;
-    min-height: 100vh;
-  }
+ .container {
+  min-height: 100vh;
+  overflow: visible;
+}
   .aside {
     background: #fff;
     border-right: 1px solid #e5e7eb;
@@ -593,7 +592,7 @@
   }
   .main {
     background: linear-gradient(180deg, #49bdb3 0%, #0c4a6e 100%);
-  }
+        overflow-y:auto;}
   .container-inner {
     padding: 16px;
   }

@@ -533,12 +533,13 @@
 
 <style>
   /* Layout (Tidak berubah) */
-  .layout{
-    display:grid;
-    grid-template-columns: 220px 1fr;
-    min-height:100dvh;
-    background:#fafafa;
-  }
+.layout {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  min-height: 100dvh;   /* NORMAL, biar auto expand */
+  overflow: visible;    /* scroll dibenarkan */
+  background: #fafafa;
+}
   /* RIGHT SIDE (Tidak berubah) */
   .right{
     position: relative;
@@ -546,7 +547,7 @@
     flex-direction:column;
     min-height:100dvh;
     background: linear-gradient(180deg,#49bdb3 0%,#2bb7b3 35%,#1798a5 65%,#0c4a6e 100%);
-    overflow:hidden;
+    overflow-y: hidden;
   }
   .right::before{
     content:"";

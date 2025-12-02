@@ -11,6 +11,7 @@
 
   let showConfirmationModal = false;
   let leaveToCancel = null;
+  let me = null;
 
   // ---------- Form State (Unified Same As Leave Application Form) ----------
 let modal;
@@ -204,42 +205,70 @@ function handleEdit(l) {
 
   modal.showModal();
 }
+async function refreshDashboard() {
+  if (!me) return;
+
+  sessionStorage.setItem("forceDashboardRefresh", "true");
+
+  // 1) Reload leaves
+  const res = await fetch("/api/leave-requests", {
+    credentials: "include"
+  });
+  const data = await res.json();
+
+  leaves = data.filter(l => l.staff_id === me.staffId);
+
+  // 2) 🔥 RELOAD USER PROFILE (IMPORTANT)
+  const meRes2 = await fetch("/api/employee/me", { credentials: "include" });
+  user = await meRes2.json();
+
+
+  // 3) Force Svelte update
+  leaves = [...leaves];
+}
+
 
 
 async function confirmCancellation() {
   if (!leaveToCancel) return;
+  const raw = leaveToCancel.status;
 
-  // 1) Pending → DELETE
-  if (leaveToCancel.status === "Pending") {
-    await fetch(`/api/leave-requests/${leaveToCancel.uuid}`, {
+  const status =
+    raw === "Approved" ? "approved" :
+    raw === "Pending" ? "pending" :
+    raw === "Cancellation Pending" ? "cancellation_pending" :
+    raw.toLowerCase();
+
+  const id = leaveToCancel.uuid;
+  if (!id) return;
+
+  // Pending → delete
+  if (status === "pending") {
+    await fetch(`/api/leave-requests/${id}`, {
       method: "DELETE",
       credentials: "include"
     });
 
-    sessionStorage.setItem("forceDashboardRefresh", "true");
-    leaves = leaves.filter(l => l.uuid !== leaveToCancel.uuid);
+    window.dispatchEvent(new Event("dashboardRefresh")); // ⭐ notify dashboard
+    closeConfirmationModal();
+    return;
   }
 
-  // 2) Approved → Send cancellation request
-  else if (leaveToCancel.status === "Approved") {
-    await fetch(`/api/leave-requests/${leaveToCancel.uuid}`, {
+  // Approved → request cancellation
+  if (status === "approved") {
+    await fetch(`/api/leave-requests/${id}`, {
       method: "PATCH",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "cancellation_pending" })
     });
 
-    sessionStorage.setItem("forceDashboardRefresh", "true");
-
-    // update UI
-    const index = leaves.findIndex(l => l.uuid === leaveToCancel.uuid);
-    if (index !== -1) {
-      leaves[index].status = "Cancellation Pending";
-      leaves = [...leaves];
-    }
+    window.dispatchEvent(new Event("dashboardRefresh")); // ⭐ notify dashboard
+    closeConfirmationModal();
+    return;
   }
 
-  closeConfirmationModal();
+  alert("This leave cannot be cancelled.");
 }
 
 async function submitLeave(event) {

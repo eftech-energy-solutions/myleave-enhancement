@@ -212,7 +212,13 @@ onMount(async () => {
 });
 
 </script>
-
+<svelte:head>
+  <style>
+    body {
+      overflow-y: hidden;
+    }
+  </style>
+</svelte:head>
 <main class="main">
 
 <div class="grid">

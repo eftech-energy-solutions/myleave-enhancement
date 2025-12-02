@@ -253,7 +253,10 @@ router.patch("/:id/edit", async (req, res) => {
     const staffId = result.rows[0].staff_id;
 
     // AUTO RECALC after editing leave
-    await recalcAnnualLeave(staffId);
+    // ❌ DO NOT recalc for cancellation_pending
+    if (status !== "cancellation_pending") {
+      await recalcAnnualLeave(staffId);
+}
 
     res.json(result.rows[0]);
 
@@ -272,37 +275,28 @@ router.patch("/:id", async (req, res) => {
     const { status } = req.body;
     const leaveId = req.params.id;
 
-        // ============================================================
-    // EMPLOYEE REQUESTS CANCELLATION (DO NOT CHANGE STATUS)
-    // ============================================================
-      if (status === "cancellation_pending") {
+    // ================= EMPLOYEE REQUESTS CANCELLATION =================
+    // STOP FLOW HERE — employee cancellation DOES NOT modify balance
+    if (status === "cancellation_pending") {
+      await pool.query(`
+        UPDATE leave_requests
+           SET request_type = 'cancellation_request',
+               status = 'cancellation_pending'
+         WHERE leave_id = $1
+      `, [leaveId]);
 
-        await pool.query(
-        `UPDATE leave_requests
-        SET request_type = 'cancellation_request',
-            status = 'cancellation_pending'
-        WHERE leave_id = $1`,
-        [leaveId]
-);
+      return res.json({
+        success: true,
+        message: "Cancellation request submitted (awaiting manager approval)"
+      });
+    }
 
-        // VERY IMPORTANT
-        return res.json({
-          success: true,
-          message: "Cancellation request submitted (awaiting manager approval)"
-        });
-      }
+    // ================= VALIDATE MANAGER ACTION =================
+    if (!["approved", "rejected", "cancelled"].includes(status)) {
+      return res.status(400).json({ message: "Invalid status" });
+    }
 
-
-      // Only block invalid statuses (NOT cancellation_pending)
-      if (!["approved", "rejected", "cancelled", "cancellation_pending"].includes(status)) {
-        return res.status(400).json({ message: "Invalid status" });
-      }
-
-
-
-    /* ============================================================
-       GET LEAVE DETAILS (USED BY BOTH APPROVE & CANCELLED)
-    ============================================================ */
+    // =============== LOAD THE LEAVE REQUEST ===============
     const leaveRes = await pool.query(
       `SELECT * FROM leave_requests WHERE leave_id = $1`,
       [leaveId]
@@ -317,17 +311,14 @@ router.patch("/:id", async (req, res) => {
     const leaveType = leave.leave_type;
     const days = Number(leave.total_days);
 
-    /* ============================================================
-       ✔ APPROVE LOGIC — Deduct Leave Balance
-    ============================================================ */
+    // =============== APPROVE LOGIC ===============
     if (status === "approved") {
-      /* A — AL / EL */
-      if (leaveType === "AL" || leaveType === "EL") {
 
+      // A — Annual / Emergency
+      if (leaveType === "AL" || leaveType === "EL") {
         const p = await pool.query(
           `SELECT leave_entitlement_annual, carry_forward_balance, carry_forward_expiry
-           FROM profiles
-           WHERE staff_id = $1`,
+             FROM profiles WHERE staff_id = $1`,
           [staffId]
         );
 
@@ -340,7 +331,7 @@ router.patch("/:id", async (req, res) => {
         const leaveDate = new Date(leave.date_from);
         carry_forward_expiry = carry_forward_expiry ? new Date(carry_forward_expiry) : null;
 
-        // if carry forward expired → ignore it
+        // Carry-forward expired → ignore
         if (carry_forward_expiry && leaveDate > carry_forward_expiry) {
           carry_forward_balance = 0;
         }
@@ -349,9 +340,8 @@ router.patch("/:id", async (req, res) => {
         let deductAL = 0;
 
         if (carry_forward_balance > 0 && leaveDate <= carry_forward_expiry) {
-          if (carry_forward_balance >= days) {
-            deductCF = days;
-          } else {
+          if (carry_forward_balance >= days) deductCF = days;
+          else {
             deductCF = carry_forward_balance;
             deductAL = days - carry_forward_balance;
           }
@@ -365,14 +355,14 @@ router.patch("/:id", async (req, res) => {
 
         await pool.query(
           `UPDATE profiles
-           SET carry_forward_balance = carry_forward_balance - $1,
-               leave_entitlement_annual = leave_entitlement_annual - $2
+             SET carry_forward_balance = carry_forward_balance - $1,
+                 leave_entitlement_annual = leave_entitlement_annual - $2
            WHERE staff_id = $3`,
           [deductCF, deductAL, staffId]
         );
       }
 
-      /* B — MC */
+      // B — Medical Leave
       else if (leaveType === "MC") {
         const m = await pool.query(
           `SELECT leave_entitlement_medical FROM profiles WHERE staff_id = $1`,
@@ -385,17 +375,17 @@ router.patch("/:id", async (req, res) => {
 
         await pool.query(
           `UPDATE profiles
-           SET leave_entitlement_medical = leave_entitlement_medical - $1
+             SET leave_entitlement_medical = leave_entitlement_medical - $1
            WHERE staff_id = $2`,
           [days, staffId]
         );
       }
 
-      /* C — Special Leaves */
+      // C — Special Leave
       else {
         const e = await pool.query(
           `SELECT balance FROM leave_entitlements
-           WHERE staff_id = $1 AND leave_type = $2`,
+             WHERE staff_id = $1 AND leave_type = $2`,
           [staffId, leaveType]
         );
 
@@ -409,73 +399,69 @@ router.patch("/:id", async (req, res) => {
 
         await pool.query(
           `UPDATE leave_entitlements
-           SET balance = balance - $1
+             SET balance = balance - $1
            WHERE staff_id = $2 AND leave_type = $3`,
           [days, staffId, leaveType]
         );
       }
-    }
 
-    /* ============================================================
-       ✔ CANCELLATION APPROVED — Add Back Balance
-    ============================================================ */
+    } // END APPROVE
+
+
+    // =============== CANCELLATION APPROVED (ADD BACK) ===============
     if (status === "cancelled") {
 
-      /* A — AL / EL */
       if (leaveType === "AL" || leaveType === "EL") {
         await pool.query(
           `UPDATE profiles
-           SET leave_entitlement_annual = leave_entitlement_annual + $1
+             SET leave_entitlement_annual = leave_entitlement_annual + $1
            WHERE staff_id = $2`,
           [days, staffId]
         );
       }
 
-      /* B — MC */
       else if (leaveType === "MC") {
         await pool.query(
           `UPDATE profiles
-           SET leave_entitlement_medical = leave_entitlement_medical + $1
+             SET leave_entitlement_medical = leave_entitlement_medical + $1
            WHERE staff_id = $2`,
           [days, staffId]
         );
       }
 
-      /* C — Special Leaves */
       else {
         await pool.query(
           `UPDATE leave_entitlements
-           SET balance = balance + $1
+             SET balance = balance + $1
            WHERE staff_id = $2 AND leave_type = $3`,
           [days, staffId, leaveType]
         );
       }
     }
 
-    /* ============================================================
-       UPDATE leave_requests STATUS
-    ============================================================ */
-    const updateSQL = `
-      UPDATE leave_requests
-      SET status = $1
-      WHERE leave_id = $2
-      RETURNING *;
-    `;
+    // =============== UPDATE STATUS ===============
+    const updated = await pool.query(
+      `UPDATE leave_requests
+         SET status = $1
+       WHERE leave_id = $2
+       RETURNING *;`,
+      [status, leaveId]
+    );
 
-    const updated = await pool.query(updateSQL, [status, leaveId]);
-
-    const updatedLeave = updated.rows[0];
-
-    // Always recalc AL after any status change
+   // ❌ DO NOT recalc for cancellation_pending (employee request)
+  if (status !== "cancellation_pending") {
     await recalcAnnualLeave(staffId);
+  }
 
-    res.json(updatedLeave);
+
+    res.json(updated.rows[0]);
 
   } catch (err) {
     console.error("PATCH /api/leave-requests error:", err);
     res.status(500).json({ message: "Failed to update leave request" });
   }
 });
+
 /* ============================================================
    5) DELETE ALL LEAVE REQUESTS FOR A STAFF
    DELETE /api/leave-requests/by-staff/:staffId
@@ -612,6 +598,28 @@ router.get("/history/all", async (req, res) => {
     console.error("GET /api/leave-history error:", err);
     res.status(500).json({ message: "Failed to load leave history" });
   }
+});
+
+router.get("/me", async (req, res) => {
+  try {
+    const user = req.user;
+    if (!user || !user.staff_id) {
+      return res.status(401).json({ message: "Unauthorised" });
+    }
+
+    const result = await pool.query(
+      `SELECT *
+       FROM leave_requests
+       WHERE staff_id = $1
+       ORDER BY date_from ASC`,
+      [user.staff_id]
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error("GET /api/leave-requests/me error:", err);
+    res.status(500).json({ message: "Failed to load your leave data" });
+  }
 });
 
 export default router;

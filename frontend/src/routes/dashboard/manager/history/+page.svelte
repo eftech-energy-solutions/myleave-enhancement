@@ -156,7 +156,13 @@ function makeEmployeeRecord(item) {
   $: filtered = selected ? applyFilters(selected.employees) : [];
   $: total = filtered.length;
 </script>
-
+<svelte:head>
+  <style>
+    body {
+      overflow-y: hidden;
+    }
+  </style>
+</svelte:head>
 
 <svelte:window on:keydown={handleKey}/>
 
