@@ -462,7 +462,7 @@ function handlePhotoFile(e) {
     flex-direction:column;
     min-height:100dvh;
     background: linear-gradient(180deg,#49bdb3 0%,#2bb7b3 35%,#1798a5 65%,#0c4a6e 100%);
-    overflow:hidden;
+    overflow-y:auto;
   }
   .right::before{
     content:"";

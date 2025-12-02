@@ -370,10 +370,14 @@ router.delete("/:staff_id", async (req, res) => {
   try {
     const staffId = req.params.staff_id;
 
+    // Delete all leave requests for this staff
     await pool.query("DELETE FROM leave_requests WHERE staff_id = $1", [staffId]);
+
+    // Delete leave entitlements
     await pool.query("DELETE FROM leave_entitlements WHERE staff_id = $1", [staffId]);
+
+    // Delete profile (main table)
     await pool.query("DELETE FROM profiles WHERE staff_id = $1", [staffId]);
-    await pool.query("DELETE FROM employees WHERE staff_id = $1", [staffId]);
 
     return res.json({ success: true, message: "Employee deleted fully." });
 
@@ -382,7 +386,6 @@ router.delete("/:staff_id", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
 
 /* ============================================================
    5) GET CURRENT LOGGED-IN USER

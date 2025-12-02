@@ -27,6 +27,9 @@
       // 3) RECENT (depends on user)
       await loadRecent();
 
+      await loadAppliedLeave();
+      buildMonth(viewBase);
+
     } catch (err) {
       console.error("onMount FAILED:", err);
       error = "Failed to load dashboard.";
@@ -229,8 +232,9 @@ async function loadRecent() {
         holiday: hol,
         holidayName: holName,
         holidayDescription: holDesc,
-        title: title, // Title attribute untuk hover
-        outOfWindow
+        title: title || (hol ? 'Public Holiday' : null),
+        outOfWindow,
+        blocked: blockedDates?.has?.(iso) ?? false
       });
     }
     // monthLabel = new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(first); // DIBUANG
@@ -303,10 +307,10 @@ async function loadRecent() {
       processHolidayData();
       
       // Re-build the calendar view
-      if (!viewBase) {
-        viewBase = clampToWindowMonth(atStartOfDay(new Date()));
-      }
-      buildMonth(viewBase);
+      // if (!viewBase) {
+      //   viewBase = clampToWindowMonth(atStartOfDay(new Date()));
+      // }
+      // buildMonth(viewBase);
 
     } catch (e) {
       error = e.message || "Error";
@@ -492,6 +496,11 @@ async function submitLeave(e) {
     const created = await res.json().catch(() => null);
     console.log("Leave created:", created);
 
+    alert("Your leave application has been successfully submitted!");
+
+    await loadAppliedLeave();
+    buildMonth(viewBase);
+
     modal?.close(); 
 
   } catch (err) {
@@ -507,7 +516,41 @@ async function submitLeave(e) {
     year: "numeric"
   });
 
+  let blockedDates = new Set();
+
+async function loadAppliedLeave() {
+  const res = await fetch("/api/leave-requests", {
+    credentials: "include"
+  });
+  const list = await res.json();
+
+  blockedDates = new Set();
+
+  list
+    .filter(r => r.staff_id === user.staff_id)
+    .forEach(r => {
+      // Only block if these statuses
+      if (["pending", "approved"].includes(r.status)) {
+        const start = new Date(r.date_from);
+        const end = new Date(r.date_until);
+
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+          blockedDates.add(localISO(d));
+        }
+      }
+    });
+}
+
+
 </script>
+
+<svelte:head>
+  <style>
+    body {
+      overflow-y: hidden;
+    }
+  </style>
+</svelte:head>
 
 <main class="main">
   <!-- POKOK 'if loading' DIBUANG DARI SINI UNTUK MEMASTIKAN UI SENTIASA KELIHATAN -->
@@ -603,7 +646,13 @@ async function submitLeave(e) {
               class:today={d.today}
               class:holiday={d.holiday}
               class:out={d.outOfWindow}
-              disabled={d.outOfWindow || d.holiday || (!d.today && atStartOfDay(d.date) < today)}
+              class:blocked={d.blocked}
+              disabled={
+                d.outOfWindow ||
+                d.blocked ||
+                d.holiday ||
+                (!d.today && atStartOfDay(d.date) < today)
+              }
               on:click={() => openLeaveForm(d.date)}
               aria-label={`Select ${d.date.toDateString()}`}
               title={d.title}
@@ -614,6 +663,7 @@ async function submitLeave(e) {
         </div>
         <div class="legend small">
           <span><i class="swatch sw-blue"></i> Public / Additional leave</span>
+          <span><i class="swatch sw-applied"></i> Applied Leave</span>
           <span><i class="swatch sw-today"></i> Today</span>
         </div>
       </div>
@@ -722,6 +772,11 @@ async function submitLeave(e) {
 
   .sw-blue{ background:#71c0f5; border:1px solid #71c0f5; }
   .sw-today{ background:#fff; border:1px solid #49bdb3; }
+  .sw-applied {
+  background: #fef08a;   /* yellow */
+  border: 1px solid #facc15;
+}
+
   .legend.small{
     display:flex; justify-content:center; gap:14px; margin-top:8px; font-size:11.5px; color:#6b7280;
   }
@@ -974,6 +1029,13 @@ max-width: 150px;         /* optional — so it wraps instead of going super lon
     cursor: not-allowed; opacity: .75;
   }
 
+  .days button.blocked {
+  background: #fef08a !important;
+  border-color: #facc15 !important; 
+  color: #78350f !important;
+  cursor: not-allowed !important;
+  opacity: 1;
+}
   .recent-wrap{ display:grid; gap: 6px;  }
   .recent-card { height: 390px;}
   .recent-item{ border:1px solid var(--ring); border-radius:12px; padding:10px; display:grid; gap:6px; background:#f9fafb; }

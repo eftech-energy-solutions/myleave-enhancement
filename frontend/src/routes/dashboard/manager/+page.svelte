@@ -210,8 +210,15 @@ onMount(async () => {
     loading = false;
   }
 });
-
 </script>
+
+<svelte:head>
+  <style>
+    body {
+      overflow-y: hidden;
+    }
+  </style>
+</svelte:head>
 
 <main class="main">
 

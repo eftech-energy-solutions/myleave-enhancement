@@ -312,8 +312,6 @@ function onFromChange() {
 function onUntilChange() {
   if (duration === "Half") return;
 }
-
-
 </script>
 
 <!-- ===== Confirmation Modal ===== -->

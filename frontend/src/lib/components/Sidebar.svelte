@@ -533,12 +533,14 @@
 
 <style>
   /* Layout (Tidak berubah) */
-  .layout{
-    display:grid;
-    grid-template-columns: 220px 1fr;
-    min-height:100dvh;
-    background:#fafafa;
-  }
+ .layout {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  min-height: 100dvh;   /* NORMAL, biar auto expand */
+  overflow: visible;    /* scroll dibenarkan */
+  background: #fafafa;
+}
+
   /* RIGHT SIDE (Tidak berubah) */
   .right{
     position: relative;
@@ -546,8 +548,8 @@
     flex-direction:column;
     min-height:100dvh;
     background: linear-gradient(180deg,#49bdb3 0%,#2bb7b3 35%,#1798a5 65%,#0c4a6e 100%);
-    overflow:hidden;
-  }
+    overflow-y: hidden;
+}
   .right::before{
     content:"";
     position:absolute; inset:0;
@@ -632,7 +634,14 @@
   a.menu-btn{ text-decoration:none; } 
 
   /* Content (Tidak berubah) */
-  .content-wrap{ flex:1; background:transparent; padding:16px; }
+  .content-wrap {
+  flex: 1;
+  background: transparent;
+  padding: 16px;
+  overflow-y: auto;       /* ⭐ allow scroll dalam content sahaja */
+  height: calc(100vh - 90px);  /* ⭐ adjust ikut tinggi topbar */
+}
+
   .content{ max-width:1600px; margin:0 auto; }
 
   /* Modal styles (Umum) (Tidak berubah) */

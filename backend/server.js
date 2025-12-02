@@ -61,9 +61,7 @@ app.use('/api/employee', profileRoutes);
 app.use('/api/upload', uploadRoute);
 app.use('/api/holidays', holidayRoutes);
 app.use('/api/auth', authRoutes);
-app.use('/api/employee', profileRoutes); // singular 'employee'
 app.use('/uploads', express.static('uploads'));
-app.use("/api/employee", profileRoutes);
 app.use("/api", roleSettingRoute);
 app.use("/api/leave-requests", leaveRequestsRoutes);
 

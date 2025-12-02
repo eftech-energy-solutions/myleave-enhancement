@@ -27,6 +27,9 @@
       // 3) RECENT (depends on user)
       await loadRecent();
 
+      await loadAppliedLeave();
+      buildMonth(viewBase);
+      
     } catch (err) {
       console.error("onMount FAILED:", err);
       error = "Failed to load dashboard.";
@@ -221,17 +224,18 @@ async function loadRecent() {
       }
 
       arr.push({
-        key: iso,
-        label: d.getDate(),
-        date: d,
-        muted: d.getMonth() !== m,
-        today: sameDay(d, today),
-        holiday: hol,
-        holidayName: holName,
-        holidayDescription: holDesc,
-        title: title, // Title attribute untuk hover
-        outOfWindow
-      });
+          key: iso,
+          label: d.getDate(),
+          date: d,
+          muted: d.getMonth() !== m,
+          today: sameDay(d, today),
+          holiday: hol,
+          holidayName: holName,
+          holidayDescription: holDesc,
+          title: title || (hol ? 'Public Holiday' : null),
+          outOfWindow,
+          blocked: blockedDates?.has?.(iso) ?? false
+        });
     }
     // monthLabel = new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(first); // DIBUANG
     days = arr;
@@ -303,10 +307,10 @@ async function loadRecent() {
       processHolidayData();
       
       // Re-build the calendar view
-      if (!viewBase) {
-        viewBase = clampToWindowMonth(atStartOfDay(new Date()));
-      }
-      buildMonth(viewBase);
+      // if (!viewBase) {
+      //   viewBase = clampToWindowMonth(atStartOfDay(new Date()));
+      // }
+      // buildMonth(viewBase);
 
     } catch (e) {
       error = e.message || "Error";
@@ -461,6 +465,36 @@ async function loadRecent() {
     await tick();
   }
 
+  let blockedDates = new Set();
+
+async function loadAppliedLeave() {
+  const res = await fetch("/api/leave-requests", {
+    credentials: "include"
+  });
+  if (!res.ok) return;
+
+  const all = await res.json();
+
+  // Manager: only his own leave requests
+  const list = all.filter(r =>
+    String(r.staff_id).toLowerCase() === String(user?.staff_id).toLowerCase()
+  );
+
+  // Reset first (avoid duplicates)
+  blockedDates = new Set();
+
+  list.forEach(r => {
+    if (["pending", "approved"].includes(r.status)) {
+      const start = new Date(r.date_from);
+      const end = new Date(r.date_until);
+
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        blockedDates.add(localISO(d));
+      }
+    }
+  });
+}
+
 async function submitLeave(e) {
   const formEl = e.currentTarget;
   e.preventDefault();
@@ -492,6 +526,10 @@ async function submitLeave(e) {
     const created = await res.json().catch(() => null);
     console.log("Leave created:", created);
 
+    alert("Your leave application has been successfully submitted!");
+
+    await loadAppliedLeave();
+    buildMonth(viewBase);
     modal?.close(); 
 
   } catch (err) {
@@ -506,6 +544,8 @@ async function submitLeave(e) {
     month: "short",
     year: "numeric"
   });
+
+
 
 </script>
 
@@ -603,7 +643,13 @@ async function submitLeave(e) {
               class:today={d.today}
               class:holiday={d.holiday}
               class:out={d.outOfWindow}
-              disabled={d.outOfWindow || d.holiday || (!d.today && atStartOfDay(d.date) < today)}
+              class:blocked={d.blocked}
+              disabled={
+                d.outOfWindow ||
+                d.blocked ||
+                d.holiday ||
+                (!d.today && atStartOfDay(d.date) < today)
+              }
               on:click={() => openLeaveForm(d.date)}
               aria-label={`Select ${d.date.toDateString()}`}
               title={d.title}
@@ -614,7 +660,9 @@ async function submitLeave(e) {
         </div>
         <div class="legend small">
           <span><i class="swatch sw-blue"></i> Public / Additional leave</span>
+          <span><i class="swatch sw-applied"></i> Applied Leave</span>
           <span><i class="swatch sw-today"></i> Today</span>
+
         </div>
       </div>
       {/if}
@@ -641,6 +689,14 @@ async function submitLeave(e) {
     </div>
   </div>
 </main>
+
+<svelte:head>
+  <style>
+    body {
+      overflow-y: hidden;
+    }
+  </style>
+</svelte:head>
 
 <!-- Modal -->
 <dialog bind:this={modal} class="leave-modal" aria-labelledby="leave-title">
@@ -722,6 +778,11 @@ async function submitLeave(e) {
 
   .sw-blue{ background:#71c0f5; border:1px solid #71c0f5; }
   .sw-today{ background:#fff; border:1px solid #49bdb3; }
+  .sw-applied {
+  background: #fef08a;   /* yellow */
+  border: 1px solid #facc15;
+}
+
   .legend.small{
     display:flex; justify-content:center; gap:14px; margin-top:8px; font-size:11.5px; color:#6b7280;
   }
@@ -974,6 +1035,14 @@ max-width: 150px;         /* optional — so it wraps instead of going super lon
     cursor: not-allowed; opacity: .75;
   }
 
+ .days button.blocked {
+  background: #fef08a !important;
+  border-color: #facc15 !important; 
+  color: #78350f !important;
+  cursor: not-allowed !important;
+  opacity: 1;
+}
+  
   .recent-wrap{ display:grid; gap: 6px;  }
   .recent-card { height: 390px;}
   .recent-item{ border:1px solid var(--ring); border-radius:12px; padding:10px; display:grid; gap:6px; background:#f9fafb; }
