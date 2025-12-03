@@ -582,10 +582,11 @@ function onUntilChange() {
     font-size: 12px;
     display: inline-block;
   }
-  .badge.approved { background: #dcfce7; color: #166534; }
-  .badge.pending  { background: #fef9c3; color: #92400e; }
-  .badge.rejected { background: #fee2e2; color: #991b1b; }
-  .badge.cancellation-pending { background: #fef08a; color: #854d0e; }
+  .badge.approved { background: #dcfce7; color: #166534; border-color:#cbeee3;}
+  .badge.pending  { background: #fef9c3; color: #92400e; border-color:#f5e1b7;}
+  .badge.rejected { background: #fee2e2; color: #991b1b; border-color:#f3c2c2; }
+  .badge.cancelled {background:#f1f5f9; color:#475569; border-color:#e2e8f0;}
+  .badge.cancellation-pending { background: #fef08a; color: #854d0e; border-color: #fddc63;}
 
   /* ===== ACTION BUTTON ===== */
   .delete-btn {
