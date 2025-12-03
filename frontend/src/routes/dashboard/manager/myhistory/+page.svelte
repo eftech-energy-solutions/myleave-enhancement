@@ -155,6 +155,7 @@ $: {
             l.status === "pending" ? "Pending" :
             l.status === "approved" ? "Approved" :
             l.status === "rejected" ? "Rejected" :
+            l.status === "cancelled" ? "Cancelled" :
             l.status === "cancellation_pending" ? "Cancellation Pending" :
             l.status
         }));
