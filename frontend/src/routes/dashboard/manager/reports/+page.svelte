@@ -1,7 +1,20 @@
 <script>
   import { onMount, tick } from 'svelte';
   // export let data; // DIBUANG: Komponen ini akan memuatkan data sendiri.
+  const leaveTypeFullName = {
+    AL: "Annual / Emergency",
+    MC: "Medical",
+    MAT: "Maternity",
+    PAT: "Paternity",
+    COMP_A: "Compassionate A (Parent/Child/Spouse)",
+    COMP_B: "Compassionate B (Grandparent/Sibling)",
+    MAR: "Marriage",
+    HOSP: "Hospitalization"
+  };
 
+  function getLeaveFullName(code) {
+    return leaveTypeFullName[code] || code;
+  }
   // ----- state -----
   let loading = true;
   let error = "";
@@ -709,7 +722,10 @@ async function submitLeave(e) {
             <div class="when">{fmt(r.from)} – {fmt(r.to)}</div>
             <div class="cols">
               <div><div class="muted">Total Days:</div><div>{r.totalDays}</div></div>
-              <div><div class="muted">Leave Type:</div><div>{r.type}</div></div>
+              <div>
+              <div class="muted">Leave Type:</div>
+              <div>{getLeaveFullName(r.type)}</div>
+            </div>
               <div><div class="muted">Status:</div><div>{r.status}</div></div>
             </div>
           </div>

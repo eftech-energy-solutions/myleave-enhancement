@@ -1,6 +1,20 @@
 <script>
   import { onMount } from "svelte";
 
+  const leaveTypeFullName = {
+    AL: "Annual / Emergency",
+    MC: "Medical",
+    MAT: "Maternity",
+    PAT: "Paternity",
+    COMP_A: "Compassionate A (Parent/Child/Spouse)",
+    COMP_B: "Compassionate B (Grandparent/Sibling)",
+    MAR: "Marriage",
+    HOSP: "Hospitalization"
+  };
+
+  function getLeaveFullName(code) {
+    return leaveTypeFullName[code] || code;
+  }
   // =============== STATE =================
   let leaves = [];
   let filteredLeaves = [];
@@ -512,7 +526,7 @@ function onUntilChange() {
           {#if l.dateTo !== l.dateFrom} – {fmt(l.dateTo)}{/if}
         </td>
         <td class="center">{l.totalDays}</td>
-        <td>{l.type}</td>
+        <td>{getLeaveFullName(l.type)}</td>
         <td>
           <span class="badge {l.status.toLowerCase().replace(' ', '-')}">{l.status}</span>
         </td>

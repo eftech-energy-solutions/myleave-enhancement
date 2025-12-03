@@ -1,6 +1,20 @@
 
 <script>
   import { onMount } from "svelte";
+    const leaveTypeFullName = {
+    AL: "Annual / Emergency",
+    MC: "Medical",
+    MAT: "Maternity",
+    PAT: "Paternity",
+    COMP_A: "Compassionate A (Parent/Child/Spouse)",
+    COMP_B: "Compassionate B (Grandparent/Sibling)",
+    MAR: "Marriage",
+    HOSP: "Hospitalization"
+  };
+
+  function getLeaveFullName(code) {
+    return leaveTypeFullName[code] || code;
+  }
 
   let rows = [];
   let showModal = false;
@@ -350,7 +364,7 @@ function makeEmployeeRecord(item) {
                     <td>{emp.department}</td>
                     <td>{dateRange(emp.dateFrom, emp.dateTo)}</td>
                     <td class="center">{emp.totalDays}</td>
-                    <td>{emp.leaveType}</td>
+                    <td>{getLeaveFullName(emp.leaveType)}</td>
                     <td><span class="status {emp.status.toLowerCase()}">{emp.status}</span></td>
                   </tr>
                 {/each}
