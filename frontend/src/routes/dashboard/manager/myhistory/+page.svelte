@@ -588,7 +588,6 @@ function onUntilChange() {
   .badge.cancelled {background:#f1f5f9; color:#475569; border-color:#e2e8f0;}
   .badge.cancellation-pending { background: #fef08a; color: #854d0e; border-color: #fddc63;}
 
-
   /* ===== ACTION BUTTON ===== */
   .delete-btn {
     background: transparent;

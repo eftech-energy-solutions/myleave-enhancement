@@ -4,20 +4,6 @@
 
 <script>
   import { onMount } from "svelte";
-    const leaveTypeFullName = {
-    AL: "Annual / Emergency",
-    MC: "Medical",
-    MAT: "Maternity",
-    PAT: "Paternity",
-    COMP_A: "Compassionate A (Parent/Child/Spouse)",
-    COMP_B: "Compassionate B (Grandparent/Sibling)",
-    MAR: "Marriage",
-    HOSP: "Hospitalization"
-  };
-
-  function getLeaveFullName(code) {
-    return leaveTypeFullName[code] || code;
-  }
 
   let rows = [];
   let showModal = false;
@@ -88,20 +74,24 @@ function groupByMonth(list) {
 }
 
 function makeEmployeeRecord(item) {
+  const raw = item.status.toLowerCase();
+
+  let formatted =
+    raw === "cancellation_pending"
+      ? "Cancellation pending"
+      : raw.charAt(0).toUpperCase() + raw.slice(1);
+
   return {
     id: item.staff_id,
     name: item.staff_name,
     department: item.department,
     totalDays: item.total_days,
     leaveType: item.leave_type,
-    status: item.status.charAt(0).toUpperCase() + item.status.slice(1),
+    status: formatted,
     dateFrom: item.date_from,
     dateTo: item.date_until
   };
 }
-
-
-
   // ===== UI handlers =====
   const count = row =>
     row.employees.filter(e =>
@@ -293,8 +283,8 @@ function makeEmployeeRecord(item) {
                     <td>{emp.department}</td>
                     <td>{dateRange(emp.dateFrom, emp.dateTo)}</td>
                     <td class="center">{emp.totalDays}</td>
-                    <td>{getLeaveFullName(emp.leaveType)}</td>
-                    <td><span class="status {emp.status.toLowerCase()}">{emp.status}</span></td>
+                    <td>{emp.leaveType}</td>
+                    <td><span class="status {emp.status.toLowerCase().replace(' ', '-')}">{emp.status}</span></td>
                   </tr>
                 {/each}
               </tbody>
@@ -348,7 +338,6 @@ function makeEmployeeRecord(item) {
     text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
   }
 
-  /* ===== New Month Cards ===== */
   /* ===== New Month Cards ===== */
   .card-grid {
     display: grid;
@@ -447,6 +436,14 @@ function makeEmployeeRecord(item) {
   .status.pending{  background:#fff8e7; color:#8a5b00; border-color:#f5e1b7; }
   .status.rejected{ background:#fdecec; color:#9b1c1c; border-color:#f3c2c2; }
   .status.cancelled{ background:#f1f5f9; color:#475569; border-color:#e2e8f0; }
+  .status.cancellation-pending {
+  background: #fef08a;
+  color: #854d0e;
+  border-color: #fddc63;
+  white-space: nowrap;
+}
+
+
 
   .empty{ padding:22px; color:#567; text-align:center; }
   .dialog-foot{ padding:12px 16px; border-top:1px solid #eee; display:flex; justify-content:flex-end; }

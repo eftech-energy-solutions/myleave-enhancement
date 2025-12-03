@@ -240,6 +240,11 @@ approvedHOSP = all
   let maxMonthStart = monthStart(maxDate);
 
   let today = atStartOfDay(new Date());
+  // ========= 6 BULAN TERAWAL (LIMIT APPLY) =========
+  let maxApplyDate = new Date(today);
+  maxApplyDate.setMonth(maxApplyDate.getMonth() + 6);
+  const maxApplyISO = localISO(maxApplyDate);
+
   const todayISO = localISO(today);
 
   let viewBase = atStartOfDay(new Date());
@@ -283,7 +288,8 @@ approvedHOSP = all
 
       // out-of-window flag
       const outOfWindow = d < minDate || d > maxDate;
-
+      // ❌ BLOCK jika lebih 6 bulan dari tarikh hari ini
+      const beyondSixMonths = d > maxApplyDate;
       const hol = isHoliday(d);
       const holName = hol ? holidayTitle(d) : null;
       const holDesc = hol ? holidayDescription(d) : null; // BARU
@@ -305,7 +311,11 @@ approvedHOSP = all
         holidayDescription: holDesc,
         title: title || (hol ? 'Public Holiday' : null),
         outOfWindow,
-        blocked: blockedDates?.has?.(iso) ?? false
+        blocked: blockedDates?.has?.(iso) ?? false,
+        beyondSixMonths,
+         limitMessage: beyondSixMonths
+          ? "You can only apply for leave within the next 6 months."
+          : null
       });
     }
     // monthLabel = new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(first); // DIBUANG
@@ -740,12 +750,24 @@ async function loadApprovedUsedDays() {
                 d.outOfWindow ||
                 d.blocked ||
                 d.holiday ||
+                d.beyondSixMonths ||
                 (!d.today && atStartOfDay(d.date) < today)
               }
-              on:click={() => openLeaveForm(d.date)}
-              aria-label={`Select ${d.date.toDateString()}`}
-              title={d.title}
-            >{d.label}</button>
+              on:click={() => {
+                if (d.beyondSixMonths) {
+                  alert("You can only apply for leave within the next 6 months.");
+                  return;
+                }
+                openLeaveForm(d.date);
+              }}
+              title={
+                d.limitMessage
+                  ? d.limitMessage
+                  : d.title
+              }
+            >
+              {d.label}
+            </button>
           {/each}
         </div>
         <div class="legend small">
