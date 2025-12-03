@@ -172,18 +172,24 @@ async function loadRecent() {
     approvedMC = all
       .filter(l =>
         String(l.staff_id) === String(user.staff_id) &&
-        l.status?.toLowerCase() === "approved" &&
+        (
+          l.status?.toLowerCase() === "approved" ||
+          l.status?.toLowerCase() === "cancellation_pending"
+        ) &&
         l.leave_type === "MC"
       )
-      .reduce((sum, l) => sum + Number(l.total_days), 0);
+      .reduce((sum, l) => sum + Number(l.total_days || 0), 0);
 
     approvedHOSP = all
       .filter(l =>
         String(l.staff_id) === String(user.staff_id) &&
-        l.status?.toLowerCase() === "approved" &&
+        (
+          l.status?.toLowerCase() === "approved" ||
+          l.status?.toLowerCase() === "cancellation_pending"
+        ) &&
         l.leave_type === "HOSP"
       )
-      .reduce((sum, l) => sum + Number(l.total_days), 0);
+      .reduce((sum, l) => sum + Number(l.total_days || 0), 0);
 
     recent = all
       .filter(l => String(l.staff_id) === String(user.staff_id))

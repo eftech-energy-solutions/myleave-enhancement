@@ -1,6 +1,19 @@
 <script>
   import { onMount } from "svelte";
+    const leaveTypeFullName = {
+    AL: "Annual / Emergency",
+    MC: "Medical",
+    MAT: "Maternity",
+    PAT: "Paternity",
+    COMP_A: "Compassionate A (Parent/Child/Spouse)",
+    COMP_B: "Compassionate B (Grandparent/Sibling)",
+    MAR: "Marriage",
+    HOSP: "Hospitalization"
+  };
 
+  function getLeaveFullName(code) {
+    return leaveTypeFullName[code] || code;
+  }
   /* ================================
       1) MANAGER & EMPLOYEE STATE
      ================================ */
@@ -559,7 +572,7 @@ async function rejectCancellation(item) {
                   {item.profile_department || item.department}
                 </div>
               </div>
-              <span class="pill type">{item.leave_type}</span>
+              <span class="pill type">{getLeaveFullName(item.leave_type) || "Leave"}</span>
             </div>
 
             <!-- Dates -->
@@ -649,7 +662,7 @@ async function rejectCancellation(item) {
                 </div>
               </div>
               <span class="pill type" style="background:#fee2e2; color:#b91c1c;">
-                Cancellation: {item.leave_type}
+                Cancellation: {getLeaveFullName(item.leave_type)}
               </span>
             </div>
 

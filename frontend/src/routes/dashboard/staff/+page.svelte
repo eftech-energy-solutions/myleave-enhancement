@@ -23,6 +23,8 @@
   let approvedAL = 0;
   let approvedMC = 0;
   let approvedHOSP = 0;
+  let usedMC = 0;
+  let usedHOSP = 0;
 
 
   // ----- user/profile -----
@@ -43,6 +45,7 @@
 
       // 3) RECENT (depends on user)
       await loadRecent();
+      await loadApprovedUsedDays();
       await loadAppliedLeave();
 
       // 🔥 force donut refresh after cancellation
@@ -82,19 +85,17 @@ $: donuts = user ? [
     // ✔ Show carry forward separately (for display only)
     carryForward: Number(user.carry_forward_original ?? 0)
   },
-
-  
   {
     title: "Medical Leave Summary",
-    total: 14,
-    spent: approvedMC
+    total: user.leave_entitlement_medical_original ?? 14,
+    spent: usedMC
   },
-
   {
     title: "Hospitalization Leave Summary",
-    total: user.hosp_entitlement ?? 60,
-    spent: approvedHOSP
+    total: 60,
+    spent: usedHOSP
   }
+
 ] : [];
 
 
@@ -609,6 +610,29 @@ async function loadAppliedLeave() {
       }
     });
 }
+async function loadApprovedUsedDays() {
+  const res = await fetch("/api/leave-requests", { credentials: "include" });
+  const all = await res.json();
+
+  // MC + HOSP behave EXACTLY like AL:
+  // Count approved + cancellation_pending
+  const active = all.filter(r =>
+    String(r.staff_id) === String(user.staff_id) &&
+    (
+      r.status?.toLowerCase() === "approved" ||
+      r.status?.toLowerCase() === "cancellation_pending"
+    )
+  );
+
+  usedMC = active
+    .filter(r => r.leave_type === "MC")
+    .reduce((sum, r) => sum + Number(r.total_days || 0), 0);
+
+  usedHOSP = active
+    .filter(r => r.leave_type === "HOSP")
+    .reduce((sum, r) => sum + Number(r.total_days || 0), 0);
+}
+
 </script>
 <svelte:head>
   <style>

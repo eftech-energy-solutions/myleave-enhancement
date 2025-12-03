@@ -176,7 +176,7 @@ function makeEmployeeRecord(item) {
         <td>${emp.department}</td>
         <td>${dateRange(emp.dateFrom, emp.dateTo)}</td>
         <td style="text-align:center;">${emp.totalDays}</td>
-        <td>${emp.leaveType}</td>
+        <td>${getLeaveFullName(emp.leaveType)}</td>
         <td>${emp.status}</td>
       </tr>
     `).join('');

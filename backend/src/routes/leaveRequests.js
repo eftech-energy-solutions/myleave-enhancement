@@ -381,7 +381,34 @@ router.patch("/:id", async (req, res) => {
         );
       }
 
-      // C — Special Leave
+      // C — Hospitalization Leave
+        else if (leaveType === "HOSP") {
+
+          const h = await pool.query(
+            `SELECT balance FROM leave_entitlements
+              WHERE staff_id = $1 AND leave_type = 'HOSP'`,
+            [staffId]
+          );
+
+          if (!h.rows.length) {
+            return res.status(404).json({ message: "Hospitalization entitlement not found" });
+          }
+
+          if (h.rows[0].balance < days) {
+            return res.status(400).json({ message: "Insufficient Hospitalization Leave balance" });
+          }
+
+          await pool.query(
+            `UPDATE leave_entitlements
+              SET balance = balance - $1
+            WHERE staff_id = $2 AND leave_type = 'HOSP'`,
+            [days, staffId]
+          );
+        }
+
+
+
+      // D — Special Leave
       else {
         const e = await pool.query(
           `SELECT balance FROM leave_entitlements
@@ -411,33 +438,47 @@ router.patch("/:id", async (req, res) => {
     // =============== CANCELLATION APPROVED (ADD BACK) ===============
     if (status === "cancelled") {
 
-      if (leaveType === "AL" || leaveType === "EL") {
-        await pool.query(
-          `UPDATE profiles
-             SET leave_entitlement_annual = leave_entitlement_annual + $1
-           WHERE staff_id = $2`,
-          [days, staffId]
-        );
-      }
+  // A — ANNUAL / EMERGENCY (AL, EL)
+  if (leaveType === "AL" || leaveType === "EL") {
+    await pool.query(
+      `UPDATE profiles
+         SET leave_entitlement_annual = leave_entitlement_annual + $1
+       WHERE staff_id = $2`,
+      [days, staffId]
+    );
+  }
 
-      else if (leaveType === "MC") {
-        await pool.query(
-          `UPDATE profiles
-             SET leave_entitlement_medical = leave_entitlement_medical + $1
-           WHERE staff_id = $2`,
-          [days, staffId]
-        );
-      }
+  // B — MEDICAL
+  else if (leaveType === "MC") {
+    await pool.query(
+      `UPDATE profiles
+         SET leave_entitlement_medical = leave_entitlement_medical + $1
+       WHERE staff_id = $2`,
+      [days, staffId]
+    );
+  }
 
-      else {
-        await pool.query(
-          `UPDATE leave_entitlements
-             SET balance = balance + $1
-           WHERE staff_id = $2 AND leave_type = $3`,
-          [days, staffId, leaveType]
-        );
-      }
-    }
+  // 🔥 C — HOSPITALIZATION (THIS WAS MISSING)
+  else if (leaveType === "HOSP") {
+    await pool.query(
+      `UPDATE leave_entitlements
+        SET balance = balance + $1
+      WHERE staff_id = $2 AND leave_type = 'HOSP'`,
+      [days, staffId]
+    );
+  }
+
+
+  // D — OTHER SPECIAL LEAVES
+  else {
+    await pool.query(
+      `UPDATE leave_entitlements
+         SET balance = balance + $1
+       WHERE staff_id = $2 AND leave_type = $3`,
+      [days, staffId, leaveType]
+    );
+  }
+}
 
     // =============== UPDATE STATUS ===============
     const updated = await pool.query(
