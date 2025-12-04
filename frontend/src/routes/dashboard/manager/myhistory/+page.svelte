@@ -11,6 +11,10 @@
     HOSP: "Hospitalization"
   };
 
+  function formatDays(n) {
+  return Number(n).toFixed(1);
+}
+
   function getLeaveFullName(code) {
     return leaveTypeFullName[code] || code;
   }
@@ -24,6 +28,7 @@
   let selectedYear = "All";
   let showEditModal = false;
   let editingLeave = null;
+  let originalLeaveType = null;
 
   let showConfirmationModal = false;
   let leaveToCancel = null;
@@ -205,11 +210,11 @@ $: filteredLeaves = leaves
 
   isEdit = true;
   editingUuid = l.uuid;
-
+  originalLeaveType = l.type; 
   leaveType = l.type;
   duration = l.totalDays === 0.5 ? "Half" : l.duration || "Full";
   dateFrom = l.dateFrom.slice(0,10);
-dateUntil = l.dateTo.slice(0,10);
+  dateUntil = l.dateTo.slice(0,10);
 
   // Auto-set fixed leave types
   if (fixedDurations[leaveType]) {
@@ -226,6 +231,12 @@ dateUntil = l.dateTo.slice(0,10);
 
 }
 
+function preventTypeChange() {
+  if (isEdit && leaveType !== originalLeaveType) {
+    alert("You cannot change leave type. Please delete this pending request and submit a new one.");
+    leaveType = originalLeaveType; // revert back
+  }
+}
 
   async function confirmCancellation() {
   if (!leaveToCancel) return;
@@ -276,6 +287,71 @@ dateUntil = l.dateTo.slice(0,10);
   reason,
   request_type: "update"    // 🔥 TAMBAH LINE INI
 };
+// ============================================
+// CLIENT-SIDE VALIDATION FOR EDIT (ALL TYPES)
+// Same behaviour as APPLY form
+// ============================================
+
+// 1. Annual Leave (AL / EL)
+if (leaveType === "AL" || leaveType === "EL") {
+
+  const annualOriginal = Number(user.leave_entitlement_annual_original ?? 14);
+
+  // CF valid only before expiry
+  let carryForward = 0;
+  const cfExpiry = user.carry_forward_expiry ? new Date(user.carry_forward_expiry) : null;
+  const today = new Date();
+
+  if (cfExpiry && today <= cfExpiry) {
+    carryForward = Number(user.carry_forward_balance || 0);
+  }
+
+  const entitlement = annualOriginal + carryForward;
+
+  if (totalDays > entitlement) {
+    alert(
+      `Annual Leave limit exceeded.\nEntitlement: ${entitlement} days\nRequested: ${totalDays} days`
+    );
+    return;
+  }
+}
+
+// 2. MEDICAL (MC)
+if (leaveType === "MC") {
+  const limit = Number(user.leave_entitlement_medical ?? 14);
+
+  if (totalDays > limit) {
+    alert(
+      `Medical Leave limit exceeded.\nEntitlement: ${limit} days\nRequested: ${totalDays} days`
+    );
+    return;
+  }
+}
+
+// 3. HOSPITALIZATION (HOSP)
+if (leaveType === "HOSP") {
+  const limit = Number(user.hosp_entitlement ?? 60); // entitlement
+  const remaining = Number(user.hosp_balance ?? limit); // balance shown to user
+
+  if (totalDays > remaining) {
+    alert(
+      `Hospitalization Leave limit exceeded.\nBalance: ${remaining} days\nRequested: ${totalDays} days`
+    );
+    return;
+  }
+}
+
+// 4. FIXED-duration leaves (MAT, PAT, COMP_A, COMP_B, MAR)
+if (fixedDurations[leaveType]) {
+  const required = fixedDurations[leaveType];
+
+  if (totalDays !== required) {
+    alert(
+      `${getLeaveFullName(leaveType)} must be exactly ${required} days.\nYou cannot change the duration.`
+    );
+    return;
+  }
+}
 
 
   try {
@@ -385,7 +461,7 @@ function onUntilChange() {
     <!-- Leave Type -->
     <label>
       <span>Type</span>
-      <select bind:value={leaveType} required>
+      <select bind:value={leaveType} required on:change={preventTypeChange}>
         <option value="AL">Annual / Emergency</option>
         <option value="MC">Medical</option>
         <option value="MAT">Maternity</option>
@@ -477,7 +553,7 @@ function onUntilChange() {
           {fmt(l.dateFrom)}
           {#if l.dateTo !== l.dateFrom} – {fmt(l.dateTo)}{/if}
         </td>
-        <td class="center">{l.totalDays}</td>
+        <td class="center">{formatDays(l.totalDays)}</td> 
         <td>{getLeaveFullName(l.type)}</td>
 
         <td>

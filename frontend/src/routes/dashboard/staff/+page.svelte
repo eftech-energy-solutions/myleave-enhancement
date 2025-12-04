@@ -25,6 +25,9 @@
   let approvedHOSP = 0;
   let usedMC = 0;
   let usedHOSP = 0;
+  let totalALUsed = 0;
+  let totalMCUsed = 0;
+  let totalHOSPUsed = 0;
 
 
   // ----- user/profile -----
@@ -535,31 +538,89 @@ approvedHOSP = all
   }
 
   async function openLeaveForm(date) {
-    const iso = localISO(date);
-    leaveType = 'AL';
-    duration  = 'Full';
-    dateFrom  = iso;
-    dateUntil = iso;
-    totalDays = 1;
-    attachmentFiles = undefined;
-    if (!modal?.open) modal.showModal();
-    await tick();
-  }
+  // Leave type limits
+  const limit = {
+    AL: Number(user.leave_entitlement_annual_original ?? 14),
+    MC: Number(user.leave_entitlement_medical_original ?? 14),
+    HOSP: 60,
+    MAT: 98,
+    PAT: 7,
+    COMP_A: 3,
+    COMP_B: 1,
+    MAR: 3
+  }[leaveType];
+
+  // Current usage including pending
+  const totalUsed = {
+    AL: totalALUsed,
+    MC: totalMCUsed,
+    HOSP: totalHOSPUsed,
+    MAT: 98,
+    PAT: 7,
+    COMP_A: 3,
+    COMP_B: 1,
+    MAR: 3
+  }[leaveType];
+
+  // ❌ If max reached, block
+  // if (totalUsed >= limit) {
+  //   alert(`${getLeaveFullName(leaveType)} limit (${limit} days) has been reached.`);
+  //   return;
+  // }
+
+  // ✅ Open form normally
+  const iso = localISO(date);
+
+  leaveType = leaveType || 'AL'; // keep selected type
+  duration  = 'Full';
+  dateFrom  = iso;
+  dateUntil = iso;
+  totalDays = 1;
+  attachmentFiles = undefined;
+
+  if (!modal?.open) modal.showModal();
+  await tick();
+}
 
 async function submitLeave(e) {
   const formEl = e.currentTarget;
   e.preventDefault();
 
   if (!formEl.reportValidity()) return;
+    const limit = {
+        AL: Number(user.leave_entitlement_annual_original ?? 14),
+        MC: Number(user.leave_entitlement_medical_original ?? 14),
+        HOSP: Number(user.hosp_entitlement ?? 60),
+        MAT: 98,
+        PAT: 7,
+        COMP_A: 3,
+        COMP_B: 1,
+        MAR: 3
+      }[leaveType];
 
-  const fd = new FormData(formEl);
+      const totalUsed = {
+        AL: totalALUsed,
+        MC: totalMCUsed,
+        HOSP: totalHOSPUsed,
+        MAT: 98,
+        PAT: 7,
+        COMP_A: 3,
+        COMP_B: 1,
+        MAR: 3
+      }[leaveType];
 
-  fd.set("type", leaveType);
-  fd.set("requestType", requestType);
-  fd.set("duration", duration);
-  fd.set("dateFrom", dateFrom);
-  fd.set("dateUntil", dateUntil);
-  fd.set("totalDays", String(totalDays));
+      if (totalUsed >= limit) {
+        alert(`${getLeaveFullName(leaveType)} leave application limit (${limit} days) has been reached.`);
+        return;
+      }
+      const fd = new FormData(formEl);
+
+      fd.set("type", leaveType);
+      fd.set("requestType", requestType);
+      fd.set("duration", duration);
+      fd.set("dateFrom", dateFrom);
+      fd.set("dateUntil", dateUntil);
+      fd.set("totalDays", String(totalDays));
 
   try {
     const res = await fetch("/api/leave-requests", {
@@ -569,8 +630,20 @@ async function submitLeave(e) {
     });
 
     if (!res.ok) {
-      const msg = await res.text().catch(() => "Failed to submit leave.");
-      alert(msg);
+      const data = await res.json().catch(() => null);
+
+      if (data?.message) {
+        alert(data.message);  
+      } else {
+        alert(
+          `${getLeaveFullName(type)} limit exceeded.\n` +
+          `Entitlement: ${err.entitlement} days\n` +
+          `Used: ${err.used} days\n` +
+          `Requested: ${err.requested} days\n\n` +
+          `Remaining balance: ${err.remaining} days`
+        );
+      }
+
       return;
     }
 
@@ -603,6 +676,22 @@ async function loadAppliedLeave() {
     credentials: "include"
   });
   const list = await res.json();
+  const allMine = list.filter(r => r.staff_id === user.staff_id);
+
+  totalALUsed = allMine
+  .filter(r => ["AL", "EL"].includes(r.leave_type))
+  .filter(r => ["approved", "pending", "cancellation_pending"].includes(r.status))
+  .reduce((s, r) => s + Number(r.total_days || 0), 0);
+
+  totalMCUsed = allMine
+    .filter(r => r.leave_type === "MC")
+    .filter(r => ["approved", "pending", "cancellation_pending"].includes(r.status))
+    .reduce((s, r) => s + Number(r.total_days || 0), 0);
+
+  totalHOSPUsed = allMine
+    .filter(r => r.leave_type === "HOSP")
+    .filter(r => ["approved", "pending", "cancellation_pending"].includes(r.status))
+    .reduce((s, r) => s + Number(r.total_days || 0), 0);
 
   blockedDates = new Set();
 
@@ -758,8 +847,26 @@ async function loadApprovedUsedDays() {
                   alert("You can only apply for leave within the next 6 months.");
                   return;
                 }
+
+                if (d.blocked) {
+                  alert("You already applied leave on this date.");
+                  return;
+                }
+
+                if (d.holiday) {
+                  alert("You cannot apply leave on a public holiday.");
+                  return;
+                }
+
+                if (!d.today && atStartOfDay(d.date) < today) {
+                  alert("You cannot apply for past dates.");
+                  return;
+                }
+
+                // ✅ Always allow form to open
                 openLeaveForm(d.date);
               }}
+
               title={
                 d.limitMessage
                   ? d.limitMessage

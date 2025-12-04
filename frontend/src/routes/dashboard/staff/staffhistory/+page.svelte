@@ -12,6 +12,10 @@
     HOSP: "Hospitalization"
   };
 
+  function formatDays(n) {
+  return Number(n).toFixed(1);
+}
+
   function getLeaveFullName(code) {
     return leaveTypeFullName[code] || code;
   }
@@ -31,7 +35,7 @@
 let modal;
 let isEdit = false;
 let editingUuid = null;
-
+let originalLeaveType = null;
 let leaveType = "AL";
 let duration = "Full";
 let dateFrom = "";
@@ -198,7 +202,7 @@ function handleEdit(l) {
 
   isEdit = true;
   editingUuid = l.uuid;
-
+  originalLeaveType = l.type;
   leaveType = l.type;
   duration = l.totalDays === 0.5 ? "Half" : l.duration || "Full";
 
@@ -220,6 +224,14 @@ function handleEdit(l) {
 
   modal.showModal();
 }
+
+function preventTypeChange() {
+  if (isEdit && leaveType !== originalLeaveType) {
+    alert("Leave type changes are restricted. Kindly cancel the pending request and submit a new request.");
+    leaveType = originalLeaveType; // revert back
+  }
+}
+
 async function refreshDashboard() {
   if (!me) return;
 
@@ -288,6 +300,33 @@ async function submitLeave(event) {
   };
 
   try {
+
+const limitMap = {
+  AL: 14,
+  MC: 14,
+  HOSP: 60,
+  MAT: 98,
+  PAT: 7,
+  COMP_A: 3,
+  COMP_B: 1,
+  MAR: 3
+};
+
+const limit = limitMap[leaveType];
+
+// count ALL used days (except the leave being edited)
+let used = leaves
+  .filter(l => l.type === leaveType)
+  .filter(l => l.status === "Approved" || l.status === "Pending" || l.status === "Cancellation Pending")
+  .filter(l => l.uuid !== editingUuid)   // exclude the one we are editing
+  .reduce((s, l) => s + Number(l.totalDays), 0);
+
+// check if new total exceeds limit
+if (used + totalDays > limit) {
+  alert(`Your ${getLeaveFullName(leaveType)} leave limit (${limit} days) has been exceeded.`);
+  return;
+}
+
     // ---- EDIT MODE ----
     if (isEdit && editingUuid) {
       await fetch(`/api/leave-requests/${editingUuid}/edit`, {
@@ -432,7 +471,7 @@ function onUntilChange() {
     <!-- Leave Type -->
     <label>
       <span>Type</span>
-      <select bind:value={leaveType} required>
+      <select bind:value={leaveType} required on:change={preventTypeChange}>
         <option value="AL">Annual / Emergency</option>
         <option value="MC">Medical</option>
         <option value="MAT">Maternity</option>
@@ -526,7 +565,7 @@ function onUntilChange() {
           {fmt(l.dateFrom)}
           {#if l.dateTo !== l.dateFrom} – {fmt(l.dateTo)}{/if}
         </td>
-        <td class="center">{l.totalDays}</td>
+        <td class="center">{formatDays(l.totalDays)}</td>
         <td>{getLeaveFullName(l.type)}</td>
         <td>
           <span class="badge {l.status.toLowerCase().replace(' ', '-')}">{l.status}</span>
