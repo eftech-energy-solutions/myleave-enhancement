@@ -686,7 +686,7 @@
   .overview-wide { max-width: 100%; margin: 0; }
   .mini-metrics { display: grid; grid-template-columns: repeat(6, 0.5fr); gap: 10px; align-items: stretch; }
   .mini { border: 1px solid var(--ring); background: #f9fafb; border-radius: 10px; padding: 8px; text-align: center; height: 75px; display: flex; flex-direction: column; justify-content: center; transition: all 0.2s ease; }
-  .mini-val { font-size: 18px; font-weight: 800; color: #0f172a; line-height: 1.1; }
+  .mini-val { font-size: 20px; font-weight: 800; color: #0f172a; line-height: 1.1; }
   .mini-label { font-size: 12px; color: #0c4a6e; margin-top: 2px; display: flex; align-items: center; gap: 5px; justify-content: center; }
   .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
 

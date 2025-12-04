@@ -34,64 +34,122 @@ const donuts = [
   }
 ];
 
-const staffLeaveData = {
-  annual: {
-    taken: [
-      { name: "Alya", days: 3 },
-      { name: "Azira", days: 4 },
-      { name: "Nur", days: 7 }
-    ],
-    remaining: [
-      { name: "Alya", days: 5 },
-      { name: "Azira", days: 3 },
-      { name: "Nur", days: 1 }
-    ],
-    carry: [
-      { name: "Alya", days: 2 },
-      { name: "Azira", days: 1 },
-      { name: "Nur", days: 0 }
-    ]
-  },
-  medical: {
-    taken: [
-      { name: "Alya", days: 1 },
-      { name: "Azira", days: 0 },
-      { name: "Nur", days: 3 }
-    ],
-    remaining: [
-      { name: "Alya", days: 13 },
-      { name: "Azira", days: 14 },
-      { name: "Nur", days: 11 }
-    ],
-    carry: [
-      { name: "Alya", days: 0 },
-      { name: "Azira", days: 0 },
-      { name: "Nur", days: 0 }
-    ]
-  },
-  hospital: {
-    taken: [
-      { name: "Alya", days: 10 },
-      { name: "Azira", days: 2 },
-      { name: "Nur", days: 0 }
-    ],
-    remaining: [
-      { name: "Alya", days: 50 },
-      { name: "Azira", days: 58 },
-      { name: "Nur", days: 60 }
-    ],
-    carry: [
-      { name: "Alya", days: 7 },
-      { name: "Azira", days: 5 },
-      { name: "Nur", days: 0 }
-    ]
-  }
+let staffLeaveData = {
+  annual: { taken: [], remaining: [], carry: [] },
+  medical: { taken: [], remaining: [], carry: [] },
+  hospital: { taken: [], remaining: [], carry: [] }
 };
+
 
 function getKey(title) {
   if (title.includes("Annual")) return "annual";
   if (title.includes("Medical")) return "medical";
   if (title.includes("Hospital")) return "hospital";
+}
+
+function customTooltip(context) {
+  let tooltip = document.getElementById("chart-tooltip");
+
+  // Create tooltip element kalau belum ada
+  if (!tooltip) {
+    tooltip = document.createElement("div");
+    tooltip.id = "chart-tooltip";
+    tooltip.style.position = "absolute";
+    tooltip.style.background = "rgba(30,30,30,0.92)";
+    tooltip.style.color = "#fff";
+    tooltip.style.padding = "10px 12px";
+    tooltip.style.borderRadius = "6px";
+    tooltip.style.pointerEvents = "auto";  // penting utk scroll & click
+    tooltip.style.maxWidth = "260px";
+    tooltip.style.zIndex = "9999999";
+    tooltip.style.boxShadow = "0 4px 8px rgba(0,0,0,.25)";
+    tooltip.style.whiteSpace = "normal";
+    document.body.appendChild(tooltip);
+  }
+
+  const model = context.tooltip;
+
+  // ==========================
+  // HIDE tooltip bila mouse keluar
+  // TAPI JANGAN hide kalau frozenTooltip = true
+  // ==========================
+  // HIDE tooltip hanya bila:
+// 1. tak frozen
+// 2. opacity = 0
+if (!frozenTooltip && model.opacity === 0) {
+  tooltip.style.opacity = 0;
+  return;
+}
+
+// Kalau frozen → abaikan model.opacity
+if (frozenTooltip) {
+  // jangan hide, jangan reposition
+} else {
+  // normal: update position ikut hover
+  const rect = context.chart.canvas.getBoundingClientRect();
+  tooltip.style.left = rect.left + model.caretX + 12 + "px";
+  tooltip.style.top  = rect.top  + model.caretY + 12 + "px";
+}
+
+
+  // ==========================
+  // BINA CONTENT
+  // ==========================
+  let html = "";
+
+  // TITLE — kekal besar
+  if (model.title?.length) {
+    html += `
+      <div style="
+        font-weight:700;
+        font-size:12px;
+        margin-bottom:6px;
+      ">
+        ${model.title[0]}
+      </div>
+    `;
+  }
+
+  // BODY — nama staff kecil + scrollable
+  if (model.body) {
+    const lines = model.body.map(b => b.lines).flat();
+
+    html += `
+  <div id="tooltip-scroll" style="
+    font-size:10px;
+    line-height:1.25;
+    max-height:140px;
+    overflow-y: auto;
+    overflow-x: hidden;
+  ">
+    ${lines.join("<br>")}
+  </div>
+
+  <div style="
+    margin-top:6px;
+    font-size:9px;
+    opacity:0.6;
+    text-align:right;
+    font-style:italic;
+  ">
+    Click to freeze
+  </div>
+`;
+  }
+
+  tooltip.innerHTML = html;
+
+// ==========================
+// POSITION TOOLTIP
+// ==========================
+if (!frozenTooltip) {
+  const rect = context.chart.canvas.getBoundingClientRect();
+  tooltip.style.left = rect.left + model.caretX + 12 + "px";
+  tooltip.style.top  = rect.top  + model.caretY + 12 + "px";
+}
+
+tooltip.style.opacity = 1;
+
 }
 
   const pct = (s, t) => (t > 0 ? Math.round((s/t)*100) : 0);
@@ -102,6 +160,7 @@ function getKey(title) {
   let dataByDept = [];
   let totalEmployees = 0;
   let canvasEl;
+  let frozenTooltip = false;
 
   const palette = [
     "#FFD9CC", "#C6DEF1", "#F2C6DE",
@@ -151,56 +210,194 @@ onMount(async () => {
           }
         }
       });
+
+// ================= FETCH ALL STAFF (INCLUDING ZERO LEAVE) =================
+const empRes = await fetch("/api/employee");
+const allEmployees = await empRes.json();
+
+const staffMap = {};
+allEmployees.forEach(emp => {
+  staffMap[emp.staff_id] = {
+    name: emp.full_name,
+    department: emp.department,
+    annual_taken: 0,
+    medical_taken: 0,
+    hospital_taken: 0,
+    annual_remaining: emp.leave_entitlement_annual ?? 0,
+    medical_remaining: emp.leave_entitlement_medical ?? 0,
+    carry: 0
+  };
+});
+
+// ================= FETCH LEAVE DATA =================
+const leaveRes = await fetch("/api/leave-requests?status=approved");
+const leaveData = await leaveRes.json();
+
+// Merge leave summary into full staff list
+leaveData.forEach(r => {
+  const id = r.staff_id;
+  if (!staffMap[id]) return;
+
+  const days = Number(r.total_days);
+
+  if (r.leave_type === "AL" || r.leave_type === "EL")
+    staffMap[id].annual_taken += days;
+
+  if (r.leave_type === "MC")
+    staffMap[id].medical_taken += days;
+
+  if (r.leave_type === "HOSP")
+    staffMap[id].hospital_taken += days;
+});
+
+// ================= BUILD DONUT CHART DATA =================
+staffLeaveData = {
+  annual: {
+    taken: Object.values(staffMap).map(s => ({
+    name: s.name,
+    days: s.annual_taken,       // atau medical, hospital
+    department: s.department    // ← WAJIB ADA
+  })),
+    remaining: Object.values(staffMap).map(s => ({
+    name: s.name,
+    days: s.annual_taken,       // atau medical, hospital
+    department: s.department    // ← WAJIB ADA
+  })),
+    carry: Object.values(staffMap).map(s => ({
+    name: s.name,
+    days: s.annual_taken,       // atau medical, hospital
+    department: s.department    // ← WAJIB ADA
+  }))
+  },
+    medical: {
+      taken: Object.values(staffMap).map(s => ({
+    name: s.name,
+    days: s.annual_taken,       // atau medical, hospital
+    department: s.department    // ← WAJIB ADA
+  })),
+
+      remaining: Object.values(staffMap).map(s => ({
+    name: s.name,
+    days: s.annual_taken,       // atau medical, hospital
+    department: s.department    // ← WAJIB ADA
+  })),
+
+      carry: Object.values(staffMap).map(s => ({
+    name: s.name,
+    days: s.annual_taken,       // atau medical, hospital
+    department: s.department    // ← WAJIB ADA
+  }))
+
+    },
+    hospital: {
+      taken: Object.values(staffMap).map(s => ({
+    name: s.name,
+    days: s.annual_taken,       // atau medical, hospital
+    department: s.department    // ← WAJIB ADA
+  })),
+
+      remaining: Object.values(staffMap).map(s => ({
+    name: s.name,
+    days: s.annual_taken,       // atau medical, hospital
+    department: s.department    // ← WAJIB ADA
+  })),
+      carry: Object.values(staffMap).map(s => ({
+    name: s.name,
+    days: s.annual_taken,       // atau medical, hospital
+    department: s.department    // ← WAJIB ADA
+  }))
     }
-
+  };
+    }
     // ✅ DONUT CHARTS
-    donuts.forEach(d => {
-      const data = staffLeaveData[d.key];
+// ✅ DONUT CHARTS
+donuts.forEach(d => {
+  const data = staffLeaveData[d.key];
 
-      const totalTaken = data.taken.reduce((a,b)=>a+b.days,0);
-      const totalRemaining = data.remaining.reduce((a,b)=>a+b.days,0);
-      const totalCarry = data.carry.reduce((a,b)=>a+b.days,0);
+  const hasCarry = d.key === "annual";
+  const labels = hasCarry
+    ? ['Taken Leave', 'Remaining Leave', 'Carry-forward Leave']
+    : ['Taken Leave', 'Remaining Leave'];
 
-      new Chart(d.canvas, {
-        type: 'doughnut',
-        data: {
-          labels: ['Taken Leave', 'Remaining Leave', 'Carry-forward Leave'],
-          datasets: [{
-            data: [1, 1, 1],   // ✅ semua slice sama besar
-            backgroundColor: ['#ef4444', '#3b82f6', '#10b981'],
-            hoverOffset: 10,
-            borderWidth: 2
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          cutout: '62%',
-          layout: {
-            padding: { right: 24 }
-          },
-          plugins: {
-            tooltip: {
-              displayColors: false,
-              callbacks: {
-                title: (items) => items[0].label,
-                label: (ctx) => {
-                  const slice =
-                    ctx.label.includes('Taken') ? 'taken' :
-                    ctx.label.includes('Remaining') ? 'remaining' : 'carry';
+  const colors = hasCarry
+    ? ['#ef4444', '#3b82f6', '#10b981']
+    : ['#ef4444', '#3b82f6'];
 
-                  const list = staffLeaveData[d.key][slice];
-                  return list.map(s => `${s.name}: ${s.days}`);
-                }
-              }
-            },
-            legend: {
-              display: false
+  const values = hasCarry ? [1,1,1] : [1,1];
+
+  // ==========================
+  // CHART
+  // ==========================
+  new Chart(d.canvas, {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [{
+        data: values,
+        backgroundColor: colors,
+        hoverOffset: 3,
+        borderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '62%',
+      interaction: {
+        intersect: false,
+        mode: 'nearest'
+      },
+      layout: {
+        padding: { right: 24 }
+      },
+      plugins: {
+        tooltip: {
+          enabled: false,
+          external: customTooltip,
+          displayColors: false,
+          padding: 12,
+          callbacks: {
+            title: (items) => items[0].label,
+            label: (ctx) => {
+              let slice;
+              if (ctx.label.includes('Taken')) slice = 'taken';
+              else if (ctx.label.includes('Remaining')) slice = 'remaining';
+              else slice = 'carry';
+
+              const list = staffLeaveData[d.key][slice];
+              return list.map(s => `${s.name}: ${s.days}`);
             }
           }
+        },
+        legend: {
+          display: false
         }
-      });
-    });
+      }
+    }
+  });
+
+  // ======================
+  // CLICK UNTUK FREEZE TOOLTIP
+  // ======================
+  d.canvas.addEventListener("click", () => {
+    frozenTooltip = !frozenTooltip;
+  });
+
+  // ======================
+  // CLICK LUAR UNTUK UNFREEZE
+  // ======================
+  document.addEventListener("click", (e) => {
+    const tooltip = document.getElementById("chart-tooltip");
+    if (!tooltip) return;
+
+    if (tooltip.contains(e.target)) return;
+    if (e.target.tagName === "CANVAS") return;
+
+    frozenTooltip = false;
+    tooltip.style.opacity = 0;
+  });
+
+}); // END donuts.forEach
 
     loading = false;
 
@@ -209,7 +406,7 @@ onMount(async () => {
     error = "Failed to load employee overview";
     loading = false;
   }
-});
+})
 </script>
 <svelte:head>
   <style>
@@ -220,38 +417,45 @@ onMount(async () => {
 </svelte:head>
 <main class="main">
 
-<div class="grid">
- {#each donuts as d}
-  <div class="card donut-card" style="grid-column: span 4;">
-    <h3 class="donut-title">{d.title}</h3>
+  <div class="grid">
 
-    <div class="donut-container">
-  <canvas bind:this={d.canvas}></canvas>
-    </div>
-    <!-- ✅ CUSTOM INDICATOR BAWAH SETIAP DONUT -->
-    <div class="legend-custom">
-        <div class="legend-row-top">
-          <div class="legend-item">
-            <span class="chip" style="background:#ef4444"></span>
-            <span>Taken Leave</span>
-          </div>
+    {#each donuts as d}
+      <div class="card donut-card" style="grid-column: span 4;">
+        <h3 class="donut-title">{d.title}</h3>
 
-          <div class="legend-item">
-            <span class="chip" style="background:#3b82f6"></span>
-            <span>Remaining Leave</span>
-          </div>
+        <div class="donut-container">
+          <canvas bind:this={d.canvas}></canvas>
         </div>
 
-        <div class="legend-row-bottom">
-          <div class="legend-item">
-            <span class="chip" style="background:#10b981"></span>
-            <span>Carry-forward Leave</span>
-          </div>
-        </div>
-      </div>
-  </div>
-{/each}
+        <div class="legend-custom">
 
+          <!-- TAKEN + REMAINING -->
+          <div class="legend-row-top">
+            <div class="legend-item">
+              <span class="chip" style="background:#ef4444"></span>
+              <span>Taken Leave</span>
+            </div>
+
+            <div class="legend-item">
+              <span class="chip" style="background:#3b82f6"></span>
+              <span>Remaining Leave</span>
+            </div>
+          </div>
+
+          <!-- CARRY ONLY IF ANNUAL -->
+          {#if d.key === "annual"}
+            <div class="legend-row-bottom">
+              <div class="legend-item">
+                <span class="chip" style="background:#10b981"></span>
+                <span>Carry-forward Leave</span>
+              </div>
+            </div>
+          {/if}
+
+        </div> <!-- /.legend-custom -->
+
+      </div> <!-- /.card donut-card -->
+    {/each}
 
     <!-- CHART -->
     <div class="card employees-card" style="grid-column: span 6;">
@@ -264,11 +468,12 @@ onMount(async () => {
       </div>
     </div>
 
-
     <!-- EMPLOYEE NUMBERS -->
     <div class="card employee-card" style="grid-column: span 6;">
       <h3>Employees Overview</h3>
+
       <div class="stats-wrap"></div>
+
       <div class="stats">
         <div class="stat total-tile">
           <div class="label">Total Employees</div>
@@ -286,17 +491,19 @@ onMount(async () => {
         {/each}
       </div>
 
-      <a class="numbers-link" href="/dashboard/admin/employees">
+      <a class="numbers-link" href="/dashboard/manager/employees">
         View employees
       </a>
     </div>
-  </div>
+  </div> <!-- END GRID -->
 </main>
 
 <style>
   :root{ --ring:#e5e7eb; --shadow:0 4px 12px rgba(0,0,0,.06); }
   .main { padding: 18px; }
-
+  canvas {
+  cursor: pointer !important;
+}
   /* grid + cards */
   .grid{ margin-top:-35px; display:grid; gap:10px; grid-template-columns:repeat(12, minmax(0,1fr)); }
   .card{ background:#fff; border:1px solid var(--ring); border-radius:12px; padding:14px; box-shadow:var(--shadow); }
@@ -304,6 +511,15 @@ onMount(async () => {
 
   /* donut */
   :global(:root){ --spentRed:#ef4444; --restBlue:#3b82f6; }
+
+  :global(#tooltip-scroll) {
+  scrollbar-width: none;          /* Firefox */
+  -ms-overflow-style: none;       /* IE/Edge lama */
+}
+
+:global(#tooltip-scroll::-webkit-scrollbar) {
+  display: none;                  /* Chrome/Safari */
+}
 
   .donut-title{ font-size:12px; font-weight:700; color:#374151; margin:0 0 6px; }
  .donut-container {
@@ -315,6 +531,7 @@ onMount(async () => {
   justify-content: center;
   transform: translateY(-10px);
   margin-left: 145px;
+  overflow: visible !important;
 }
 .card.donut-card {
   padding: 8px 10px !important;  /* smaller top/bottom */
