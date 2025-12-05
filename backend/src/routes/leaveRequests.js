@@ -11,6 +11,10 @@ const leaveTypeFullName = {
   MAR: "Marriage",
   HOSP: "Hospitalization"
 };
+import fs from "fs";
+import path from "path";
+
+const __dirname = path.resolve();
 
 function getLeaveFullName(code) {
   return leaveTypeFullName[code] || code;
@@ -66,7 +70,6 @@ async function recalcAnnualLeave(staffId) {
     console.error("❌ recalcAnnualLeave error:", err);
   }
 }
-
 /* ============================================================
    🔄 YEARLY RESET FUNCTION (RUN ONCE PER YEAR)
    ============================================================ */
@@ -296,7 +299,7 @@ if (used + serverTotalDays > entitlement) {
     const department = user.department || null;
     const requesterRole = user.role || "Staff";
     const requesterPosition = user.position;
-    const attachmentPath = req.file ? req.file.path : null;
+    const attachmentPath = req.file ? req.file.path.replace(/\\/g, "/") : null;
 
     if (!type || !dateFrom || !dateUntil || !totalDays || !reason) {
       return res.status(400).json({ message: "Missing required fields" });
@@ -373,7 +376,7 @@ router.get("/", async (req, res) => {
    4) EDIT LEAVE DETAILS
    PATCH /api/leave-requests/:id/edit
    ============================================================ */
-router.patch("/:id/edit", async (req, res) => {
+router.patch("/:id/edit", upload.single("attachment"), async (req, res) => {
   try {
     const leaveId = req.params.id;
 
@@ -386,31 +389,62 @@ router.patch("/:id/edit", async (req, res) => {
       reason
     } = req.body;
 
-    // Load existing leave to get staff_id
-    const existing = await pool.query(
-      `SELECT staff_id FROM leave_requests WHERE leave_id = $1`,
+    // Get existing leave
+    const existingRes = await pool.query(
+      `SELECT staff_id, attachment_path 
+       FROM leave_requests 
+       WHERE leave_id = $1`,
       [leaveId]
     );
 
-    if (!existing.rows.length) {
+    if (!existingRes.rows.length) {
       return res.status(404).json({ message: "Leave request not found" });
     }
 
-    const staffId = existing.rows[0].staff_id;
+    const existing = existingRes.rows[0];
+    const staffId = existing.staff_id;
+    const oldAttachment = existing.attachment_path;
+
+    // ================================
+    // HANDLE ATTACHMENT REPLACEMENT
+    // ================================
+    // ================================
+// HANDLE ATTACHMENT REPLACEMENT
+// ================================
+let newAttachmentPath = oldAttachment;
+
+if (req.file) {
+  newAttachmentPath = req.file.path.replace(/\\/g, "/");
+
+
+  if (oldAttachment) {
+    try {
+      const fullPath = path.join(process.cwd(), oldAttachment);
+      fs.unlink(fullPath, (err) => {
+        if (err) console.warn("Unable to delete old attachment:", err);
+      });
+    } catch (err) {
+      console.warn("Failed to delete old attachment:", err);
+    }
+  }
+}
 
     // ======================================================
-    // 🛑 SERVER VALIDATION (same as POST)
+    // VALIDATION (same as your current logic)
     // ======================================================
+
     const start = new Date(date_from);
     const end = new Date(date_until);
     const msDay = 1000 * 60 * 60 * 24;
 
-    const serverTotalDays =
-      Math.floor((end - start) / msDay) + 1;
+    const serverTotalDays = Math.floor((end - start) / msDay) + 1;
 
     if (serverTotalDays <= 0) {
       return res.status(400).json({ message: "Invalid date range" });
     }
+
+    // ---- ENTITLEMENT CHECKS (copy same logic as your POST) ----
+    // (kept 100% the same, no change)
 
     let entitlement = 0;
     let used = 0;
@@ -534,36 +568,34 @@ router.patch("/:id/edit", async (req, res) => {
     // ======================================================
     // UPDATE DATA (allowed)
     // ======================================================
-    const sql = `
-      UPDATE leave_requests
-      SET
-        leave_type = $1,
-        duration = $2,
-        date_from = $3,
-        date_until = $4,
-        total_days = $5,
-        reason = $6
-      WHERE leave_id = $7
-      RETURNING *;
-    `;
+     const updated = await pool.query(
+      `UPDATE leave_requests
+         SET leave_type = $1,
+             duration = $2,
+             date_from = $3,
+             date_until = $4,
+             total_days = $5,
+             reason = $6,
+             attachment_path = $7
+       WHERE leave_id = $8
+       RETURNING *`,
+      [
+        leave_type,
+        duration,
+        date_from,
+        date_until,
+        total_days,
+        reason,
+        newAttachmentPath,
+        leaveId
+      ]
+    );
 
-    const params = [
-      leave_type,
-      duration,
-      date_from,
-      date_until,
-      total_days,
-      reason,
-      leaveId
-    ];
-
-    const result = await pool.query(sql, params);
-
-    res.json(result.rows[0]);
+    res.json(updated.rows[0]);
 
   } catch (err) {
     console.error("PATCH /api/leave-requests/:id/edit error:", err);
-    res.status(500).json({ message: "Failed to update leave details" });
+    res.status(500).json({ message: "Failed to update leave" });
   }
 });
 
@@ -964,31 +996,9 @@ router.get("/me", async (req, res) => {
     res.json(result.rows);
   } catch (err) {
     console.error("GET /api/leave-requests/me error:", err);
-    res.status(500).json({ message: "Failed to load your leave data" });
-  }
-});
-
-
-router.get("/me", async (req, res) => {
-  try {
-    const user = req.user;
-    if (!user || !user.staff_id) {
-      return res.status(401).json({ message: "Unauthorised" });
-    }
-
-    const result = await pool.query(
-      `SELECT *
-       FROM leave_requests
-       WHERE staff_id = $1
-       ORDER BY date_from ASC`,
-      [user.staff_id]
-    );
-
-    res.json(result.rows);
-  } catch (err) {
-    console.error("GET /api/leave-requests/me error:", err);
     res.status(500).json({ message: "Failed to load your leave data" });
   }
 });
+
 
 export default router;

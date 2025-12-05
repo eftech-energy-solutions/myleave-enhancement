@@ -14,6 +14,7 @@ import authRoutes from './src/routes/authRoutes.js';
 import dashboardRoutes from './src/routes/dashboardRoutes.js';
 import roleSettingRoute from "./src/routes/roleSettingRoute.js";
 import leaveRequestsRoutes from "./src/routes/leaveRequests.js";
+import path from "path";
 
 dotenv.config();
 
@@ -64,6 +65,8 @@ app.use('/api/auth', authRoutes);
 app.use('/uploads', express.static('uploads'));
 app.use("/api", roleSettingRoute);
 app.use("/api/leave-requests", leaveRequestsRoutes);
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+
 
 // ============================
 // HELPER
