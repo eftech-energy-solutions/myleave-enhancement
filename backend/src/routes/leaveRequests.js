@@ -9,7 +9,8 @@ const leaveTypeFullName = {
   COMP_A: "Compassionate A",
   COMP_B: "Compassionate B",
   MAR: "Marriage",
-  HOSP: "Hospitalization"
+  HOSP: "Hospitalization",
+  UNPAID: "Unpaid"
 };
 import fs from "fs";
 import path from "path";
@@ -258,17 +259,38 @@ else if (type === "HOSP") {
   used = Number(u.rows[0].used);
 }
 
+else if (type === "UNPAID") {
+   entitlement = Infinity;
+   used = 0;
+}
+
+
+
 // =======================================================
 // SPECIAL LEAVES (PAT, COMP_A, COMP_B, MAR)
 // =======================================================
+// =======================================================
 else {
+  const defaults = { PAT: 7, COMP_A: 3, COMP_B: 1, MAR: 3 };
+
   const s = await pool.query(
     `SELECT balance FROM leave_entitlements
        WHERE staff_id = $1 AND leave_type = $2`,
     [user.staff_id, type]
   );
 
-  entitlement = Number(s.rows[0]?.balance || 0);
+  if (!s.rows.length) {
+    // Auto create entitlement row if missing
+    entitlement = defaults[type] || 0;
+
+    await pool.query(
+      `INSERT INTO leave_entitlements (staff_id, leave_type, balance)
+       VALUES ($1, $2, $3)`,
+      [user.staff_id, type, entitlement]
+    );
+  } else {
+    entitlement = Number(s.rows[0].balance || 0);
+  }
 
   const u = await pool.query(
     `SELECT COALESCE(SUM(total_days), 0) AS used
@@ -279,12 +301,19 @@ else {
     [user.staff_id, type]
   );
 
-  used = Number(u.rows[0].used);
+  used = Number(u.rows[0].used || 0);
 }
 
 // =======================================================
 // 🛑 FINAL CHECK
 // =======================================================
+
+// ⭐ UNPAID LEAVE HAS NO LIMIT — ALWAYS ALLOWED
+if (type === "UNPAID"){
+  entitlement = Infinity;  
+  used = 0;
+}
+
 if (used + serverTotalDays > entitlement) {
   return res.status(400).json({
     message: `${getLeaveFullName(type)} leave application limit exceeded.`,
@@ -405,9 +434,6 @@ router.patch("/:id/edit", upload.single("attachment"), async (req, res) => {
     const staffId = existing.staff_id;
     const oldAttachment = existing.attachment_path;
 
-    // ================================
-    // HANDLE ATTACHMENT REPLACEMENT
-    // ================================
     // ================================
 // HANDLE ATTACHMENT REPLACEMENT
 // ================================
@@ -534,6 +560,10 @@ if (req.file) {
 
       used = Number(u.rows[0].used);
     }
+    else if (leave_type === "UNPAID") {
+   entitlement = Infinity;
+   used = 0;
+}
 
     // SPECIAL LEAVES
     else {
@@ -556,6 +586,12 @@ if (req.file) {
 
       used = Number(u.rows[0].used);
     }
+// ⭐ UNPAID LEAVE HAS NO LIMIT — ALWAYS ALLOWED
+if (leave_type === "UNPAID") {
+  entitlement = Infinity;
+  used = 0;
+}
+
 
     // FINAL CHECK
     if (used + serverTotalDays > entitlement) {
@@ -610,14 +646,14 @@ router.patch("/:id", async (req, res) => {
     const leaveId = req.params.id;
 
     // ================= EMPLOYEE REQUESTS CANCELLATION =================
-    // STOP FLOW HERE — employee cancellation DOES NOT modify balance
     if (status === "cancellation_pending") {
-      await pool.query(`
-        UPDATE leave_requests
+      await pool.query(
+        `UPDATE leave_requests
            SET request_type = 'cancellation_request',
                status = 'cancellation_pending'
-         WHERE leave_id = $1
-      `, [leaveId]);
+         WHERE leave_id = $1`,
+        [leaveId]
+      );
 
       return res.json({
         success: true,
@@ -630,7 +666,7 @@ router.patch("/:id", async (req, res) => {
       return res.status(400).json({ message: "Invalid status" });
     }
 
-    // =============== LOAD THE LEAVE REQUEST ===============
+    // ================= LOAD LEAVE REQUEST =================
     const leaveRes = await pool.query(
       `SELECT * FROM leave_requests WHERE leave_id = $1`,
       [leaveId]
@@ -645,14 +681,23 @@ router.patch("/:id", async (req, res) => {
     const leaveType = leave.leave_type;
     const days = Number(leave.total_days);
 
-    // =============== APPROVE LOGIC ===============
+    /* ============================================================
+       -------------- APPROVE LEAVE REQUEST -----------------
+       ============================================================ */
     if (status === "approved") {
+      // ⭐ UNPAID — NO DEDUCTION, ALWAYS ALLOWED
+      if (leaveType === "UNPAID") {
+        // do nothing
+      }
 
-      // A — Annual / Emergency
-      if (leaveType === "AL" || leaveType === "EL") {
+      // A — Annual / Emergency (AL / EL)
+      else if (leaveType === "AL" || leaveType === "EL") {
         const p = await pool.query(
-          `SELECT leave_entitlement_annual, carry_forward_balance, carry_forward_expiry
-             FROM profiles WHERE staff_id = $1`,
+          `SELECT leave_entitlement_annual,
+                  carry_forward_balance,
+                  carry_forward_expiry
+           FROM profiles
+           WHERE staff_id = $1`,
           [staffId]
         );
 
@@ -716,37 +761,34 @@ router.patch("/:id", async (req, res) => {
       }
 
       // C — Hospitalization Leave
-        else if (leaveType === "HOSP") {
+      else if (leaveType === "HOSP") {
+        const h = await pool.query(
+          `SELECT balance FROM leave_entitlements
+           WHERE staff_id = $1 AND leave_type = 'HOSP'`,
+          [staffId]
+        );
 
-          const h = await pool.query(
-            `SELECT balance FROM leave_entitlements
-              WHERE staff_id = $1 AND leave_type = 'HOSP'`,
-            [staffId]
-          );
-
-          if (!h.rows.length) {
-            return res.status(404).json({ message: "Hospitalization entitlement not found" });
-          }
-
-          if (h.rows[0].balance < days) {
-            return res.status(400).json({ message: "Insufficient Hospitalization Leave balance" });
-          }
-
-          await pool.query(
-            `UPDATE leave_entitlements
-              SET balance = balance - $1
-            WHERE staff_id = $2 AND leave_type = 'HOSP'`,
-            [days, staffId]
-          );
+        if (!h.rows.length) {
+          return res.status(404).json({ message: "Hospitalization entitlement not found" });
         }
 
+        if (h.rows[0].balance < days) {
+          return res.status(400).json({ message: "Insufficient Hospitalization balance" });
+        }
 
+        await pool.query(
+          `UPDATE leave_entitlements
+             SET balance = balance - $1
+           WHERE staff_id = $2 AND leave_type = 'HOSP'`,
+          [days, staffId]
+        );
+      }
 
-      // D — Special Leave
+      // D — Special Leaves (PAT, COMP_A, COMP_B, MAR)
       else {
         const e = await pool.query(
           `SELECT balance FROM leave_entitlements
-             WHERE staff_id = $1 AND leave_type = $2`,
+           WHERE staff_id = $1 AND leave_type = $2`,
           [staffId, leaveType]
         );
 
@@ -766,68 +808,77 @@ router.patch("/:id", async (req, res) => {
         );
       }
 
-    } // END APPROVE
+    } // END APPROVED
 
 
-    // =============== CANCELLATION APPROVED (ADD BACK) ===============
+
+
+
+    /* ============================================================
+       ------------------ CANCELLATION APPROVED -------------------
+       ============================================================ */
     if (status === "cancelled") {
 
-  // A — ANNUAL / EMERGENCY (AL, EL)
-  if (leaveType === "AL" || leaveType === "EL") {
-    await pool.query(
-      `UPDATE profiles
-         SET leave_entitlement_annual = leave_entitlement_annual + $1
-       WHERE staff_id = $2`,
-      [days, staffId]
-    );
-  }
+      // ⭐ UNPAID — no refund needed
+      if (leaveType === "UNPAID") {
+        // do nothing
+      }
 
-  // B — MEDICAL
-  else if (leaveType === "MC") {
-    await pool.query(
-      `UPDATE profiles
-         SET leave_entitlement_medical = leave_entitlement_medical + $1
-       WHERE staff_id = $2`,
-      [days, staffId]
-    );
-  }
+      // A — Annual / Emergency
+      else if (leaveType === "AL" || leaveType === "EL") {
+        await pool.query(
+          `UPDATE profiles
+             SET leave_entitlement_annual = leave_entitlement_annual + $1
+           WHERE staff_id = $2`,
+          [days, staffId]
+        );
+      }
 
-  // 🔥 C — HOSPITALIZATION (THIS WAS MISSING)
-  else if (leaveType === "HOSP") {
-    await pool.query(
-      `UPDATE leave_entitlements
-        SET balance = balance + $1
-      WHERE staff_id = $2 AND leave_type = 'HOSP'`,
-      [days, staffId]
-    );
-  }
+      // B — Medical
+      else if (leaveType === "MC") {
+        await pool.query(
+          `UPDATE profiles
+             SET leave_entitlement_medical = leave_entitlement_medical + $1
+           WHERE staff_id = $2`,
+          [days, staffId]
+        );
+      }
 
+      // C — Hospitalization
+      else if (leaveType === "HOSP") {
+        await pool.query(
+          `UPDATE leave_entitlements
+             SET balance = balance + $1
+           WHERE staff_id = $2 AND leave_type = 'HOSP'`,
+          [days, staffId]
+        );
+      }
 
-  // D — OTHER SPECIAL LEAVES
-  else {
-    await pool.query(
-      `UPDATE leave_entitlements
-         SET balance = balance + $1
-       WHERE staff_id = $2 AND leave_type = $3`,
-      [days, staffId, leaveType]
-    );
-  }
-}
+      // D — SPECIAL LEAVES
+      else {
+        await pool.query(
+          `UPDATE leave_entitlements
+             SET balance = balance + $1
+           WHERE staff_id = $2 AND leave_type = $3`,
+          [days, staffId, leaveType]
+        );
+      }
+    }
 
-    // =============== UPDATE STATUS ===============
+    /* ============================================================
+       ------------------ UPDATE STATUS + RECALC ------------------
+       ============================================================ */
     const updated = await pool.query(
       `UPDATE leave_requests
          SET status = $1
        WHERE leave_id = $2
-       RETURNING *;`,
+       RETURNING *`,
       [status, leaveId]
     );
 
-   // ❌ DO NOT recalc for cancellation_pending (employee request)
-  if (status !== "cancellation_pending") {
-    await recalcAnnualLeave(staffId);
-  }
-
+    if (status !== "cancellation_pending") {
+      await recalcAnnualLeave(staffId);
+    }
 
     res.json(updated.rows[0]);
 

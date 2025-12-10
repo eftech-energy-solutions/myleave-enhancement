@@ -772,6 +772,11 @@ async function rejectCancellation(item) {
   .btn-reject { background:#dc2626; color:#fff; }
   .btn-details{ background:#e0f2fe; color:#0c4a6e; }
   .btn-approve:hover, .btn-reject:hover, .btn-details:hover{ filter:brightness(.97); }
+  .unpaid-pill {
+  background-color: rgba(239, 68, 68, 0.18) !important; 
+  color: #b91c1c !important;                            
+  border: 1px solid rgba(239, 68, 68, 0.35) !important;  
+  }
 
   /* ===== Modals (Add / Details) ===== */
   .modal-wrap{ position:fixed; inset:0; display:grid; place-items:center; background:rgba(0,0,0,.35); z-index:80; animation:fadeIn .15s ease; }
@@ -810,6 +815,7 @@ async function rejectCancellation(item) {
   .btn-danger { background:#dc2626; color:#fff; border:none; border-radius:10px; padding:.8rem 1.4rem; font-weight:700; cursor:pointer; }
   .btn-danger:hover { filter:brightness(.96); }
 
+  
   /* Date inputs with calendar icon on the right */
   .ctl.date { position:relative; }
   .ctl.date::after{ content:""; position:absolute; right:12px; top:50%; transform:translateY(-50%); width:18px; height:18px; opacity:.7; background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" stroke="%2364748b" fill="none" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2" ry="2" stroke-width="2"/><line x1="16" y1="3" x2="16" y2="7" stroke-width="2"/><line x1="8" y1="3" x2="8" y2="7" stroke-width="2"/><line x1="3" y1="11" x2="21" y2="11" stroke-width="2"/></svg>') no-repeat center / contain; pointer-events:none; }
@@ -935,7 +941,13 @@ async function rejectCancellation(item) {
                   {item.requester_position} • {item.staff_id} • {item.profile_department || item.department}
                 </div>
               </div>
-              <span class="pill type">{getLeaveFullName(item.leave_type) || "Leave"}</span>
+              <span
+                class={`pill type ${item.leave_type === "UNPAID" ? "unpaid-pill" : ""}`}
+              >
+                {item.leave_type === "UNPAID"
+                  ? "Unpaid"
+                  : getLeaveFullName(item.leave_type) || "Leave"}
+              </span>
             </div>
 
             <!-- Dates -->

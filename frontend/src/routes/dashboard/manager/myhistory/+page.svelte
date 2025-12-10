@@ -8,7 +8,8 @@
     COMP_A: "Compassionate A (Parent/Child/Spouse)",
     COMP_B: "Compassionate B (Grandparent/Sibling)",
     MAR: "Marriage",
-    HOSP: "Hospitalization"
+    HOSP: "Hospitalization",
+    UNPAID: "Unpaid"
   };
 
   function formatDays(n) {
@@ -624,8 +625,15 @@ function onUntilChange() {
         <td>{getLeaveFullName(l.type)}</td>
 
         <td>
-          <span class="badge {l.status.toLowerCase().replace(' ', '-')}">{l.status}</span>
+          <span 
+            class="badge 
+              {l.status.toLowerCase().replace(' ', '-')} 
+              {l.status === 'Approved' && l.type === 'UNPAID' ? 'unpaid-approved' : ''}"
+          >
+            {l.status}
+          </span>
         </td>
+
     <td class="center">
   <div class="action-wrapper">
 
@@ -754,6 +762,13 @@ function onUntilChange() {
   .badge.rejected { background: #fee2e2; color: #991b1b; border-color:#f3c2c2; }
   .badge.cancelled {background:#f1f5f9; color:#475569; border-color:#e2e8f0;}
   .badge.cancellation-pending { background: #fef08a; color: #854d0e; border-color: #fddc63;}
+
+/* === SPECIAL COLOR FOR APPROVED UNPAID LEAVE === */
+.badge.unpaid-approved {
+  background: #ffe7bb;    /* soft orange / light gold */
+  color: #b45309;         /* darker amber text */
+  border: 1px solid #f5c66c;
+}
 
   /* ===== ACTION BUTTON ===== */
   .delete-btn {
