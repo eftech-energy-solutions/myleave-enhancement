@@ -1,6 +1,15 @@
 import express from "express";
 import pool from "../db.js";
 import multer from "multer";
+import {
+  sendLeaveSubmitted,
+  sendPendingApproval,
+  sendLeaveApproved,
+  sendLeaveRejected,
+  sendCancellationPending,
+  sendCancellationApproved
+} from "../utils/emailService.js";
+
 const leaveTypeFullName = {
   AL: "Annual / Emergency",
   MC: "Medical",
@@ -359,8 +368,54 @@ if (used + serverTotalDays > entitlement) {
     ];
 
     const result = await pool.query(sql, params);
-    res.status(201).json(result.rows[0]);
-  } catch (err) {
+const leave = result.rows[0];
+
+// ======================
+// SEND EMAIL TO STAFF (submitter)
+// ======================
+sendLeaveSubmitted(user.email, user.full_name, leave);
+
+// ======================
+// FIND WHO SHOULD APPROVE
+// ======================
+let approverEmail = null;
+
+if (user.role === "Manager") {
+  // Manager applying leave → Admin must approve
+  const adminRes = await pool.query(
+    `SELECT email FROM profiles WHERE role='Admin' LIMIT 1`
+  );
+
+  if (adminRes.rows.length) {
+    approverEmail = adminRes.rows[0].email;
+  }
+
+} else {
+  // Staff applying leave → Manager approves
+  const mgrRes = await pool.query(
+    `SELECT email FROM profiles 
+     WHERE role='Manager' AND department=$1`,
+    [user.department]
+  );
+
+  if (mgrRes.rows.length) {
+    approverEmail = mgrRes.rows[0].email;
+  }
+}
+
+// ======================
+// SEND PENDING APPROVAL EMAIL
+// ======================
+if (approverEmail) {
+  sendPendingApproval(approverEmail, user.full_name, leave);
+}
+
+
+// RETURN TO FRONTEND
+res.status(201).json(leave);
+  } 
+  
+  catch (err) {
     console.error("POST /api/leave-requests error:", err);
     res.status(500).json({ message: "Failed to create leave request" });
   }
@@ -646,20 +701,94 @@ router.patch("/:id", async (req, res) => {
     const leaveId = req.params.id;
 
     // ================= EMPLOYEE REQUESTS CANCELLATION =================
+    // if (status === "cancellation_pending") {
+    //   await pool.query(
+    //     `UPDATE leave_requests
+    //        SET request_type = 'cancellation_request',
+    //            status = 'cancellation_pending'
+    //      WHERE leave_id = $1`,
+    //     [leaveId]
+    //   );
+    //   // SEND EMAIL TO MANAGER
+    //     const managerRes = await pool.query(
+    //       `SELECT email FROM profiles WHERE role='Manager' AND department=$1`,
+    //       [leave.department]
+    //     );
+    //     if (managerRes.rows.length) {
+    //       sendCancellationPending(managerRes.rows[0].email, leave.staff_name, leave);
+    //     }
+
+    //   return res.json({
+    //     success: true,
+    //     message: "Cancellation request submitted (awaiting manager approval)"
+    //   });
+    // }
+
     if (status === "cancellation_pending") {
-      await pool.query(
-        `UPDATE leave_requests
+
+    // Load full leave info FIRST
+    const leaveRes = await pool.query(
+      `SELECT * FROM leave_requests WHERE leave_id = $1`,
+      [leaveId]
+    );
+    const leave = leaveRes.rows[0];
+
+    await pool.query(
+      `UPDATE leave_requests
            SET request_type = 'cancellation_request',
                status = 'cancellation_pending'
          WHERE leave_id = $1`,
-        [leaveId]
-      );
+      [leaveId]
+    );
 
-      return res.json({
-        success: true,
-        message: "Cancellation request submitted (awaiting manager approval)"
-      });
-    }
+    // SEND EMAIL TO MANAGER
+    // const mgrRes = await pool.query(
+    //   `SELECT email FROM profiles 
+    //    WHERE role='Manager' AND department = $1`,
+    //    [leave.department]
+    // );
+
+    // if (mgrRes.rows.length) {
+    //   sendCancellationPending(mgrRes.rows[0].email, leave.staff_name, leave);
+    // }
+
+    // return res.json({
+    //   success: true,
+    //   message: "Cancellation request submitted (awaiting manager approval)"
+    // });
+    // Determine who should approve the cancellation
+let approverEmail = null;
+
+// If the requester is a Manager -> Admin must approve
+if (leave.requester_role === "Manager") {
+  const adminRes = await pool.query(
+    `SELECT email FROM profiles WHERE LOWER(role) = 'admin' LIMIT 1`
+  );
+  approverEmail = adminRes.rows[0]?.email;
+}
+
+// If requester is Staff -> Manager must approve
+else {
+  const mgrRes = await pool.query(
+    `SELECT email FROM profiles 
+     WHERE LOWER(role) = 'manager' AND department = $1`,
+    [leave.department]
+  );
+  approverEmail = mgrRes.rows[0]?.email;
+}
+
+// Send cancellation notification to correct approver
+if (approverEmail) {
+  sendCancellationPending(approverEmail, leave.staff_name, leave);
+}
+
+return res.json({
+  success: true,
+  message: "Cancellation request submitted (awaiting approval)"
+});
+
+}
+
 
     // ================= VALIDATE MANAGER ACTION =================
     if (!["approved", "rejected", "cancelled"].includes(status)) {
@@ -678,6 +807,14 @@ router.patch("/:id", async (req, res) => {
 
     const leave = leaveRes.rows[0];
     const staffId = leave.staff_id;
+
+    // GET STAFF EMAIL (since leave.email is NULL)
+    const emailRow = await pool.query(
+      `SELECT email FROM profiles WHERE staff_id = $1`,
+      [staffId]
+    );
+const staffEmail = emailRow.rows[0]?.email;
+
     const leaveType = leave.leave_type;
     const days = Number(leave.total_days);
 
@@ -807,12 +944,15 @@ router.patch("/:id", async (req, res) => {
           [days, staffId, leaveType]
         );
       }
+      console.log("📧 DEBUG staff email:", staffEmail);
+
+      sendLeaveApproved(staffEmail, leave);
 
     } // END APPROVED
 
-
-
-
+    if (status === "rejected") {
+  sendLeaveRejected(staffEmail, leave);
+  }
 
     /* ============================================================
        ------------------ CANCELLATION APPROVED -------------------
@@ -863,6 +1003,7 @@ router.patch("/:id", async (req, res) => {
           [days, staffId, leaveType]
         );
       }
+      sendCancellationApproved(staffEmail, leave);
     }
 
     /* ============================================================
@@ -886,6 +1027,7 @@ router.patch("/:id", async (req, res) => {
     console.error("PATCH /api/leave-requests error:", err);
     res.status(500).json({ message: "Failed to update leave request" });
   }
+  
 });
 
 /* ============================================================
