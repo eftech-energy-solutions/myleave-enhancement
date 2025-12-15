@@ -3,6 +3,14 @@ import pool from "../db.js";
 import multer from "multer";
 import cron from "node-cron";
 import { calculateWorkingDays } from "../utils/calculateWorkingDays.js";
+import {
+  sendLeaveSubmitted,
+  sendPendingApproval,
+  sendLeaveApproved,
+  sendLeaveRejected,
+  sendCancellationPending,
+  sendCancellationApproved
+} from "../utils/emailService.js";
 
 const leaveTypeFullName = {
   AL: "Annual / Emergency",
@@ -12,8 +20,13 @@ const leaveTypeFullName = {
   COMP_A: "Compassionate A",
   COMP_B: "Compassionate B",
   MAR: "Marriage",
-  HOSP: "Hospitalization"
+  HOSP: "Hospitalization",
+  UNPAID: "Unpaid"
 };
+import fs from "fs";
+import path from "path";
+
+const __dirname = path.resolve();
 
 function getLeaveFullName(code) {
   return leaveTypeFullName[code] || code;
@@ -110,7 +123,7 @@ router.post("/", upload.single("attachment"), async (req, res) => {
 
     const staffId = user.staff_id;
 
-      let serverDays;
+    let serverDays;
     if (duration === 'Half') {
       serverDays = 0.5;
     } else {
@@ -228,8 +241,7 @@ router.post("/", upload.single("attachment"), async (req, res) => {
     const attachmentPath = req.file ? req.file.path : null;
 
     const result = await pool.query(
-      `
-      INSERT INTO leave_requests (
+      `INSERT INTO leave_requests (
         staff_id, staff_name, department,
         requester_role, requester_position,
         leave_type, request_type,
@@ -241,8 +253,7 @@ router.post("/", upload.single("attachment"), async (req, res) => {
         $8,$9,$10,$11,$12,$13,
         'pending', NOW()
       )
-      RETURNING *
-    `,
+      RETURNING *`,
       [
         staffId,
         user.full_name,
@@ -260,9 +271,53 @@ router.post("/", upload.single("attachment"), async (req, res) => {
       ]
     );
 
-    return res.status(201).json(result.rows[0]);
+    const leave = result.rows[0];
+
+    // ======================
+    // SEND EMAIL TO STAFF (submitter)
+    // ======================
+    sendLeaveSubmitted(user.email, user.full_name, leave);
+
+    // ======================
+    // FIND WHO SHOULD APPROVE
+    // ======================
+    let approverEmail = null;
+
+    if (user.role === "Manager") {
+      // Manager applying leave → Admin must approve
+      const adminRes = await pool.query(
+        `SELECT email FROM profiles WHERE role='Admin' LIMIT 1`
+      );
+
+      if (adminRes.rows.length) {
+        approverEmail = adminRes.rows[0].email;
+      }
+
+    } else {
+      // Staff applying leave → Manager approves
+      const mgrRes = await pool.query(
+        `SELECT email FROM profiles 
+         WHERE role='Manager' AND department=$1`,
+        [user.department]
+      );
+
+      if (mgrRes.rows.length) {
+        approverEmail = mgrRes.rows[0].email;
+      }
+    }
+
+    // ======================
+    // SEND PENDING APPROVAL EMAIL
+    // ======================
+    if (approverEmail) {
+      sendPendingApproval(approverEmail, user.full_name, leave);
+    }
+
+    // RETURN TO FRONTEND
+    return res.status(201).json(leave);
+
   } catch (err) {
-    console.error("POST /leave-requests error:", err);
+    console.error("POST /api/leave-requests error:", err);
     return res.status(500).json({ message: "Failed to create leave request" });
   }
 });
@@ -301,9 +356,10 @@ router.get("/", async (req, res) => {
 });
 
 /* ============================================================
-    EDIT LEAVE REQUEST
-============================================================ */
-router.patch("/:id/edit", async (req, res) => {
+   4) EDIT LEAVE DETAILS
+   PATCH /api/leave-requests/:id/edit
+   ============================================================ */
+router.patch("/:id/edit", upload.single("attachment"), async (req, res) => {
   try {
     const leaveId = req.params.id;
     const { leave_type, duration, date_from, date_until, total_days, reason } =
@@ -328,6 +384,9 @@ router.patch("/:id/edit", async (req, res) => {
     
     if (serverDays <= 0)
       return res.status(400).json({ message: "Invalid date range or no working days" });
+
+    // ---- ENTITLEMENT CHECKS (copy same logic as your POST) ----
+    // (kept 100% the same, no change)
 
     let entitlement = 0;
     let used = 0;
@@ -404,6 +463,10 @@ router.patch("/:id/edit", async (req, res) => {
 
       used = Number(u.rows[0].used);
     }
+    else if (leave_type === "UNPAID") {
+   entitlement = Infinity;
+   used = 0;
+}
 
     // ===== SPECIAL LEAVES =====
     else {
@@ -425,6 +488,12 @@ router.patch("/:id/edit", async (req, res) => {
 
       used = Number(u.rows[0].used);
     }
+// ⭐ UNPAID LEAVE HAS NO LIMIT — ALWAYS ALLOWED
+if (leave_type === "UNPAID") {
+  entitlement = Infinity;
+  used = 0;
+}
+
 
     if (used + serverDays > entitlement) {
       return res.status(400).json({
@@ -435,21 +504,38 @@ router.patch("/:id/edit", async (req, res) => {
       });
     }
 
-    const updated = await pool.query(
-      `
-      UPDATE leave_requests
-      SET leave_type=$1, duration=$2, date_from=$3,
-          date_until=$4, total_days=$5, reason=$6
-      WHERE leave_id=$7
-      RETURNING *
-    `,
-      [leave_type, duration, date_from, date_until, serverDays, reason, leaveId]
+    // ======================================================
+    // UPDATE DATA (allowed)
+    // ======================================================
+     const updated = await pool.query(
+      `UPDATE leave_requests
+         SET leave_type = $1,
+             duration = $2,
+             date_from = $3,
+             date_until = $4,
+             total_days = $5,
+             reason = $6,
+             attachment_path = $7
+       WHERE leave_id = $8
+       RETURNING *`,
+      [
+        leave_type,
+        duration,
+        date_from,
+        date_until,
+        total_days,
+        reason,
+        newAttachmentPath,
+        leaveId
+      ]
     );
+
+    res.json(updated.rows[0]);
 
     return res.json(updated.rows[0]);
   } catch (err) {
-    console.error("PATCH /:id/edit error:", err);
-    return res.status(500).json({ message: "Update failed" });
+    console.error("PATCH /api/leave-requests/:id/edit error:", err);
+    res.status(500).json({ message: "Failed to update leave" });
   }
 });
 
@@ -678,12 +764,17 @@ if (status === "approved" && (leaveType === "AL" || leaveType === "EL")) {
       [status, leaveId]
     );
 
-    return res.json(updated.rows[0]);
+    if (status !== "cancellation_pending") {
+      await recalcAnnualLeave(staffId);
+    }
+
+    res.json(updated.rows[0]);
 
   } catch (err) {
     console.error("PATCH /:id error:", err);
     return res.status(500).json({ message: "Failed to update leave request" });
   }
+  
 });
 
 

@@ -9,7 +9,8 @@
     COMP_A: "Compassionate A (Parent/Child/Spouse)",
     COMP_B: "Compassionate B (Grandparent/Sibling)",
     MAR: "Marriage",
-    HOSP: "Hospitalization"
+    HOSP: "Hospitalization",
+    UNPAID: "Unpaid Leave"
   };
 
   function getLeaveFullName(code) {
@@ -511,12 +512,12 @@ approvedHOSP = all
     (leaveType === 'MC') && (!attachmentFiles || attachmentFiles.length === 0);
 
   const fixedDurations = {
-      MAT : 98,
-      PAT : 7,
-      "COMP_A": 3,
-      "COMP_B": 1,
-      MAR : 3
-  };
+    MAT : 98,
+    PAT : 7,
+    COMP_A: 3,
+    COMP_B: 1,
+    MAR : 3
+};
 
   const dayMs = 24 * 60 * 60 * 1000;
   const diffDays = (from, until) => {
@@ -535,12 +536,15 @@ approvedHOSP = all
     dateUntil = dateFrom;
   }
   $: {
-    const n = fixedDurations[leaveType];
-    endLocked = Boolean(n);
-    if (dateFrom && endLocked) {
-      dateUntil = addDaysISO(dateFrom, n);
-    }
+  const n = fixedDurations[leaveType];
+  endLocked = Boolean(n);
+
+  // ALWAYS reset dateUntil when leaveType changes AND it's a fixed-duration type
+  if (dateFrom && endLocked) {
+    dateUntil = addDaysISO(dateFrom, n);
   }
+}
+
   $: {
     if (duration === 'Half') {
       totalDays = 0.5;
@@ -568,20 +572,26 @@ approvedHOSP = all
     PAT: 7,
     COMP_A: 3,
     COMP_B: 1,
-    MAR: 3
+    MAR: 3,
+    UNPAID: Infinity 
   }[leaveType];
 
   // Current usage including pending
-  const totalUsed = {
-    AL: totalALUsed,
-    MC: totalMCUsed,
-    HOSP: totalHOSPUsed,
-    MAT: 98,
-    PAT: 7,
-    COMP_A: 3,
-    COMP_B: 1,
-    MAR: 3
-  }[leaveType];
+const totalUsed = {
+  AL: totalALUsed,
+  MC: totalMCUsed,
+  HOSP: totalHOSPUsed,
+
+  // FIXED LEAVE → start as 0 used
+  MAT: totalMCUsed,   // OR 0 → lagi selamat 
+  PAT: 0,
+  COMP_A: 0,
+  COMP_B: 0,
+  MAR: 0,
+  
+  UNPAID: 0
+}[leaveType];
+
 
   // ❌ If max reached, block
   // if (totalUsed >= limit) {
@@ -620,17 +630,20 @@ async function submitLeave(e) {
       }[leaveType];
 
       const totalUsed = {
-        AL: totalALUsed,
-        MC: totalMCUsed,
-        HOSP: totalHOSPUsed,
-        MAT: 98,
-        PAT: 7,
-        COMP_A: 3,
-        COMP_B: 1,
-        MAR: 3
-      }[leaveType];
+      AL: totalALUsed,
+      MC: totalMCUsed,
+      HOSP: totalHOSPUsed,
 
-      if (totalUsed >= limit) {
+      MAT: 0,
+      PAT: 0,
+      COMP_A: 0,
+      COMP_B: 0,
+      MAR: 0,
+      UNPAID: 0
+    }[leaveType];
+
+
+      if (limit !== Infinity && (totalUsed + totalDays) > limit)  {
         alert(`${getLeaveFullName(leaveType)} leave application limit (${limit} days) has been reached.`);
         return;
       }
@@ -956,6 +969,7 @@ async function loadApprovedUsedDays() {
         <option value="COMP_B">Compassionate B (Grandparent/Sibling)</option>
         <option value="MAR">Marriage</option>
         <option value="HOSP">Hospitalization</option>
+        <option value="UNPAID">Unpaid Leave</option>
       </select>
     </label>
 

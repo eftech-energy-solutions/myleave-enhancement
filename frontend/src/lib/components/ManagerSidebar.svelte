@@ -104,115 +104,106 @@
   // ------------------------------------------------------
 
   // Save profile update
-  async function saveProfile(e) {
-    e.preventDefault();
-    // Clear previous messages on new save attempt
-    error = '';
-    msg = '';
+// Save profile update
+async function saveProfile(e) {
+  e.preventDefault();
 
-    // --- PICTURE BRANCH ---
-    if (activeProfilePane === 'picture') {
-      if (!selectedFile) return alert('Please select a photo');
-      try {
-        const formData = new FormData();
-        formData.append('photo', selectedFile);
+  error = '';
+  msg = '';
 
-        const res = await fetch('http://localhost:5000/api/upload/profile', {
-          method: 'POST',
-          body: formData,
-          credentials: 'include' // important for cookie auth
-        });
+  // --- PICTURE BRANCH ---
+  if (activeProfilePane === 'picture') {
+    if (!selectedFile) return alert('Please select a photo');
 
-        const data = await parseSmart(res);
-        if (!res.ok || (isJsonResponse(res) && !data?.success)) {
-          const msgText = isJsonResponse(res)
-            ? (data?.error || `Upload failed (status ${res.status})`)
-            : `Upload failed (status ${res.status}). ${String(data.text).slice(0,180)}…`;
-          throw new Error(msgText);
-        }
+    try {
+      const formData = new FormData();
+      formData.append('photo', selectedFile);
 
-        // ✅ Update sidebar and modal preview
-        safeUser.photoUrl = data.photoUrl;
-        profilePhotoUrl = `http://localhost:5000${data.photoUrl}`;
-        selectedFile = null;
-        alert('Profile photo updated!');
-        closeProfileModal(); // Close modal on picture success
-        return;
-      } catch (err) {
-        console.error(err);
-        alert(err.message || 'Upload failed. Server may be down or endpoint is wrong.');
-        return;
+      const res = await fetch('http://localhost:5000/api/upload/profile', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include'
+      });
+
+      const data = await parseSmart(res);
+      if (!res.ok || (isJsonResponse(res) && !data?.success)) {
+        const msgText = isJsonResponse(res)
+          ? (data?.error || `Upload failed (status ${res.status})`)
+          : `Upload failed (status ${res.status}). ${String(data.text).slice(0,180)}…`;
+        throw new Error(msgText);
       }
+
+      // update UI
+      safeUser.photoUrl = data.photoUrl;
+      profilePhotoUrl = `http://localhost:5000${data.photoUrl}`;
+      selectedFile = null;
+      alert('Profile photo updated!');
+      closeProfileModal();
+      return;
+    } catch (err) {
+      console.error(err);
+      alert(err.message || 'Upload failed. Server may be down or endpoint is wrong.');
+      return;
+    }
+  }
+
+  // --- PASSWORD BRANCH ---
+  if (activeProfilePane === 'password') {
+    const form = e.target;
+
+    const pwdCurrent = form.pwdCurrent.value || '';
+    const pwd1 = form.pwd1.value || '';
+    const pwd2 = form.pwd2.value || '';
+
+    // validation
+    if (!pwdCurrent || !pwd1 || !pwd2) {
+      error = 'All password fields are required.';
+      return;
+    }
+    if (pwd1 !== pwd2) {
+      error = 'New passwords do not match.';
+      return;
+    }
+    if (pwd1.length < 8) {
+      error = 'New password must be at least 8 characters.';
+      return;
     }
 
-    // --- PASSWORD BRANCH ---
-    if (activeProfilePane === 'password') {
-      const pwd1 = e.currentTarget.querySelector('input[name="pwd1"]').value || '';
-      const pwd2 = e.currentTarget.querySelector('input[name="pwd2"]').value || '';
-      const pwdCurrent = e.currentTarget.querySelector('input[name="pwdCurrent"]').value || '';
+    const email = (safeUser?.email || '').trim().toLowerCase();
 
-      if (!pwdCurrent || !pwd1 || !pwd2) {
-        error = 'All password fields are required.';
-        return;
-      }
-      if (pwd1 !== pwd2) {
-        error = 'New passwords do not match.';
-        return;
-      }
-      if (pwd1.length < 8) {
-        error = 'New password must be at least 8 characters.';
-        return;
-      }
+    try {
+      // PRIMARY ROUTE (email)
+      if (email) {
+        const res = await fetch('http://localhost:5000/api/auth/change-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            email,
+            currentPassword: pwdCurrent,
+            newPassword: pwd1
+          })
+        });
 
-      // Prefer email flow (as per inspired code). Fall back to staffId route if needed.
-      const email = (safeUser?.email || '').trim().toLowerCase();
-
-      try {
-        let res, data;
-
-        if (email) {
-          // PRIMARY: /api/auth/change-password (JSON)
-          res = await fetch('http://localhost:5000/api/auth/change-password', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({
-              email,
-              currentPassword: pwdCurrent,
-              newPassword: pwd1
-            })
-          });
-
-          data = await parseSmart(res);
-
-          if (!res.ok || (isJsonResponse(res) && !data?.success)) {
-            // If this endpoint not found or non-JSON, try staffId route as fallback
-            if (res.status === 404 || data?._nonJson) throw { _tryFallback: true, res, data };
-            const msgText = isJsonResponse(res)
-              ? (data?.error || `Failed to change password (status ${res.status})`)
-              : `Failed to change password (status ${res.status}). ${String(data.text).slice(0,180)}…`;
-            throw new Error(msgText);
-          }
-        } else {
-          // No email in session -> fallback directly
-          throw { _tryFallback: true };
+        if (res.status === 404) throw { _tryFallback: true };
+        if (!res.ok) {
+          const data = await res.json().catch(() => null);
+          throw new Error(data?.error || 'Failed to change password.');
         }
 
-        // Success path for email route
-        msg = data?.message || 'Password updated successfully!';
-        e.currentTarget.querySelector('input[name="pwd1"]').value = '';
-        e.currentTarget.querySelector('input[name="pwd2"]').value = '';
-        e.currentTarget.querySelector('input[name="pwdCurrent"]').value = '';
+        msg = 'Password updated successfully!';
+        form.reset();
         return;
+      }
 
-      } catch (firstErr) {
-        // Fallback to staffId route if available
+      // no email → fallback
+      throw { _tryFallback: true };
+
+    } catch (err) {
+      // FALLBACK ROUTE (staffId)
+      if (err?._tryFallback) {
         try {
-          if (!safeUser.staffId) {
-            throw new Error(firstErr?.message || 'Missing Staff ID and email; cannot change password.');
-          }
-
-          const res2 = await fetch(
+          const res = await fetch(
             `http://localhost:5000/api/employee/${encodeURIComponent(safeUser.staffId)}/password`,
             {
               method: 'PUT',
@@ -225,25 +216,26 @@
             }
           );
 
-          const data2 = await parseSmart(res2);
-          if (!res2.ok || (isJsonResponse(res2) && !data2?.success)) {
-            const msgText = isJsonResponse(res2)
-              ? (data2?.error || `Password update failed (status ${res2.status})`)
-              : `Password update failed (status ${res2.status}). ${String(data2.text).slice(0,180)}…`;
-            throw new Error(msgText);
+          if (!res.ok) {
+            const data = await res.json().catch(() => null);
+            throw new Error(data?.error || 'Password update failed.');
           }
 
-          msg = data2?.message || 'Password updated successfully!';
-          e.currentTarget.querySelector('input[name="pwd1"]').value = '';
-          e.currentTarget.querySelector('input[name="pwd2"]').value = '';
-          e.currentTarget.querySelector('input[name="pwdCurrent"]').value = '';
+          msg = 'Password updated successfully!';
+          form.reset();
+          return;
         } catch (fallbackErr) {
-          console.error('Password update error:', fallbackErr);
-          error = fallbackErr?.message || firstErr?.message || 'An error occurred.';
+          error = fallbackErr?.message || 'An error occurred.';
+          return;
         }
       }
+
+      // unexpected
+      error = err?.message || 'An error occurred.';
+      return;
     }
-  } // <-- closes saveProfile
+  }
+}
 
   function handlePhotoFile(e) {
     const file = e.currentTarget.files?.[0];
@@ -903,7 +895,7 @@
   }
 
   .input-lg {
-    font-size: 16px;
+    font-size: 14px;
     padding: 12px 14px;
     border: 1px solid #d1d5db;
     border-radius: 10px;

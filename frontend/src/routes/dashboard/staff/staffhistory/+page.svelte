@@ -9,7 +9,8 @@
     COMP_A: "Compassionate A (Parent/Child/Spouse)",
     COMP_B: "Compassionate B (Grandparent/Sibling)",
     MAR: "Marriage",
-    HOSP: "Hospitalization"
+    HOSP: "Hospitalization",
+    UNPAID: "Unpaid"
   };
 
   function formatDays(n) {
@@ -30,6 +31,8 @@
   let showConfirmationModal = false;
   let leaveToCancel = null;
   let me = null;
+  let currentAttachment = null;
+  let newAttachmentName = "";
 
   // ---------- Form State (Unified Same As Leave Application Form) ----------
 let modal;
@@ -101,7 +104,7 @@ const leaveCodes = {
       const meRes = await fetch("/api/employee/me", {
         credentials: "include"
       });
-      const me = await meRes.json();
+      me = await meRes.json();
 
       // If failed to get user, do not continue
       if (!me || !me.staffId) {
@@ -128,6 +131,7 @@ const leaveCodes = {
     type: l.leave_type,  // always keep AL/MC/MAT/PAT etc.
     reason: l.reason,
     duration: l.duration,
+    attachment_path: l.attachment_path, 
     status:
       l.status === "pending" ? "Pending" :
       l.status === "approved" ? "Approved" :
@@ -205,6 +209,7 @@ function handleEdit(l) {
   originalLeaveType = l.type;
   leaveType = l.type;
   duration = l.totalDays === 0.5 ? "Half" : l.duration || "Full";
+  currentAttachment = l.attachment_path || null;
 
   dateFrom = l.dateFrom.slice(0, 10);
   
@@ -221,6 +226,9 @@ function handleEdit(l) {
 
   totalDays = autoCalc(leaveType, dateFrom, dateUntil, duration);
   reason = l.reason || "";
+  currentAttachment = l.attachment_path || null;
+  newAttachmentName = "";
+
 
   modal.showModal();
 }
@@ -333,35 +341,30 @@ if (used + totalDays > limit) {
   return;
 }
 
-    // ---- EDIT MODE ----
-    if (isEdit && editingUuid) {
-      await fetch(`/api/leave-requests/${editingUuid}/edit`, {
-        method: "PATCH",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      
-      sessionStorage.setItem("forceDashboardRefresh", "true");
+if (isEdit && editingUuid) {
+  const formData = new FormData();
+  formData.append("leave_type", leaveType);
+  formData.append("duration", duration);
+  formData.append("date_from", dateFrom);
+  formData.append("date_until", payload.date_until);
+  formData.append("total_days", totalDays);
+  formData.append("reason", reason);
+  formData.append("request_type", "update");
 
-      // ⭐ UPDATE UI WITHOUT REFRESH
-      const idx = leaves.findIndex(l => l.uuid === editingUuid);
+  if (attachmentFiles && attachmentFiles.length > 0) {
+    formData.append("attachment", attachmentFiles[0]);
+  }
 
-      if (idx !== -1) {
-        leaves[idx] = {
-          ...leaves[idx],
-          type: leaveType,
-          dateFrom: dateFrom,
-          dateTo: payload.date_until,
-          totalDays: totalDays,
-          reason: reason,
-          duration: duration
-        };
+  await fetch(`http://localhost:5000/api/leave-requests/${editingUuid}/edit`, {
+    method: "PATCH",
+    credentials: "include",
+    body: formData
+  });
 
-        leaves = [...leaves]; // trigger reactive update
-      }
-    }
-
+  await loadLeaveHistory();
+  closeEditModal();
+  return;
+}
     // ---- NEW APPLICATION (OPTIONAL) ----
     else {
       await fetch(`/api/leave-requests`, {
@@ -379,6 +382,40 @@ if (used + totalDays > limit) {
   }
 }
 
+async function loadLeaveHistory() {
+  try {
+    if (!me || !me.staffId) return;
+
+    const res = await fetch("/api/leave-requests", { credentials: "include" });
+    const all = await res.json();  // ONLY ONE json() HERE
+
+    leaves = all
+      .filter(l => l.staff_id === me.staffId)
+      .map(l => ({
+        uuid: l.leave_id,
+        id: l.staff_id,
+        name: l.staff_name,
+        dateFrom: l.date_from,
+        dateTo: l.date_until,
+        totalDays: l.total_days,
+        type: l.leave_type,
+        duration: l.duration,
+        reason: l.reason,
+        attachment_path: l.attachment_path,
+        status:
+          l.status === "pending" ? "Pending" :
+          l.status === "approved" ? "Approved" :
+          l.status === "rejected" ? "Rejected" :
+          l.status === "cancelled" ? "Cancelled" :
+          l.status === "cancellation_pending" ? "Cancellation Pending" :
+          l.status
+      }));
+
+    leaves = [...leaves];
+  } catch (err) {
+    console.error("Failed to reload leave history:", err);
+  }
+}
 
 function closeEditModal() {
   if (modal?.open) modal.close();
@@ -535,10 +572,33 @@ function onUntilChange() {
     </label>
 
     <!-- Attachment -->
-    <label>
-      <span>Attachment</span>
-      <input type="file" bind:files={attachmentFiles} />
-    </label>
+  <label>
+  <span>Attachment</span>
+  <input 
+    type="file" 
+    bind:files={attachmentFiles}
+    on:change={() => {
+      newAttachmentName = attachmentFiles?.[0]?.name || "";
+    }}
+  />
+
+  {#if currentAttachment}
+    <a 
+      href={"http://localhost:5000/" + currentAttachment}
+      target="_blank"
+      class="view-attachment-btn"
+    >
+      View existing attachment
+    </a>
+  {/if}
+
+  {#if newAttachmentName}
+    <div class="new-file-label">
+      New file selected: <strong>{newAttachmentName}</strong>
+    </div>
+  {/if}
+</label>
+
 
     <button type="submit" class="submit-btn">
   {isEdit ? "SAVE" : "SUBMIT"}
@@ -574,15 +634,45 @@ function onUntilChange() {
         <td class="center">{formatDays(l.totalDays)}</td>
         <td>{getLeaveFullName(l.type)}</td>
         <td>
-          <span class="badge {l.status.toLowerCase().replace(' ', '-')}">{l.status}</span>
+          <span 
+            class="badge 
+              {l.status.toLowerCase().replace(' ', '-')} 
+              {l.status === 'Approved' && l.type === 'UNPAID' ? 'unpaid-approved' : ''}"
+          >
+            {l.status}
+          </span>
         </td>
+
         <td class="center">
   <div class="action-wrapper">
+
+    <!-- SLOT: FILE ICON -->
+<div class="slot">
+  {#if l.attachment_path && l.status !== 'Pending'}
+    <button 
+      class="icon-btn file-btn {l.status === 'Cancelled' ? 'disabled-file' : ''}"
+      title={l.status === 'Cancelled' ? "Attachment disabled" : "View Attachment"}
+      on:click={() => {
+        if (l.status !== "Cancelled") {
+          window.open("http://localhost:5000/" + l.attachment_path, "_blank");
+        }
+      }}
+    >
+      <svg viewBox="0 0 26 26">
+        <path 
+          fill="currentColor"
+          d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zM14 8V3.5L19.5 9H15a1 1 0 0 1-1-1z"
+        />
+      </svg>
+    </button>
+  {/if}
+</div>
+
     
     <!-- FIXED SLOT: Pencil (Pending only) -->
     <div class="slot">
       {#if l.status === 'Pending'}
-        <button class="icon-btn" title="Edit" on:click={() => handleEdit(l)}>
+        <button class="icon-btn pencil-btn" title="Edit" on:click={() => handleEdit(l)}>
           <svg viewBox="0 0 24 24">
             <path d="M3 17.25V21h3.75L17.8 9.94l-3.75-3.75L3 17.25zM20.7 7a1 1 0 0 0 0-1.4l-2.3-2.3a1 1 0 0 0-1.4 0L15 4.6l3.7 3.7 2-1.3z"/>
           </svg>
@@ -682,7 +772,12 @@ function onUntilChange() {
   .badge.rejected { background: #fee2e2; color: #991b1b; border-color:#f3c2c2; }
   .badge.cancelled {background:#f1f5f9; color:#475569; border-color:#e2e8f0;}
   .badge.cancellation-pending { background: #fef08a; color: #854d0e; border-color: #fddc63;}
-
+/* === SPECIAL COLOR FOR APPROVED UNPAID LEAVE === */
+.badge.unpaid-approved {
+  background: #ffe7bb;    /* soft orange / light gold */
+  color: #b45309;         /* darker amber text */
+  border: 1px solid #f5c66c;
+}
   /* ===== ACTION BUTTON ===== */
   .delete-btn {
     background: transparent;
@@ -703,6 +798,24 @@ function onUntilChange() {
     width: 18px;
     height: 18px;
   }
+
+  .file-btn svg {
+  width: 10px;
+  height: 10px;
+  color: #217859; /* SAME GREEN AS TRASH */
+  margin-left: 80px;
+  margin-top: 0.7px;
+}
+
+.disabled-file {
+  opacity: 0.35 !important;
+  cursor: not-allowed !important;
+  pointer-events: none !important;
+}
+
+.pencil-btn{
+  margin-left: 14px;
+}
 
   /* ===== MODAL ===== */
   .modal-backdrop {
@@ -742,10 +855,11 @@ function onUntilChange() {
   }
   .btn-secondary { background: #e5e7eb; color: #1f2937; }
   .btn-danger { background: #ef4444; color: white; }
+
 .action-wrapper {
   display: flex;
   justify-content: center;
-  gap: 10px;
+  gap: 4px;
   align-items: center;
 }
 
@@ -870,6 +984,24 @@ function onUntilChange() {
     font-size:20px; 
     cursor:pointer; 
     padding: 4px;
+  }
+
+  .new-file-label {
+    margin-top: 4px;
+    font-size: 12px;
+    color: #0f172a;
+  }
+
+  .view-attachment-btn {
+    display: inline-block;
+    margin-top: 6px;
+    font-size: 13px;
+    color: #2563eb;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+  .view-attachment-btn:hover {
+    color: #1d4ed8;
   }
 
 

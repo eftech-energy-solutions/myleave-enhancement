@@ -211,78 +211,191 @@
   }
 
   function openProfileModal() {
-    activeProfilePane = 'picture';
-    profileModalOpen = true;
-    profileMenuOpen = false;
-  }
+  activeProfilePane = 'picture';
+  profileModalOpen = true;
+  profileMenuOpen = false;
+  msg = '';
+  error = '';
+}
 
   function closeProfileModal() { profileModalOpen = false; }
 
-  async function saveProfile(e) {
-    e.preventDefault();
-    console.log("Saving profile…");
+async function saveProfile(e) {
+  e.preventDefault();
+  // clear previous UI messages
+  error = '';
 
-    if (activeProfilePane === 'password') {
-      const form = e.currentTarget;
-      const pwdCurrent = form.querySelector('input[name="pwdCurrent"]').value;
-      const pwd1 = form.querySelector('input[name="pwd1"]').value;
-      const pwd2 = form.querySelector('input[name="pwd2"]').value;
+  console.log('[saveProfile] activeProfilePane=', activeProfilePane, 'safeUser=', {
+    email: safeUser?.email,
+    staffId: safeUser?.staffId,
+    role: safeUser?.role
+  });
 
-      if (!pwdCurrent || !pwd1 || !pwd2) return alert("Fill all fields");
-      if (pwd1 !== pwd2) return alert("Password mismatch");
-      if (pwd1.length < 8) return alert("Password too short");
+  // ----------------- PICTURE BRANCH -----------------
+  if (activeProfilePane === 'picture') {
+    if (!selectedFile) {
+      alert('Please select a photo');
+      return;
+    }
+    try {
+      const formData = new FormData();
+      formData.append('photo', selectedFile);
 
-      const email = safeUser?.email || safeUser?.email;
-      if (!email) return alert("Missing email");
+      const res = await fetch('http://localhost:5000/api/upload/profile', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include'
+      });
 
-      try {
-        const res = await fetch("http://localhost:5000/api/auth/change-password", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ email, currentPassword: pwdCurrent, newPassword: pwd1 })
-        });
+      const ct = res.headers.get('content-type') || '';
+      const data = ct.includes('application/json') ? await res.json() : { _nonJson: true, text: await res.text() };
+      console.log('[upload/profile] status=', res.status, 'data=', data);
 
-        const data = await res.json();
-        if (!res.ok || !data?.success) throw new Error(data?.error);
-
-        alert("Password updated");
-        closeProfileModal();
-      } catch (err) {
-        alert(err.message);
+      if (!res.ok || (ct.includes('application/json') && !data?.success)) {
+        const msgText = ct.includes('application/json')
+          ? (data?.error || `Upload failed (status ${res.status})`)
+          : `Upload failed (status ${res.status}). ${String(data.text).slice(0,180)}…`;
+        throw new Error(msgText);
       }
+
+      // success
+      safeUser.photoUrl = data.photoUrl;
+      profilePhotoUrl = data.photoUrl.startsWith('http') ? data.photoUrl : `http://localhost:5000${data.photoUrl}`;
+      selectedFile = null;
+      alert('Profile photo updated!');
+      closeProfileModal();
+      return;
+    } catch (err) {
+      console.error('[saveProfile][picture] error:', err);
+      alert(err.message || 'Upload failed.');
+      return;
+    }
+  }
+
+  // ----------------- PASSWORD BRANCH -----------------
+  if (activeProfilePane === 'password') {
+    // grab form values safely
+    const form = e.currentTarget;
+    const pwdCurrent = (form.querySelector('input[name="pwdCurrent"]')?.value || '').trim();
+    const pwd1 = (form.querySelector('input[name="pwd1"]')?.value || '').trim();
+    const pwd2 = (form.querySelector('input[name="pwd2"]')?.value || '').trim();
+
+    error = '';
+
+    if (!pwdCurrent || !pwd1 || !pwd2) {
+      error = 'All password fields are required.';
+      return;
+    }
+    if (pwd1 !== pwd2) {
+      error = 'New passwords do not match.';
+      return;
+    }
+    if (pwd1.length < 8) {
+      error = 'New password must be at least 8 characters.';
       return;
     }
 
-    // picture upload
-    if (activeProfilePane === 'picture') {
-      if (!selectedFile) return alert("Choose a photo first");
+    // Decide route:
+    // IMPORTANT: force fallback for admin because your backend validates admin via employee/staffId route
+    const isAdmin = (safeUser?.role || '').toLowerCase() === 'admin';
+    const email = (safeUser?.email || '').trim().toLowerCase();
+    const staffIdVal = safeUser?.staffId;
 
+    console.log('[saveProfile][password] attempt', { isAdmin, email, staffId: staffIdVal });
+
+    // helper to parse json or text
+    async function parseSmartRes(res) {
+      const ct = res.headers.get('content-type') || '';
+      if (ct.includes('application/json')) {
+        return await res.json().catch(() => ({ _parseError: true }));
+      }
+      return { _nonJson: true, text: await res.text().catch(() => '') };
+    }
+
+    // Try email-based route only if NOT admin and email present
+    if (!isAdmin && email) {
       try {
-        const fd = new FormData();
-        fd.append("photo", selectedFile);
-
-        const res = await fetch("http://localhost:5000/api/upload/profile", {
-          method: "POST",
-          body: fd,
-          credentials: "include"
+        console.log('[saveProfile] using email route /api/auth/change-password', { email });
+        const res = await fetch('http://localhost:5000/api/auth/change-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ email, currentPassword: pwdCurrent, newPassword: pwd1 })
         });
 
-        const data = await res.json();
-        if (!data.success) return alert("Upload failed");
+        const data = await parseSmartRes(res);
+        console.log('[saveProfile][email-route] status=', res.status, 'data=', data);
 
-        const fullUrl = data.photoUrl.startsWith("http")
-          ? data.photoUrl
-          : `http://localhost:5000${data.photoUrl}`;
+        if (res.status === 404) {
+          // endpoint missing -> fallback
+          throw { _tryFallback: true, reason: '404' };
+        }
 
-        profilePhotoUrl = fullUrl;
-        safeUser.photoUrl = data.photoUrl;
-        alert("Profile photo updated!");
-      } catch (e) {
-        alert("Upload failed");
+        if (!res.ok || (data && typeof data === 'object' && data.success === false)) {
+          // if backend returns specific error about current password, surface it
+          const serverMsg = data?.error || data?.message || `Change failed (status ${res.status})`;
+          throw new Error(serverMsg);
+        }
+
+       // success
+       error = '';
+          msg = 'Password updated successfully!';
+          form.reset();
+
+          setTimeout(() => {
+            closeProfileModal();
+            msg = '';
+          }, 1500);
+
+          return; 
+      } catch (err) {
+        console.warn('[saveProfile][email-route] failed, will try fallback if allowed:', err);
+        if (!err?._tryFallback) {
+          // if it's not an explicit signal to fallback, still continue to fallback attempt
+          // but show the error if no fallback possible
+        }
+        // continue to fallback below
       }
     }
+
+    // FALLBACK: staffId route (PUT /api/employee/:staffId/password)
+    if (!staffIdVal) {
+      error = 'Missing staffId; cannot change password.';
+      return;
+    }
+
+    try {
+      console.log('[saveProfile] using staffId fallback route', { staffId: staffIdVal });
+      const res2 = await fetch(`http://localhost:5000/api/employee/${encodeURIComponent(staffIdVal)}/password`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ currentPassword: pwdCurrent, newPassword: pwd1 })
+      });
+
+      const data2 = await parseSmartRes(res2);
+      console.log('[saveProfile][staff-route] status=', res2.status, 'data=', data2);
+
+      // handle 404 / errors from backend
+      if (!res2.ok) {
+        const serverMsg = data2?.error || data2?.message || `Password update failed (status ${res2.status})`;
+        throw new Error(serverMsg);
+      }
+
+      // success
+      msg = data2?.message || 'Password updated successfully!';
+      form.reset();
+      return;
+    } catch (err) {
+      console.error('[saveProfile][staff-route] error:', err);
+      // If backend explicitly tells "current password incorrect" show that; else generic
+      error = err?.message || 'An error occurred while updating password.';
+      // also show alert to be obvious
+      error = err?.message || 'An error occurred while updating password.';
+      return;
+    }
   }
+}
 
   function handlePhotoFile(e) {
     const file = e.target.files?.[0];
@@ -398,7 +511,7 @@
   </div>
 </div>
 
-<!-- ================= PROFILE MODAL ================= -->
+================= PROFILE MODAL =================
 {#if profileModalOpen}
   <div class="modal-wrap">
     <div class="modal">
@@ -425,20 +538,102 @@
           </div>
 
         {:else}
-          <div class="row">
-            <label>Current Password</label>
-            <input type={showPwdCurrent ? 'text' : 'password'} name="pwdCurrent" class="input-lg" />
-          </div>
 
-          <div class="row">
-            <label>New Password</label>
-            <input type={showPwd1 ? 'text' : 'password'} name="pwd1" class="input-lg" />
-          </div>
+  <!-- CURRENT PASSWORD -->
+  <div class="row">
+    <label>Current Password</label>
 
-          <div class="row">
-            <label>Confirm Password</label>
-            <input type="password" name="pwd2" class="input-lg" />
-          </div>
+    <div class="input-wrap-lg">
+      <input
+        class="input-lg"
+        type={showPwdCurrent ? 'text' : 'password'}
+        name="pwdCurrent"
+        placeholder="Enter your current password"
+        required
+      />
+      <button
+        class="eye-btn"
+        type="button"
+        on:click={() => (showPwdCurrent = !showPwdCurrent)}
+        aria-label={showPwdCurrent ? 'Hide' : 'Show'}
+      >
+        {#if showPwdCurrent}
+          <!-- eye-off icon -->
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-5 0-9.27-3.11-11-8 1.04-2.84 3.05-5.2 5.66-6.6"/>
+            <path d="M9.9 4.24A10.94 10.94 0 0 1 12 4c5 0 9.27 3.11 11 8a10.95 10.95 0 0 1-4.06 5.06"/>
+            <line x1="1" y1="1" x2="23" y2="23"/>
+          </svg>
+        {:else}
+          <!-- eye icon -->
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+        {/if}
+      </button>
+    </div>
+  </div>
+
+  <!-- NEW PASSWORD -->
+  <div class="row">
+    <label>New Password</label>
+
+    <div class="input-wrap-lg">
+      <input
+        class="input-lg"
+        type={showPwd1 ? 'text' : 'password'}
+        name="pwd1"
+        placeholder="At least 8 characters"
+        required
+      />
+      <button
+        class="eye-btn"
+        type="button"
+        on:click={() => (showPwd1 = !showPwd1)}
+        aria-label={showPwd1 ? 'Hide' : 'Show'}
+      >
+        {#if showPwd1}
+          <!-- eye-off -->
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-5 0-9.27-3.11-11-8 1.04-2.84 3.05-5.2 5.66-6.6"/>
+            <path d="M9.9 4.24A10.94 10.94 0 0 1 12 4c5 0 9.27 3.11 11 8a10.95 10.95 0 0 1-4.06 5.06"/>
+            <path d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"/>
+            <line x1="1" y1="1" x2="23" y2="23"/>
+          </svg>
+        {:else}
+          <!-- eye -->
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+        {/if}
+      </button>
+    </div>
+  </div>
+
+  <!-- CONFIRM PASSWORD -->
+  <div class="row">
+    <label>Confirm Password</label>
+    <input
+      class="input-lg"
+      type="password"
+      name="pwd2"
+      placeholder="Re-enter new password"
+      required
+    />
+  </div>
+
+  {#if activeProfilePane === 'password'}
+        {#if msg}
+          <div class="success-msg">{msg}</div>
+        {/if}
+
+        {#if error}
+          <div class="error-msg">{error}</div>
+        {/if}
+      {/if}
+
         {/if}
 
         <div class="form-ft">
@@ -571,6 +766,29 @@
   .ico svg{ width:22px; height:22px; fill:#217859; }
   .nav a.active .ico svg{ fill:#1fb3b2; }
   .signout .ico svg{ fill:#e34040; }
+
+  .success-msg {
+  background: #eef6ff;        
+  color: #1e3a8a;             
+  border: none;
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+
+.error-msg {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
 
   /* Bottom Bar (Tidak berubah) */
   .bottom{ margin-top:auto; display:flex; justify-content:space-between; align-items:center; }
@@ -806,12 +1024,11 @@
 }
 
 /* ==================== LABEL STYLE LAGI BOLD + WARNA SAMA ==================== */
-
 .row > label,
 .role-form-row > label {
   font-size: 15px;
-  font-weight: 750;         /* 👉 boldkan lagi */
-  color: #0c4a6e;           /* 👉 sama dengan input placeholder color */
+  font-weight: 600;
+  color: #000;   /* HITAM */
 }
 
 /* ==================== EMAIL CHIP STYLING NEW ==================== */

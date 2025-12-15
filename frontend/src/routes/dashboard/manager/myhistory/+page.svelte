@@ -8,7 +8,8 @@
     COMP_A: "Compassionate A (Parent/Child/Spouse)",
     COMP_B: "Compassionate B (Grandparent/Sibling)",
     MAR: "Marriage",
-    HOSP: "Hospitalization"
+    HOSP: "Hospitalization",
+    UNPAID: "Unpaid"
   };
 
   function formatDays(n) {
@@ -32,6 +33,8 @@
 
   let showConfirmationModal = false;
   let leaveToCancel = null;
+  let currentAttachment = null;
+  let newAttachmentName = "";
 
   // ===== Edit Modal State (same as staff) =====
 let modal; 
@@ -153,8 +156,9 @@ $: {
           dateTo: l.date_until,
           totalDays: l.total_days,
           type: l.leave_type,
-          reason: l.reason,          // ADD THIS
+          reason: l.reason,        
           duration: l.duration,  
+          attachment_path: l.attachment_path, 
 
           status:
             l.status === "pending" ? "Pending" :
@@ -215,6 +219,7 @@ $: filteredLeaves = leaves
   duration = l.totalDays === 0.5 ? "Half" : l.duration || "Full";
   dateFrom = l.dateFrom.slice(0,10);
   dateUntil = l.dateTo.slice(0,10);
+  currentAttachment = l.attachment_path || null;
 
   // Auto-set fixed leave types
   if (fixedDurations[leaveType]) {
@@ -226,6 +231,9 @@ $: filteredLeaves = leaves
   }
   
   reason = l.reason || "";
+  currentAttachment = l.attachment_path || null;
+  newAttachmentName = "";
+
 
   if (modal) modal.showModal();
 
@@ -233,7 +241,7 @@ $: filteredLeaves = leaves
 
 function preventTypeChange() {
   if (isEdit && leaveType !== originalLeaveType) {
-    alert("You cannot change leave type. Please delete this pending request and submit a new one.");
+    alert("Leave type changes are restricted. Kindly cancel the pending request and submit a new request.");
     leaveType = originalLeaveType; // revert back
   }
 }
@@ -354,30 +362,66 @@ if (fixedDurations[leaveType]) {
 }
 
 
-  try {
-    await fetch(`http://localhost:5000/api/leave-requests/${editingUuid}/edit`, {
-      method: "PATCH",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
+try {
+    // Build FormData payload
+    const formData = new FormData();
+    formData.append("leave_type", leaveType);
+    formData.append("duration", duration);
+    formData.append("date_from", dateFrom);
+    formData.append("date_until", payload.date_until);
+    formData.append("total_days", totalDays);
+    formData.append("reason", reason);
+    formData.append("request_type", "update");
 
-    // Update UI instantly
-    const idx = leaves.findIndex(x => String(x.uuid) === String(editingUuid));
-
-    if (idx !== -1) {
-      leaves[idx].type = leaveType;
-      leaves[idx].dateFrom = dateFrom;
-      leaves[idx].dateTo = payload.date_until;
-      leaves[idx].totalDays = totalDays;
-      leaves[idx].reason = reason;
-      leaves = [...leaves];
+    // If user selected a new attachment → send file
+    if (attachmentFiles && attachmentFiles.length > 0) {
+      formData.append("attachment", attachmentFiles[0]);
     }
 
-    closeEditModal();
-  } catch (err) {
+    // PATCH request using FormData (NO headers!)
+await fetch(`http://localhost:5000/api/leave-requests/${editingUuid}/edit`, {
+  method: "PATCH",
+  credentials: "include",
+  body: formData
+});
+
+// 🔥 THIS FIXES YOUR ERROR
+await loadLeaveHistory();
+closeEditModal();
+
+
+
+// ---- Fetch UPDATED DATA from backend ----
+const updated = await fetch(
+  `http://localhost:5000/api/leave-requests/${editingUuid}`,
+  { credentials: "include" }
+);
+const updatedLeave = await updated.json();
+
+// ---- Now find the correct index ----
+const idx = leaves.findIndex(l => String(l.uuid) === String(editingUuid));
+
+if (idx !== -1) {
+  leaves[idx] = {
+    ...leaves[idx],
+    type: updatedLeave.leave_type,
+    dateFrom: updatedLeave.date_from,
+    dateTo: updatedLeave.date_until,
+    totalDays: updatedLeave.total_days,
+    reason: updatedLeave.reason,
+    duration: updatedLeave.duration,
+    attachment_path: updatedLeave.attachment_path  // <- REAL updated file path
+  };
+
+  leaves = [...leaves]; // force refresh
+}
+
+closeEditModal();
+
+} catch (err) {
     console.error("Error updating:", err);
-  }
+}
+
 }
 function closeEditModal() {
   try {
@@ -519,9 +563,33 @@ function onUntilChange() {
 
     <!-- Attachment -->
     <label>
-      <span>Attachment</span>
-      <input type="file" bind:files={attachmentFiles} />
-    </label>
+  <span>Attachment</span>
+  <input 
+    type="file" 
+    bind:files={attachmentFiles}
+    on:change={() => {
+      newAttachmentName = attachmentFiles?.[0]?.name || "";
+    }}
+  />
+
+  {#if currentAttachment}
+    <a 
+      href={"http://localhost:5000/" + currentAttachment}
+      target="_blank"
+      class="view-attachment-btn"
+    >
+      View existing attachment
+    </a>
+  {/if}
+
+  {#if newAttachmentName}
+    <div class="new-file-label">
+      New file selected: <strong>{newAttachmentName}</strong>
+    </div>
+  {/if}
+</label>
+
+
 
     <button type="submit" class="submit-btn">
   {isEdit ? "SAVE" : "SUBMIT"}
@@ -557,15 +625,45 @@ function onUntilChange() {
         <td>{getLeaveFullName(l.type)}</td>
 
         <td>
-          <span class="badge {l.status.toLowerCase().replace(' ', '-')}">{l.status}</span>
+          <span 
+            class="badge 
+              {l.status.toLowerCase().replace(' ', '-')} 
+              {l.status === 'Approved' && l.type === 'UNPAID' ? 'unpaid-approved' : ''}"
+          >
+            {l.status}
+          </span>
         </td>
+
     <td class="center">
   <div class="action-wrapper">
+
+   <!-- SLOT: FILE ICON -->
+<div class="slot">
+  {#if l.attachment_path && l.status !== 'Pending'}
+    <button 
+      class="icon-btn file-btn {l.status === 'Cancelled' ? 'disabled-file' : ''}"
+      title={l.status === 'Cancelled' ? "Attachment disabled" : "View Attachment"}
+      on:click={() => {
+        if (l.status !== "Cancelled") {
+          window.open("http://localhost:5000/" + l.attachment_path, "_blank");
+        }
+      }}
+    >
+      <svg viewBox="0 0 24 24">
+        <path 
+          fill="currentColor"
+          d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zM14 8V3.5L19.5 9H15a1 1 0 0 1-1-1z"
+        />
+      </svg>
+    </button>
+  {/if}
+</div>
+
 
     <!-- SLOT 1: Pencil -->
     <div class="slot">
       {#if l.status === 'Pending'}
-        <button class="icon-btn" on:click={() => handleEdit(l)} title="Edit Application">
+        <button class="icon-btn pencil-btn" on:click={() => handleEdit(l)} title="Edit Application">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
             <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1.003 1.003 0 0 0 0-1.42l-2.34-2.34a1.003 1.003 0 0 0-1.42 0L15 4.59l3.75 3.75 1.96-1.3z"/>
           </svg>
@@ -596,6 +694,7 @@ function onUntilChange() {
   .filter-bar {
     display: flex;
     justify-content: flex-end; /* push filters to the right */
+    padding-right: 20px;
     margin-bottom: 1rem;
   }
   .filters {
@@ -663,6 +762,13 @@ function onUntilChange() {
   .badge.rejected { background: #fee2e2; color: #991b1b; border-color:#f3c2c2; }
   .badge.cancelled {background:#f1f5f9; color:#475569; border-color:#e2e8f0;}
   .badge.cancellation-pending { background: #fef08a; color: #854d0e; border-color: #fddc63;}
+
+/* === SPECIAL COLOR FOR APPROVED UNPAID LEAVE === */
+.badge.unpaid-approved {
+  background: #ffe7bb;    /* soft orange / light gold */
+  color: #b45309;         /* darker amber text */
+  border: 1px solid #f5c66c;
+}
 
   /* ===== ACTION BUTTON ===== */
   .delete-btn {
@@ -753,6 +859,24 @@ function onUntilChange() {
 .icon-btn:hover {
   background: #dcfce7;
 }
+.file-btn svg {
+  width: 15px;
+  height: 15px;
+  color: #217859; /* SAME GREEN AS TRASH */
+  margin-left: 80px;
+  margin-top: 0.5px;
+}
+
+.disabled-file {
+  opacity: 0.35 !important;
+  cursor: not-allowed !important;
+  pointer-events: none !important;
+}
+.pencil-btn{
+  margin-left: 18px;
+}
+
+
 
  /* Modal Styles */
   .leave-modal {
@@ -844,6 +968,17 @@ function onUntilChange() {
     padding: 4px;
   }
 
+  .view-attachment-btn {
+    display: inline-block;
+    margin-top: 6px;
+    font-size: 13px;
+    color: #2563eb;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+  .view-attachment-btn:hover {
+    color: #1d4ed8;
+  }
 
   /* ===== Responsive (keep filters usable) ===== */
   @media (max-width: 640px) {

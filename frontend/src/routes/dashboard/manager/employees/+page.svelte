@@ -462,6 +462,11 @@ async function rejectCancellation(item) {
   .btn-reject { background:#dc2626; color:#fff; }
   .btn-details{ background:#e0f2fe; color:#0c4a6e; }
   .btn-approve:hover, .btn-reject:hover, .btn-details:hover{ filter:brightness(.97); }
+  .unpaid-pill {
+  background-color: rgba(239, 68, 68, 0.18) !important; 
+  color: #b91c1c !important;                            
+  border: 1px solid rgba(239, 68, 68, 0.35) !important;  
+}
 
   /* ===== Modals (Add / Details) ===== */
   .modal-wrap{ position:fixed; inset:0; display:grid; place-items:center; background:rgba(0,0,0,.35); z-index:80; animation:fadeIn .15s ease; }
@@ -572,7 +577,14 @@ async function rejectCancellation(item) {
                   {item.profile_department || item.department}
                 </div>
               </div>
-              <span class="pill type">{getLeaveFullName(item.leave_type) || "Leave"}</span>
+              <span
+                  class={`pill type ${item.leave_type === "UNPAID" ? "unpaid-pill" : ""}`}
+                >
+                  {item.leave_type === "UNPAID"
+                    ? "Unpaid"
+                    : getLeaveFullName(item.leave_type) || "Leave"}
+                </span>
+
             </div>
 
             <!-- Dates -->
