@@ -4,7 +4,6 @@ import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import bcrypt from 'bcryptjs';
-import cron from "node-cron";  
 
 import pool from './src/db.js';
 import profileRoutes from './src/routes/profile.js';
@@ -225,11 +224,13 @@ app.get('/api/me', async (req, res) => {
         department,
         photourl,
         leave_entitlement_annual,
-        leave_entitlement_annual_original,
         leave_entitlement_medical,
+        leave_entitlement_annual_original,
+        leave_entitlement_medical_original,
         carry_forward_balance,
         carry_forward_original,
-        carry_forward_expiry
+        carry_forward_expiry,
+        remaining_leave
       FROM profiles
       WHERE staff_id = $1
       LIMIT 1`,
@@ -335,48 +336,6 @@ app.put('/api/employee/:staffId/password', async (req, res) => {
     return res.status(500).json({ error: 'Server error' });
   }
 });
-
-// ============================
-// CARRY FORWARD CRON JOB 
-// ============================
-
-// // cron.schedule("0 0 1 1 *", async () => {
-
-//   // ⚠️ TEST MODE — runs every minute
-// cron.schedule("* * * * *", async () => {
-//   console.log("🎉 Running carry-forward generator...");
-
-//   try {
-//     const currentYear = new Date().getFullYear();
-
-//     const employees = await pool.query(`
-//       SELECT staff_id, leave_entitlement_annual
-//       FROM profiles
-//     `);
-
-//     for (const emp of employees.rows) {
-//       const remaining = Number(emp.leave_entitlement_annual);
-//       const carry = remaining > 7 ? 7 : remaining;
-
-//       await pool.query(`
-//         UPDATE profiles
-//         SET 
-//           carry_forward_original = $1,
-//           carry_forward_balance = $1,
-//           carry_forward_expiry = $2
-//         WHERE staff_id = $3
-//       `, [
-//         carry,
-//         `${currentYear}-03-31`,
-//         emp.staff_id
-//       ]);
-//     }
-
-//     console.log("🎉 Carry forward generation completed");
-//   } catch (err) {
-//     console.error("❌ CF generator error:", err);
-//   }
-// });
 
 // ============================
 // START SERVER

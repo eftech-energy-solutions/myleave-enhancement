@@ -261,13 +261,19 @@ async function confirmCancellation() {
 
   // ---------------- PENDING → DELETE ----------------
   if (leaveToCancel.status === "Pending") {
+    console.log('🔍 DELETE DEBUG:', {
+      id,
+      leaveToCancel,
+      uuid: leaveToCancel.uuid
+    });
+
     await fetch(`/api/leave-requests/${id}`, {
       method: "DELETE",
       credentials: "include"
     });
 
     window.location.reload(); 
-    return;       // ✅ valid
+    return;
   }
 
   // ---------------- APPROVED → CANCELLATION PENDING ----------------

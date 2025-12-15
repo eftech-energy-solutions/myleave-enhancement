@@ -161,8 +161,8 @@ pending = pendingRequests;
           confirmationDate: formatDate(emp.confirmation_date),
           terminationDate: formatDate(emp.termination_date),
           gender: emp.gender,
-          annualLeave: emp.leave_entitlement_annual,
-          medicalLeave: emp.leave_entitlement_medical,
+          annualLeave: emp.leave_entitlement_annual_original,
+          medicalLeave: emp.leave_entitlement_medical_original,
           notes: emp.notes
         };
 
@@ -695,7 +695,7 @@ async function rejectCancellation(item) {
     method: "PATCH",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ status: "approved" })   // revert back
+    body: JSON.stringify({ status: "rejected" })  // ✔️ FIX
   });
 
   await loadPendingRequests();

@@ -1,6 +1,9 @@
 import express from "express";
 import pool from "../db.js";
 import multer from "multer";
+import cron from "node-cron";
+import { calculateWorkingDays } from "../utils/calculateWorkingDays.js";
+
 const leaveTypeFullName = {
   AL: "Annual / Emergency",
   MC: "Medical",
@@ -17,111 +20,78 @@ function getLeaveFullName(code) {
 }
 
 const router = express.Router();
-
-// simpan attachment (kalau ada)
 const upload = multer({ dest: "uploads/leave_attachments/" });
 
 /* ============================================================
-   🔄 AUTO RECALCULATE ANNUAL LEAVE BASED ON APPROVED REQUESTS
-   ============================================================ */
-async function recalcAnnualLeave(staffId) {
-  try {
-    const profile = await pool.query(
-      `SELECT 
-          leave_entitlement_annual_original,
-          carry_forward_balance
-       FROM profiles
-       WHERE staff_id = $1`,
-      [staffId]
-    );
-
-    if (!profile.rows.length) return;
-
-    const original = Number(profile.rows[0].leave_entitlement_annual_original || 0);
-    const carryForward = Number(profile.rows[0].carry_forward_balance || 0);
-    const totalEntitlement = original + carryForward;
-
-    // SUM only approved AL/EL
-    const takenQuery = await pool.query(
-      `SELECT COALESCE(SUM(total_days), 0) AS taken
-       FROM leave_requests
-       WHERE staff_id = $1
-       AND status = 'approved'
-       AND leave_type IN ('AL', 'EL')`,
-      [staffId]
-    );
-
-    const taken = Number(takenQuery.rows[0].taken || 0);
-    const newBalance = totalEntitlement - taken;
-
-    await pool.query(
-      `UPDATE profiles
-       SET leave_entitlement_annual = $1
-       WHERE staff_id = $2`,
-      [newBalance, staffId]
-    );
-
-    return newBalance;
-  } catch (err) {
-    console.error("❌ recalcAnnualLeave error:", err);
-  }
-}
-
-/* ============================================================
-   🔄 YEARLY RESET FUNCTION (RUN ONCE PER YEAR)
-   ============================================================ */
+    YEARLY RESET
+============================================================ */
 async function resetAnnualLeaveForNewYear() {
   try {
     const staffList = await pool.query(`
       SELECT staff_id, leave_entitlement_annual, leave_entitlement_annual_original
       FROM profiles
     `);
-
     const currentYear = new Date().getFullYear();
-    const expiryDate = `${currentYear}-03-31`;
+    const expiryDate = `${currentYear + 1}-03-31`;
 
     for (const s of staffList.rows) {
-      const staffId = s.staff_id;
-
-      // Unused balance last year (max 7)
       const carryForward = Math.min(Number(s.leave_entitlement_annual || 0), 7);
 
       await pool.query(
         `UPDATE profiles
-         SET 
-           carry_forward_balance = $1,
-           carry_forward_original = $1,
-           carry_forward_expiry = $2,
-           leave_entitlement_annual = leave_entitlement_annual_original
-         WHERE staff_id = $3`,
-        [carryForward, expiryDate, staffId]
+          SET 
+            carry_forward_balance = $1::numeric,
+            carry_forward_original = $1::numeric,
+            carry_forward_expiry = $2,
+            leave_entitlement_annual = leave_entitlement_annual_original,
+            remaining_leave = leave_entitlement_annual_original + $1::numeric
+          WHERE staff_id = $3`,
+        [carryForward, expiryDate, s.staff_id]
       );
     }
 
-    console.log("🎉 Yearly leave reset completed.");
     return true;
-  } catch (error) {
-    console.error("❌ Yearly reset error:", error);
+  } catch (err) {
+    console.error("resetAnnualLeaveForNewYear error:", err);
     return false;
   }
 }
 
+async function updateRemainingLeave(staffId) {
+  const r = await pool.query(
+    `SELECT leave_entitlement_annual, carry_forward_balance, carry_forward_expiry
+     FROM profiles WHERE staff_id = $1`,
+    [staffId]
+  );
+
+  let AL = Number(r.rows[0].leave_entitlement_annual || 0);
+  let CF = Number(r.rows[0].carry_forward_balance || 0);
+  let expiry = r.rows[0].carry_forward_expiry ? new Date(r.rows[0].carry_forward_expiry) : null;
+
+  const today = new Date();
+  if (expiry && today > expiry) CF = 0;
+
+  const remaining = AL + CF;
+
+  await pool.query(
+    `UPDATE profiles SET remaining_leave = $1 WHERE staff_id = $2`,
+    [remaining, staffId]
+  );
+}
+
 /* ============================================================
-   API: TRIGGER YEARLY RESET (ADMIN)
-   POST /api/leave-requests/reset-year
-   ============================================================ */
+    API — TRIGGER RESET
+============================================================ */
 router.post("/reset-year", async (req, res) => {
-  const success = await resetAnnualLeaveForNewYear();
-  if (success) {
-    res.json({ success: true, message: "Yearly leave reset completed." });
-  } else {
-    res.status(500).json({ success: false, message: "Yearly reset failed." });
-  }
+  const ok = await resetAnnualLeaveForNewYear();
+  return ok
+    ? res.json({ success: true })
+    : res.status(500).json({ success: false });
 });
 
 /* ============================================================
-   1) CREATE NEW LEAVE REQUEST
-   ============================================================ */
+    CREATE NEW LEAVE REQUEST
+============================================================ */
 router.post("/", upload.single("attachment"), async (req, res) => {
   try {
     const {
@@ -134,175 +104,131 @@ router.post("/", upload.single("attachment"), async (req, res) => {
       reason
     } = req.body;
 
-        const user = req.user;
-
-    if (!user || !user.staff_id) {
-      return res.status(401).json({ message: "User not attached to request" });
-    }
+    const user = req.user;
+    if (!user || !user.staff_id)
+      return res.status(401).json({ message: "Unauthorised" });
 
     const staffId = user.staff_id;
 
-// =======================================================
-// 🛑 SERVER-SIDE VALIDATION: Prevent submitting above limit
-// =======================================================
+      let serverDays;
+    if (duration === 'Half') {
+      serverDays = 0.5;
+    } else {
+      serverDays = await calculateWorkingDays(dateFrom, dateUntil);
+    }
+    
+    if (serverDays <= 0)
+      return res.status(400).json({ message: "Invalid date range or no working days" });
 
-// 1. Recalculate total days (authoritative calculation)
-const start = new Date(dateFrom);
-const end = new Date(dateUntil);
-const msDay = 1000 * 60 * 60 * 24;
+    // LOAD ENTITLEMENT + USED
+    let entitlement = 0;
+    let used = 0;
 
-const serverTotalDays = Math.floor((end - start) / msDay) + 1;
+    // ===== ANNUAL / EMERGENCY =====
+    if (type === "AL" || type === "EL") {
+      const p = await pool.query(
+        `SELECT leave_entitlement_annual, carry_forward_balance, carry_forward_expiry
+         FROM profiles WHERE staff_id=$1`,
+        [staffId]
+      );
 
-if (serverTotalDays <= 0) {
-  return res.status(400).json({ message: "Invalid date range" });
-}
+      const row = p.rows[0];
+      let AL = Number(row.leave_entitlement_annual || 0);
+      let CF = Number(row.carry_forward_balance || 0);
 
-// 2. LOAD ENTITLEMENTS + USED DAYS
-let entitlement = 0;
-let used = 0;
+      const expiry = row.carry_forward_expiry
+        ? new Date(row.carry_forward_expiry)
+        : null;
 
-// =======================================================
-// ANNUAL (AL/EL)
-// =======================================================
-if (type === "AL" || type === "EL") {
+      if (expiry && new Date() > expiry) CF = 0;
 
-  // 1. Get profile & carry-forward info
-  const profile = await pool.query(
-    `SELECT 
-        leave_entitlement_annual_original,
-        leave_entitlement_annual,
-        carry_forward_balance,
-        carry_forward_expiry
-     FROM profiles 
-     WHERE staff_id = $1`,
-    [user.staff_id]
-  );
+      entitlement = AL + CF;
 
-  const row = profile.rows[0];
+      const u = await pool.query(
+        `SELECT COALESCE(SUM(total_days),0) AS used
+         FROM leave_requests
+         WHERE staff_id=$1 AND leave_type IN ('AL','EL')
+           AND status IN ('approved','pending','cancellation_pending')`,
+        [staffId]
+      );
 
-  const original = Number(row.leave_entitlement_annual_original || 0);   // yearly entitlement (14)
-  let CF = Number(row.carry_forward_balance || 0);                       // carry forward (max 7)
-  let CF_expiry = row.carry_forward_expiry ? new Date(row.carry_forward_expiry) : null;
-
-  const today = new Date();
-
-  // 2. If carry forward already expired → CF = 0
-  if (CF_expiry && today > CF_expiry) {
-    CF = 0;
-  }
-
-  // 3. ENTITLEMENT = annual entitlement + (valid carry-forward only)
-  entitlement = original + CF;
-
-  // 4. USED DAYS = approved + pending + cancellation_pending
-  const u = await pool.query(
-    `SELECT COALESCE(SUM(total_days), 0) AS used
-       FROM leave_requests
-       WHERE staff_id = $1
-         AND leave_type IN ('AL', 'EL')
-         AND status IN ('approved','pending','cancellation_pending')`,
-    [user.staff_id]
-  );
-
-  used = Number(u.rows[0].used);
-}
-
-
-// =======================================================
-// MEDICAL (MC)
-// =======================================================
-else if (type === "MC") {
-  const m = await pool.query(
-    `SELECT leave_entitlement_medical FROM profiles WHERE staff_id = $1`,
-    [user.staff_id]
-  );
-
-  entitlement = Number(m.rows[0].leave_entitlement_medical || 0);
-
-  const u = await pool.query(
-    `SELECT COALESCE(SUM(total_days), 0) AS used
-       FROM leave_requests
-       WHERE staff_id = $1
-         AND leave_type = 'MC'
-         AND status IN ('approved','pending','cancellation_pending')`,
-    [user.staff_id]
-  );
-
-  used = Number(u.rows[0].used);
-}
-
-// =======================================================
-// HOSPITALIZATION (HOSP)
-// =======================================================
-else if (type === "HOSP") {
-  const h = await pool.query(
-    `SELECT balance FROM leave_entitlements
-       WHERE staff_id = $1 AND leave_type = 'HOSP'`,
-    [user.staff_id]
-  );
-
-  entitlement = Number(h.rows[0]?.balance || 0);
-
-  const u = await pool.query(
-    `SELECT COALESCE(SUM(total_days), 0) AS used
-       FROM leave_requests
-       WHERE staff_id = $1
-         AND leave_type = 'HOSP'
-         AND status IN ('approved','pending','cancellation_pending')`,
-    [user.staff_id]
-  );
-
-  used = Number(u.rows[0].used);
-}
-
-// =======================================================
-// SPECIAL LEAVES (PAT, COMP_A, COMP_B, MAR)
-// =======================================================
-else {
-  const s = await pool.query(
-    `SELECT balance FROM leave_entitlements
-       WHERE staff_id = $1 AND leave_type = $2`,
-    [user.staff_id, type]
-  );
-
-  entitlement = Number(s.rows[0]?.balance || 0);
-
-  const u = await pool.query(
-    `SELECT COALESCE(SUM(total_days), 0) AS used
-       FROM leave_requests
-       WHERE staff_id = $1
-         AND leave_type = $2
-         AND status IN ('approved','pending','cancellation_pending')`,
-    [user.staff_id, type]
-  );
-
-  used = Number(u.rows[0].used);
-}
-
-// =======================================================
-// 🛑 FINAL CHECK
-// =======================================================
-if (used + serverTotalDays > entitlement) {
-  return res.status(400).json({
-    message: `${getLeaveFullName(type)} leave application limit exceeded.`,
-    entitlement,
-    used,
-    requested: serverTotalDays,
-    remaining: entitlement - used
-  });
-}
-
-    const staffName = user.full_name;
-    const department = user.department || null;
-    const requesterRole = user.role || "Staff";
-    const requesterPosition = user.position;
-    const attachmentPath = req.file ? req.file.path : null;
-
-    if (!type || !dateFrom || !dateUntil || !totalDays || !reason) {
-      return res.status(400).json({ message: "Missing required fields" });
+      used = Number(u.rows[0].used);
     }
 
-    const sql = `
+    // ===== MEDICAL =====
+    else if (type === "MC") {
+      const m = await pool.query(
+        `SELECT leave_entitlement_medical FROM profiles WHERE staff_id=$1`,
+        [staffId]
+      );
+
+      entitlement = Number(m.rows[0].leave_entitlement_medical || 0);
+
+      const u = await pool.query(
+        `SELECT COALESCE(SUM(total_days),0) AS used
+         FROM leave_requests
+         WHERE staff_id=$1 AND leave_type='MC'
+           AND status IN ('approved','pending','cancellation_pending')`,
+        [staffId]
+      );
+      used = Number(u.rows[0].used);
+    }
+
+    // ===== HOSPITALIZATION =====
+    else if (type === "HOSP") {
+      const h = await pool.query(
+        `SELECT balance FROM leave_entitlements
+         WHERE staff_id=$1 AND leave_type='HOSP'`,
+        [staffId]
+      );
+
+      entitlement = Number(h.rows[0]?.balance || 0);
+
+      const u = await pool.query(
+        `SELECT COALESCE(SUM(total_days),0) AS used
+         FROM leave_requests
+         WHERE staff_id=$1 AND leave_type='HOSP'
+           AND status IN ('approved','pending','cancellation_pending')`,
+        [staffId]
+      );
+      used = Number(u.rows[0].used);
+    }
+
+    // ===== SPECIAL LEAVES =====
+    else {
+      const s = await pool.query(
+        `SELECT balance FROM leave_entitlements
+         WHERE staff_id=$1 AND leave_type=$2`,
+        [staffId, type]
+      );
+
+      entitlement = Number(s.rows[0]?.balance || 0);
+
+      const u = await pool.query(
+        `SELECT COALESCE(SUM(total_days),0) AS used
+         FROM leave_requests
+         WHERE staff_id=$1 AND leave_type=$2
+           AND status IN ('approved','pending','cancellation_pending')`,
+        [staffId, type]
+      );
+      used = Number(u.rows[0].used);
+    }
+
+    // FINAL CHECK
+    if (used + serverDays > entitlement) {
+      return res.status(400).json({
+        message: `${getLeaveFullName(type)} leave application limit exceeded.`,
+        entitlement,
+        used,
+        requested: serverDays,
+        remaining: entitlement - used
+      });
+    }
+
+    const attachmentPath = req.file ? req.file.path : null;
+
+    const result = await pool.query(
+      `
       INSERT INTO leave_requests (
         staff_id, staff_name, department,
         requester_role, requester_position,
@@ -315,28 +241,35 @@ if (used + serverTotalDays > entitlement) {
         $8,$9,$10,$11,$12,$13,
         'pending', NOW()
       )
-      RETURNING *;
-    `;
+      RETURNING *
+    `,
+      [
+        staffId,
+        user.full_name,
+        user.department,
+        user.role,
+        user.position,
+        type,
+        requestType || "new",
+        duration,
+        dateFrom,
+        dateUntil,
+        serverDays,
+        reason,
+        attachmentPath
+      ]
+    );
 
-    const params = [
-      staffId, staffName, department,
-      requesterRole, requesterPosition,
-      type, requestType || "new",
-      duration, dateFrom, dateUntil,
-      totalDays, reason, attachmentPath
-    ];
-
-    const result = await pool.query(sql, params);
-    res.status(201).json(result.rows[0]);
+    return res.status(201).json(result.rows[0]);
   } catch (err) {
-    console.error("POST /api/leave-requests error:", err);
-    res.status(500).json({ message: "Failed to create leave request" });
+    console.error("POST /leave-requests error:", err);
+    return res.status(500).json({ message: "Failed to create leave request" });
   }
 });
 
 /* ============================================================
-   2) GET LEAVE REQUESTS
-   ============================================================ */
+    GET ALL LEAVE REQUESTS
+============================================================ */
 router.get("/", async (req, res) => {
   try {
     const { status } = req.query;
@@ -346,7 +279,7 @@ router.get("/", async (req, res) => {
         lr.*, p.email,
         p.department AS profile_department,
         p.position AS profile_position,
-        p.employment_date, lr.department AS staff_department,
+        p.employment_date,
         p.confirmation_date, p.termination_date,
         p.gender, p.full_name AS profile_name,
         p.photourl AS photo_url,
@@ -354,641 +287,585 @@ router.get("/", async (req, res) => {
         p.leave_entitlement_medical,
         p.notes
       FROM leave_requests lr
-      LEFT JOIN profiles p
-        ON p.staff_id = lr.staff_id
+      LEFT JOIN profiles p ON p.staff_id = lr.staff_id
       ${status ? "WHERE lr.status = $1" : ""}
-      ORDER BY lr.created_at DESC;
+      ORDER BY lr.created_at DESC
     `;
 
-    const params = status ? [status] : [];
-    const result = await pool.query(sql, params);
-
-    res.json(result.rows);
+    const result = await pool.query(sql, status ? [status] : []);
+    return res.json(result.rows);
   } catch (err) {
-    console.error("GET /api/leave-requests error:", err);
-    res.status(500).json({ message: "Failed to load leave requests" });
+    console.error("GET /leave-requests error:", err);
+    return res.status(500).json({ message: "Failed to load requests" });
   }
 });
+
 /* ============================================================
-   4) EDIT LEAVE DETAILS
-   PATCH /api/leave-requests/:id/edit
-   ============================================================ */
+    EDIT LEAVE REQUEST
+============================================================ */
 router.patch("/:id/edit", async (req, res) => {
   try {
     const leaveId = req.params.id;
+    const { leave_type, duration, date_from, date_until, total_days, reason } =
+      req.body;
 
-    const {
-      leave_type,
-      duration,
-      date_from,
-      date_until,
-      total_days,
-      reason
-    } = req.body;
-
-    // Load existing leave to get staff_id
-    const existing = await pool.query(
-      `SELECT staff_id FROM leave_requests WHERE leave_id = $1`,
+    const find = await pool.query(
+      `SELECT * FROM leave_requests WHERE leave_id=$1`,
       [leaveId]
     );
 
-    if (!existing.rows.length) {
-      return res.status(404).json({ message: "Leave request not found" });
+    if (!find.rows.length)
+      return res.status(404).json({ message: "Leave not found" });
+
+    const staffId = find.rows[0].staff_id;
+
+  let serverDays;
+    if (duration === 'Half') {
+      serverDays = 0.5;
+    } else {
+      serverDays = await calculateWorkingDays(date_from, date_until);
     }
-
-    const staffId = existing.rows[0].staff_id;
-
-    // ======================================================
-    // 🛑 SERVER VALIDATION (same as POST)
-    // ======================================================
-    const start = new Date(date_from);
-    const end = new Date(date_until);
-    const msDay = 1000 * 60 * 60 * 24;
-
-    const serverTotalDays =
-      Math.floor((end - start) / msDay) + 1;
-
-    if (serverTotalDays <= 0) {
-      return res.status(400).json({ message: "Invalid date range" });
-    }
+    
+    if (serverDays <= 0)
+      return res.status(400).json({ message: "Invalid date range or no working days" });
 
     let entitlement = 0;
     let used = 0;
 
-    // ANNUAL / EMERGENCY
+    // ====== ANNUAL / EMERGENCY ======
     if (leave_type === "AL" || leave_type === "EL") {
-
-    const p = await pool.query(
-      `SELECT 
-          leave_entitlement_annual_original,
-          carry_forward_balance,
-          carry_forward_expiry
-      FROM profiles 
-      WHERE staff_id = $1`,
-      [staffId]
-    );
-
-    const row = p.rows[0];
-
-    // annual entitlement
-    const original = Number(row.leave_entitlement_annual_original || 0);
-
-    // carry forward balance (actual)
-    let CF = Number(row.carry_forward_balance || 0);
-    let CF_expiry = row.carry_forward_expiry ? new Date(row.carry_forward_expiry) : null;
-
-    // expired CF → ignore
-    const today = new Date();
-    if (CF_expiry && today > CF_expiry) {
-      CF = 0;
-    }
-
-    // final entitlement
-    entitlement = original + CF;
-
-    // USED days except current edited leave
-    const u = await pool.query(
-      `SELECT COALESCE(SUM(total_days),0) AS used
-        FROM leave_requests
-        WHERE staff_id=$1
-          AND leave_type IN ('AL','EL')
-          AND status IN ('approved','pending','cancellation_pending')
-          AND leave_id != $2`,
-      [staffId, leaveId]
-    );
-
-    used = Number(u.rows[0].used);
-    }
-
-    // MEDICAL
-    else if (leave_type === "MC") {
-      const m = await pool.query(
-        `SELECT leave_entitlement_medical FROM profiles WHERE staff_id = $1`,
+      const p = await pool.query(
+        `SELECT leave_entitlement_annual, carry_forward_balance, carry_forward_expiry
+         FROM profiles WHERE staff_id=$1`,
         [staffId]
       );
-      entitlement = Number(m.rows[0].leave_entitlement_medical || 0);
+
+      let AL = Number(p.rows[0].leave_entitlement_annual);
+      let CF = Number(p.rows[0].carry_forward_balance);
+
+      const expiry = p.rows[0].carry_forward_expiry
+        ? new Date(p.rows[0].carry_forward_expiry)
+        : null;
+
+      if (expiry && new Date() > expiry) CF = 0;
+
+      entitlement = AL + CF;
 
       const u = await pool.query(
         `SELECT COALESCE(SUM(total_days),0) AS used
-          FROM leave_requests
-          WHERE staff_id=$1 AND leave_type='MC'
-            AND status IN ('approved','pending','cancellation_pending')
-            AND leave_id != $2`,
+         FROM leave_requests
+         WHERE staff_id=$1
+           AND leave_type IN ('AL','EL')
+           AND status IN ('approved','pending','cancellation_pending')
+           AND leave_id != $2`,
         [staffId, leaveId]
       );
+
       used = Number(u.rows[0].used);
     }
 
-    // HOSPITALIZATION
+    // ===== MEDICAL =====
+    else if (leave_type === "MC") {
+      const m = await pool.query(
+        `SELECT leave_entitlement_medical FROM profiles WHERE staff_id=$1`,
+        [staffId]
+      );
+      entitlement = Number(m.rows[0].leave_entitlement_medical);
+
+      const u = await pool.query(
+        `SELECT COALESCE(SUM(total_days),0) AS used
+         FROM leave_requests
+         WHERE staff_id=$1 AND leave_type='MC'
+           AND status IN ('approved','pending','cancellation_pending')
+           AND leave_id != $2`,
+        [staffId, leaveId]
+      );
+
+      used = Number(u.rows[0].used);
+    }
+
+    // ===== HOSPITALIZATION =====
     else if (leave_type === "HOSP") {
       const h = await pool.query(
         `SELECT balance FROM leave_entitlements
-          WHERE staff_id=$1 AND leave_type='HOSP'`,
+         WHERE staff_id=$1 AND leave_type='HOSP'`,
         [staffId]
       );
-
       entitlement = Number(h.rows[0]?.balance || 0);
 
       const u = await pool.query(
         `SELECT COALESCE(SUM(total_days),0) AS used
-          FROM leave_requests
-          WHERE staff_id=$1 AND leave_type='HOSP'
-            AND status IN ('approved','pending','cancellation_pending')
-            AND leave_id != $2`,
+         FROM leave_requests
+         WHERE staff_id=$1 AND leave_type='HOSP'
+           AND status IN ('approved','pending','cancellation_pending')
+           AND leave_id != $2`,
         [staffId, leaveId]
       );
 
       used = Number(u.rows[0].used);
     }
 
-    // SPECIAL LEAVES
+    // ===== SPECIAL LEAVES =====
     else {
       const s = await pool.query(
         `SELECT balance FROM leave_entitlements
-          WHERE staff_id=$1 AND leave_type=$2`,
+         WHERE staff_id=$1 AND leave_type=$2`,
         [staffId, leave_type]
       );
-
       entitlement = Number(s.rows[0]?.balance || 0);
 
       const u = await pool.query(
         `SELECT COALESCE(SUM(total_days),0) AS used
-          FROM leave_requests 
-          WHERE staff_id=$1 AND leave_type=$2
-            AND status IN ('approved','pending','cancellation_pending')
-            AND leave_id != $3`,
+         FROM leave_requests
+         WHERE staff_id=$1 AND leave_type=$2
+           AND status IN ('approved','pending','cancellation_pending')
+           AND leave_id != $3`,
         [staffId, leave_type, leaveId]
       );
 
       used = Number(u.rows[0].used);
     }
 
-    // FINAL CHECK
-    if (used + serverTotalDays > entitlement) {
+    if (used + serverDays > entitlement) {
       return res.status(400).json({
-        message: `Cannot update. ${leave_type} limit exceeded.
-        Entitlement: ${entitlement}, Used (others): ${used}, Requested: ${serverTotalDays}`
+        message: `Cannot update. ${leave_type} limit exceeded.`,
+        entitlement,
+        used,
+        requested: serverDays
       });
     }
 
-    // ======================================================
-    // UPDATE DATA (allowed)
-    // ======================================================
-    const sql = `
+    const updated = await pool.query(
+      `
       UPDATE leave_requests
-      SET
-        leave_type = $1,
-        duration = $2,
-        date_from = $3,
-        date_until = $4,
-        total_days = $5,
-        reason = $6
-      WHERE leave_id = $7
-      RETURNING *;
-    `;
+      SET leave_type=$1, duration=$2, date_from=$3,
+          date_until=$4, total_days=$5, reason=$6
+      WHERE leave_id=$7
+      RETURNING *
+    `,
+      [leave_type, duration, date_from, date_until, serverDays, reason, leaveId]
+    );
 
-    const params = [
-      leave_type,
-      duration,
-      date_from,
-      date_until,
-      total_days,
-      reason,
-      leaveId
-    ];
-
-    const result = await pool.query(sql, params);
-
-    res.json(result.rows[0]);
-
+    return res.json(updated.rows[0]);
   } catch (err) {
-    console.error("PATCH /api/leave-requests/:id/edit error:", err);
-    res.status(500).json({ message: "Failed to update leave details" });
+    console.error("PATCH /:id/edit error:", err);
+    return res.status(500).json({ message: "Update failed" });
   }
 });
 
-
 /* ============================================================
-   3) UPDATE STATUS (APPROVE / REJECT / CANCELLATION)
-   PATCH /api/leave-requests/:id
-   ============================================================ */
+    APPROVE / REJECT / CANCEL LOGIC
+============================================================ */
 router.patch("/:id", async (req, res) => {
+  console.log("🔥🔥 ROUTE TRIGGERED: PATCH /api/leave-requests/" + req.params.id);
+
   try {
     const { status } = req.body;
     const leaveId = req.params.id;
 
-    // ================= EMPLOYEE REQUESTS CANCELLATION =================
-    // STOP FLOW HERE — employee cancellation DOES NOT modify balance
+    // EMPLOYEE REQUESTS CANCEL
     if (status === "cancellation_pending") {
-      await pool.query(`
-        UPDATE leave_requests
-           SET request_type = 'cancellation_request',
-               status = 'cancellation_pending'
-         WHERE leave_id = $1
-      `, [leaveId]);
+      await pool.query(
+        `UPDATE leave_requests
+         SET request_type='cancellation_request', status='cancellation_pending'
+         WHERE leave_id=$1`,
+        [leaveId]
+      );
 
       return res.json({
         success: true,
-        message: "Cancellation request submitted (awaiting manager approval)"
+        message: "Cancellation request submitted"
       });
     }
 
-    // ================= VALIDATE MANAGER ACTION =================
-    if (!["approved", "rejected", "cancelled"].includes(status)) {
+    // VALID STATUS
+    if (!["approved", "rejected", "cancelled"].includes(status))
       return res.status(400).json({ message: "Invalid status" });
-    }
 
-    // =============== LOAD THE LEAVE REQUEST ===============
-    const leaveRes = await pool.query(
-      `SELECT * FROM leave_requests WHERE leave_id = $1`,
+    const find = await pool.query(
+      `SELECT * FROM leave_requests WHERE leave_id=$1`,
       [leaveId]
     );
 
-    if (!leaveRes.rows.length) {
-      return res.status(404).json({ message: "Leave request not found" });
-    }
+    if (!find.rows.length)
+      return res.status(404).json({ message: "Leave not found" });
 
-    const leave = leaveRes.rows[0];
+    const leave = find.rows[0];
     const staffId = leave.staff_id;
-    const leaveType = leave.leave_type;
+    const leaveType = String(leave.leave_type || "").trim().toUpperCase();
     const days = Number(leave.total_days);
+    const leaveDate = new Date(leave.date_from);
 
-    // =============== APPROVE LOGIC ===============
-    if (status === "approved") {
-
-      // A — Annual / Emergency
-      if (leaveType === "AL" || leaveType === "EL") {
-        const p = await pool.query(
-          `SELECT leave_entitlement_annual, carry_forward_balance, carry_forward_expiry
-             FROM profiles WHERE staff_id = $1`,
-          [staffId]
-        );
-
-        let {
-          leave_entitlement_annual,
-          carry_forward_balance,
-          carry_forward_expiry
-        } = p.rows[0];
-
-        const leaveDate = new Date(leave.date_from);
-        carry_forward_expiry = carry_forward_expiry ? new Date(carry_forward_expiry) : null;
-
-        // Carry-forward expired → ignore
-        if (carry_forward_expiry && leaveDate > carry_forward_expiry) {
-          carry_forward_balance = 0;
-        }
-
-        let deductCF = 0;
-        let deductAL = 0;
-
-        if (carry_forward_balance > 0 && leaveDate <= carry_forward_expiry) {
-          if (carry_forward_balance >= days) deductCF = days;
-          else {
-            deductCF = carry_forward_balance;
-            deductAL = days - carry_forward_balance;
-          }
-        } else {
-          deductAL = days;
-        }
-
-        if (deductAL > leave_entitlement_annual) {
-          return res.status(400).json({ message: "Insufficient Annual Leave balance" });
-        }
-
-        await pool.query(
-          `UPDATE profiles
-             SET carry_forward_balance = carry_forward_balance - $1,
-                 leave_entitlement_annual = leave_entitlement_annual - $2
-           WHERE staff_id = $3`,
-          [deductCF, deductAL, staffId]
-        );
-      }
-
-      // B — Medical Leave
-      else if (leaveType === "MC") {
-        const m = await pool.query(
-          `SELECT leave_entitlement_medical FROM profiles WHERE staff_id = $1`,
-          [staffId]
-        );
-
-        if (m.rows[0].leave_entitlement_medical < days) {
-          return res.status(400).json({ message: "Insufficient Medical Leave balance" });
-        }
-
-        await pool.query(
-          `UPDATE profiles
-             SET leave_entitlement_medical = leave_entitlement_medical - $1
-           WHERE staff_id = $2`,
-          [days, staffId]
-        );
-      }
-
-      // C — Hospitalization Leave
-        else if (leaveType === "HOSP") {
-
-          const h = await pool.query(
-            `SELECT balance FROM leave_entitlements
-              WHERE staff_id = $1 AND leave_type = 'HOSP'`,
-            [staffId]
-          );
-
-          if (!h.rows.length) {
-            return res.status(404).json({ message: "Hospitalization entitlement not found" });
-          }
-
-          if (h.rows[0].balance < days) {
-            return res.status(400).json({ message: "Insufficient Hospitalization Leave balance" });
-          }
-
-          await pool.query(
-            `UPDATE leave_entitlements
-              SET balance = balance - $1
-            WHERE staff_id = $2 AND leave_type = 'HOSP'`,
-            [days, staffId]
-          );
-        }
-
-
-
-      // D — Special Leave
-      else {
-        const e = await pool.query(
-          `SELECT balance FROM leave_entitlements
-             WHERE staff_id = $1 AND leave_type = $2`,
-          [staffId, leaveType]
-        );
-
-        if (!e.rows.length) {
-          return res.status(404).json({ message: "Entitlement not set for this leave type" });
-        }
-
-        if (e.rows[0].balance < days) {
-          return res.status(400).json({ message: "Insufficient leave balance" });
-        }
-
-        await pool.query(
-          `UPDATE leave_entitlements
-             SET balance = balance - $1
-           WHERE staff_id = $2 AND leave_type = $3`,
-          [days, staffId, leaveType]
-        );
-      }
-
-    } // END APPROVE
-
-
-    // =============== CANCELLATION APPROVED (ADD BACK) ===============
+    /* ============================================================
+        CANCELLATION APPROVED — RETURN LEAVE FIRST!
+    ============================================================ */
     if (status === "cancelled") {
 
-  // A — ANNUAL / EMERGENCY (AL, EL)
-  if (leaveType === "AL" || leaveType === "EL") {
-    await pool.query(
-      `UPDATE profiles
-         SET leave_entitlement_annual = leave_entitlement_annual + $1
-       WHERE staff_id = $2`,
-      [days, staffId]
-    );
-  }
+      if (leaveType === "AL" || leaveType === "EL") {
 
-  // B — MEDICAL
-  else if (leaveType === "MC") {
-    await pool.query(
-      `UPDATE profiles
-         SET leave_entitlement_medical = leave_entitlement_medical + $1
-       WHERE staff_id = $2`,
-      [days, staffId]
-    );
-  }
+  const { deduct_cf, deduct_al } = leave;
 
-  // 🔥 C — HOSPITALIZATION (THIS WAS MISSING)
-  else if (leaveType === "HOSP") {
-    await pool.query(
-      `UPDATE leave_entitlements
-        SET balance = balance + $1
-      WHERE staff_id = $2 AND leave_type = 'HOSP'`,
-      [days, staffId]
-    );
-  }
-
-
-  // D — OTHER SPECIAL LEAVES
-  else {
-    await pool.query(
-      `UPDATE leave_entitlements
-         SET balance = balance + $1
-       WHERE staff_id = $2 AND leave_type = $3`,
-      [days, staffId, leaveType]
-    );
-  }
+  await pool.query(
+    `UPDATE profiles
+     SET carry_forward_balance = carry_forward_balance + $1,
+         leave_entitlement_annual = leave_entitlement_annual + $2
+     WHERE staff_id=$3`,
+    [deduct_cf, deduct_al, staffId]
+  );
 }
+      // UPDATE REMAINING
+      await updateRemainingLeave(staffId);
 
-    // =============== UPDATE STATUS ===============
+      // SET STATUS CANCELLED
+      const updated = await pool.query(
+        `UPDATE leave_requests SET status='cancelled' WHERE leave_id=$1 RETURNING *`,
+        [leaveId]
+      );
+
+      return res.json(updated.rows[0]);
+    }
+
+/* ============================================================
+    APPROVE (AL / EL) — DEDUCT LEAVE
+============================================================ */
+if (status === "approved" && (leaveType === "AL" || leaveType === "EL")) {
+
+  const p = await pool.query(
+    `SELECT leave_entitlement_annual,
+            carry_forward_balance,
+            carry_forward_expiry
+     FROM profiles
+     WHERE staff_id = $1`,
+    [staffId]
+  );
+
+  let AL = Number(p.rows[0].leave_entitlement_annual);
+  let CF = Number(p.rows[0].carry_forward_balance);
+  let expiry = p.rows[0].carry_forward_expiry
+    ? new Date(p.rows[0].carry_forward_expiry)
+    : null;
+
+  console.log('🔍 BEFORE APPROVAL:', { AL, CF, expiry, days, leaveDate });
+
+  // 🔥 FIX: Check if CF has already expired at TODAY'S date
+  const today = new Date();
+  if (expiry && today > expiry) {
+    CF = 0;
+    console.log('⚠️ CF already expired, setting CF to 0');
+  }
+
+  let deductCF = 0;
+  let deductAL = 0;
+
+  // Only use CF if it's still valid AND leave starts before expiry
+  if (CF > 0 && expiry && leaveDate <= expiry) {
+    // 🔥 FIX: Check if leave spans across expiry date
+    const leaveEnd = new Date(leave.date_until);
+    
+    if (leaveEnd > expiry) {
+      // Leave crosses expiry - split calculation
+      const msDay = 1000 * 60 * 60 * 24;
+      const daysBeforeExpiry = Math.floor((expiry - leaveDate) / msDay) + 1;
+      const daysAfterExpiry = days - daysBeforeExpiry;
+      
+      console.log(`📅 Leave crosses expiry: ${daysBeforeExpiry} days before, ${daysAfterExpiry} days after`);
+      
+      // Use CF for days before expiry only
+      if (CF >= daysBeforeExpiry) {
+        deductCF = daysBeforeExpiry;
+        deductAL = daysAfterExpiry;
+      } else {
+        deductCF = CF;
+        deductAL = days - CF;
+      }
+    } else {
+      // Entire leave is before expiry - use CF first as usual
+      if (CF >= days) {
+        deductCF = days;
+      } else {
+        deductCF = CF;
+        deductAL = days - CF;
+      }
+    }
+  } else {
+    // CF expired or leave starts after expiry - use AL only
+    deductAL = days;
+  }
+
+  // Validate sufficient balance
+  if (deductAL > AL) {
+    return res.status(400).json({
+      message: "Insufficient Annual Leave balance.",
+      required: deductAL,
+      available: AL
+    });
+  }
+
+  console.log('💰 Calculated Deduction:', { deductCF, deductAL, totalDays: days });
+  console.log('📊 Expected New Balance:', { newCF: CF - deductCF, newAL: AL - deductAL });
+
+  // Update profile
+  await pool.query(
+    `UPDATE profiles
+     SET carry_forward_balance = carry_forward_balance - $1,
+         leave_entitlement_annual = leave_entitlement_annual - $2
+     WHERE staff_id = $3`,
+    [deductCF, deductAL, staffId]
+  );
+
+  console.log('✅ Profile updated with:', { deductCF, deductAL, staffId });
+
+  // 🔥 IMPORTANT: Save deductions for cancellation restoration
+  await pool.query(
+    `UPDATE leave_requests
+     SET deduct_cf=$1, deduct_al=$2
+     WHERE leave_id=$3`,
+    [deductCF, deductAL, leaveId]
+  );
+
+  console.log('✅ Leave request updated with deductions');
+
+  await updateRemainingLeave(staffId);
+  
+  console.log('✅ Remaining leave updated');
+}
+    /* ============================================================
+        OTHER TYPES (MC, HOSP, SPECIAL)
+    ============================================================ */
+    if (status === "approved" && leaveType === "MC") {
+
+      const m = await pool.query(
+        `SELECT leave_entitlement_medical FROM profiles WHERE staff_id=$1`,
+        [staffId]
+      );
+
+      if (m.rows[0].leave_entitlement_medical < days)
+        return res.status(400).json({ message: "Insufficient MC" });
+
+      await pool.query(
+        `UPDATE profiles
+         SET leave_entitlement_medical = leave_entitlement_medical - $1
+         WHERE staff_id=$2`,
+        [days, staffId]
+      );
+    }
+
+    if (status === "approved" && leaveType === "HOSP") {
+
+      const h = await pool.query(
+        `SELECT balance FROM leave_entitlements
+         WHERE staff_id=$1 AND leave_type='HOSP'`,
+        [staffId]
+      );
+
+      if (!h.rows.length || h.rows[0].balance < days)
+        return res.status(400).json({ message: "Insufficient HOSP" });
+
+      await pool.query(
+        `UPDATE leave_entitlements
+         SET balance = balance - $1
+         WHERE staff_id=$2 AND leave_type='HOSP'`,
+        [days, staffId]
+      );
+    }
+
+    // FINAL: UPDATE STATUS
     const updated = await pool.query(
       `UPDATE leave_requests
-         SET status = $1
-       WHERE leave_id = $2
-       RETURNING *;`,
+       SET status=$1
+       WHERE leave_id=$2
+       RETURNING *`,
       [status, leaveId]
     );
 
-   // ❌ DO NOT recalc for cancellation_pending (employee request)
-  if (status !== "cancellation_pending") {
-    await recalcAnnualLeave(staffId);
-  }
-
-
-    res.json(updated.rows[0]);
+    return res.json(updated.rows[0]);
 
   } catch (err) {
-    console.error("PATCH /api/leave-requests error:", err);
-    res.status(500).json({ message: "Failed to update leave request" });
+    console.error("PATCH /:id error:", err);
+    return res.status(500).json({ message: "Failed to update leave request" });
   }
 });
 
+
 /* ============================================================
-   5) DELETE ALL LEAVE REQUESTS FOR A STAFF
-   DELETE /api/leave-requests/by-staff/:staffId
-   ============================================================ */
+    DELETE ALL EMPLOYEE LEAVES
+============================================================ */
 router.delete("/by-staff/:staffId", async (req, res) => {
   try {
-    const staffId = req.params.staffId;
+    await pool.query(`DELETE FROM leave_requests WHERE staff_id=$1`, [
+      req.params.staffId
+    ]);
 
-    await pool.query(
-      "DELETE FROM leave_requests WHERE staff_id = $1",
-      [staffId]
-    );
-
-    // Recalculate leave after mass delete
-    await recalcAnnualLeave(staffId);
-
-    res.json({ success: true });
+    return res.json({ success: true });
   } catch (err) {
     console.error("DELETE by-staff error:", err);
-    res.status(500).json({ message: "Failed to delete staff leaves" });
+    return res.status(500).json({ message: "Failed" });
   }
 });
 
 /* ============================================================
-   6) DELETE ONE LEAVE REQUEST
-   DELETE /api/leave-requests/:id
-   ============================================================ */
+    DELETE ONE LEAVE REQUEST
+============================================================ */
 router.delete("/:id", async (req, res) => {
   try {
-    const leaveId = req.params.id;
-
     const find = await pool.query(
-      "SELECT staff_id FROM leave_requests WHERE leave_id = $1",
-      [leaveId]
+      `SELECT * FROM leave_requests WHERE leave_id=$1`,
+      [req.params.id]
     );
 
-    if (!find.rows.length) {
-      return res.status(404).json({ message: "Leave request not found" });
+    if (!find.rows.length)
+      return res.status(404).json({ message: "Not found" });
+
+    const leave = find.rows[0];
+    const staffId = leave.staff_id;
+    const leaveType = String(leave.leave_type || "").trim().toUpperCase();
+    const days = Number(leave.total_days);
+
+    // 🔥 NEW: Restore balance if leave was approved
+    if (leave.status === "approved") {
+      if (leaveType === "AL" || leaveType === "EL") {
+        const { deduct_cf, deduct_al } = leave;
+        
+        await pool.query(
+          `UPDATE profiles
+           SET carry_forward_balance = carry_forward_balance + $1,
+               leave_entitlement_annual = leave_entitlement_annual + $2
+           WHERE staff_id=$3`,
+          [deduct_cf || 0, deduct_al || 0, staffId]
+        );
+      } else if (leaveType === "MC") {
+        await pool.query(
+          `UPDATE profiles
+           SET leave_entitlement_medical = leave_entitlement_medical + $1
+           WHERE staff_id=$2`,
+          [days, staffId]
+        );
+      } else if (leaveType === "HOSP") {
+        await pool.query(
+          `UPDATE leave_entitlements
+           SET balance = balance + $1
+           WHERE staff_id=$2 AND leave_type='HOSP'`,
+          [days, staffId]
+        );
+      }
     }
 
-    const staffId = find.rows[0].staff_id;
+    // Delete the record
+    await pool.query(`DELETE FROM leave_requests WHERE leave_id=$1`, [req.params.id]);
 
-    const result = await pool.query(
-      "DELETE FROM leave_requests WHERE leave_id = $1 RETURNING *",
-      [leaveId]
-    );
+    // Update remaining leave
+    await updateRemainingLeave(staffId);
 
-    if (!result.rowCount)
-      return res.status(404).json({ message: "Leave request not found" });
-
-    // Auto recalc after delete
-    await recalcAnnualLeave(staffId);
-
-    res.json({ success: true });
-
+    return res.json({ success: true });
   } catch (err) {
     console.error("DELETE leave error:", err);
-    res.status(500).json({ message: "Failed to delete leave" });
+    return res.status(500).json({ message: "Failed" });
   }
 });
-
 /* ============================================================
-   7) FORCE RECALCULATE ANNUAL LEAVE BALANCE
-   POST /api/leave-requests/recalculate/:staffId
-   ============================================================ */
-router.post("/recalculate/:staffId", async (req, res) => {
-  try {
-    const staffId = req.params.staffId;
-
-    const newBalance = await recalcAnnualLeave(staffId);
-
-    res.json({
-      success: true,
-      message: "Annual leave recalculated successfully",
-      staffId: staffId,
-      newBalance: newBalance
-    });
-
-  } catch (err) {
-    console.error("RECALCULATE error:", err);
-    res.status(500).json({ message: "Failed to recalculate leave" });
-  }
-});
-
-/* ============================================================
-   8) LEAVE HISTORY
-   Admin = all
-   Manager = only department
-   GET /api/leave-history
-   ============================================================ */
+    HISTORY
+============================================================ */
 router.get("/history/all", async (req, res) => {
   try {
     const user = req.user;
-
-    if (!user) {
-      return res.status(401).json({ message: "Unauthorised" });
-    }
-
-    const role = user.role;
-    const dept = user.department;
+    if (!user) return res.status(401).json({ message: "Unauthorised" });
 
     let sql = `
-      SELECT
-        lr.leave_id,
-        lr.staff_id,
-        lr.staff_name,
-        lr.department,
-        lr.leave_type,
-        lr.status,
-        lr.total_days,
-        lr.date_from,
-        lr.date_until,
-        lr.created_at,
-        p.photourl,
-        p.position
+      SELECT lr.leave_id, lr.staff_id, lr.staff_name, lr.department,
+             lr.leave_type, lr.status, lr.total_days,
+             lr.date_from, lr.date_until, lr.created_at,
+             p.photourl, p.position
       FROM leave_requests lr
-      LEFT JOIN profiles p
-        ON p.staff_id = lr.staff_id
+      LEFT JOIN profiles p ON p.staff_id = lr.staff_id
     `;
 
     let params = [];
 
-    if (role === "Manager") {
-      sql += ` WHERE lr.department = $1 `;
-      params.push(dept);
+    if (user.role === "Manager") {
+      sql += ` WHERE lr.department=$1 `;
+      params.push(user.department);
     }
 
-    sql += ` ORDER BY lr.date_from DESC;`;
+    sql += ` ORDER BY lr.date_from DESC`;
 
     const result = await pool.query(sql, params);
 
-    res.json(result.rows);
+    return res.json(result.rows);
   } catch (err) {
-    console.error("GET /api/leave-history error:", err);
-    res.status(500).json({ message: "Failed to load leave history" });
+    console.error("GET history error:", err);
+    return res.status(500).json({ message: "Failed load history" });
   }
 });
+
 /* ============================================================
-   GET LEAVE REQUESTS FOR LOGGED-IN USER ONLY
-   GET /api/leave-requests/me
-   ============================================================ */
+    GET MY LEAVES
+============================================================ */
 router.get("/me", async (req, res) => {
   try {
     const user = req.user;
-    if (!user || !user.staff_id) {
-      return res.status(401).json({ message: "Unauthorised" });
-    }
+    if (!user) return res.status(401).json({ message: "Unauthorised" });
 
     const result = await pool.query(
-      `SELECT *
-       FROM leave_requests
-       WHERE staff_id = $1
+      `SELECT * FROM leave_requests
+       WHERE staff_id=$1
        ORDER BY date_from ASC`,
       [user.staff_id]
     );
 
-    res.json(result.rows);
+    return res.json(result.rows);
   } catch (err) {
-    console.error("GET /api/leave-requests/me error:", err);
-    res.status(500).json({ message: "Failed to load your leave data" });
+    console.error("GET /me error:", err);
+    return res.status(500).json({ message: "Failed load" });
   }
 });
 
+// TEMPORARY - Test cron (runs every minute)
+// cron.schedule('* * * * *', async () => {
+//   console.log('🧪 TEST CRON TRIGGERED');
+//   const success = await resetAnnualLeaveForNewYear();
+//   if (success) {
+//     console.log('✅ Test reset completed!');
+//   } else {
+//     console.error('❌ Test reset failed!');
+//   }
+// });
+// console.log('⏰ TEST: Cron running every minute');
 
-router.get("/me", async (req, res) => {
-  try {
-    const user = req.user;
-    if (!user || !user.staff_id) {
-      return res.status(401).json({ message: "Unauthorised" });
-    }
 
-    const result = await pool.query(
-      `SELECT *
-       FROM leave_requests
-       WHERE staff_id = $1
-       ORDER BY date_from ASC`,
-      [user.staff_id]
-    );
+// Calculate time 2 minutes from now
+// const now = new Date();
+// const testTime = new Date(now.getTime() + 2 * 60000);
+// const minute = testTime.getMinutes();
+// const hour = testTime.getHours();
 
-    res.json(result.rows);
-  } catch (err) {
-    console.error("GET /api/leave-requests/me error:", err);
-    res.status(500).json({ message: "Failed to load your leave data" });
-  }
+// console.log(`⏰ TEST: Cron will trigger at ${hour}:${minute} (in ~2 minutes)`);
+
+// // Test cron - triggers once at specific time
+// cron.schedule(`${minute} ${hour} * * *`, async () => {
+//   console.log('🎉 TEST TRIGGER - Simulating Jan 1 behavior');
+//   const success = await resetAnnualLeaveForNewYear();
+//   if (success) {
+//     console.log('✅ Test reset completed!');
+//   } else {
+//     console.error('❌ Test reset failed!');
+//   }
+// });
+
+
+/* ============================================================
+    AUTOMATIC YEARLY RESET - RUNS JANUARY 1 AT 00:00
+============================================================ */
+cron.schedule('0 0 1 1 *', async () => {
+  console.log('🎉 AUTO YEARLY RESET TRIGGERED - January 1, 00:00');
+  const success = await resetAnnualLeaveForNewYear();
+  if (success) {
+    console.log('✅ Yearly leave reset completed successfully!');
+  } else {
+    console.error('❌ Yearly leave reset failed!');
+  }
 });
+
+console.log('⏰ Cron job scheduled: Yearly reset on January 1 at midnight');
 
 export default router;
+

@@ -25,6 +25,9 @@
   let totalALUsed = 0;
   let totalMCUsed = 0;
   let totalHOSPUsed = 0;
+  let pendingAL = 0;
+  let pendingMC = 0;
+  let pendingHOSP = 0;
   const formatCF = (x) => Number(x || 0).toString().replace(".0", "");
 
   // ----- user/profile -----
@@ -71,19 +74,43 @@ $: donuts = user ? [
     title: "Annual Leave Summary",
     total: Number(user.leave_entitlement_annual_original ?? 14),
     spent: Number(approvedAL || 0),
-    carryForward: Number(user.carry_forward_original ?? 0)
+    pending: Number(pendingAL || 0),
+    
+    // ✅ FIX: Check if CF expired
+    carryForward: (() => {
+      const cf = Number(user.carry_forward_balance ?? 0);
+      const expiry = user.carry_forward_expiry ? new Date(user.carry_forward_expiry) : null;
+      const today = new Date();
+      
+      // If expired, show 0 instead of actual balance
+      return (expiry && today > expiry) ? 0 : cf;
+    })(),
+    
+    // ✅ FIX: Calculate remaining without expired CF
+    remaining: (() => {
+      const al = Number(user.leave_entitlement_annual ?? 14);
+      const cf = Number(user.carry_forward_balance ?? 0);
+      const expiry = user.carry_forward_expiry ? new Date(user.carry_forward_expiry) : null;
+      const today = new Date();
+      
+      const validCF = (expiry && today > expiry) ? 0 : cf;
+      
+      return al + validCF - Number(approvedAL || 0);
+    })()
   },
-
   {
     title: "Medical Leave Summary",
-    total: 14,
-    spent: approvedMC
+    total: Number(user.leave_entitlement_medical_original ?? user.leave_entitlement_medical ?? 14),
+    spent: Number(approvedMC || 0),
+    pending: Number(pendingMC || 0),  // ✅ ADD THIS
+    remaining: Number((user.leave_entitlement_medical_original ?? 14) - (approvedMC || 0) - (pendingMC || 0))
   },
-
   {
     title: "Hospitalization Leave Summary",
-    total: user.hosp_entitlement ?? 60,
-    spent: approvedHOSP
+    total: Number(user.hosp_entitlement ?? user.hosp_entitlement_original ?? 60),
+    spent: Number(approvedHOSP || 0),
+    pending: Number(pendingHOSP || 0),  // ✅ ADD THIS
+    remaining: Number((user.hosp_entitlement ?? user.hosp_entitlement_original ?? 60) - (approvedHOSP || 0) - (pendingHOSP || 0))
   }
 ] : [];
 
@@ -171,7 +198,30 @@ async function loadRecent() {
       .reduce((sum, l) => sum + Number(l.total_days || 0), 0);
 
     approvedAL = Number(approvedAL || 0);
+  // ✅ ADD PENDING CALCULATIONS HERE
+    let pendingAL = all
+      .filter(l =>
+        String(l.staff_id) === String(user.staff_id) &&
+        l.status?.toLowerCase() === "pending" &&
+        (l.leave_type === "AL" || l.leave_type === "EL")
+      )
+      .reduce((sum, l) => sum + Number(l.total_days || 0), 0);
 
+    let pendingMC = all
+      .filter(l =>
+        String(l.staff_id) === String(user.staff_id) &&
+        l.status?.toLowerCase() === "pending" &&
+        l.leave_type === "MC"
+      )
+      .reduce((sum, l) => sum + Number(l.total_days || 0), 0);
+
+    let pendingHOSP = all
+      .filter(l =>
+        String(l.staff_id) === String(user.staff_id) &&
+        l.status?.toLowerCase() === "pending" &&
+        l.leave_type === "HOSP"
+      )
+  .reduce((sum, l) => sum + Number(l.total_days || 0), 0);
     approvedMC = all
       .filter(l =>
         String(l.staff_id) === String(user.staff_id) &&
@@ -681,17 +731,17 @@ async function submitLeave(e) {
 
         {#if d.title.toLowerCase().includes('annual')}
           <div class="cf-top">
-        <span>Carry forward: {formatCF(d.carryForward)}/7</span>
+        <span>Carry forward: {formatCF(d.carryForward)}/{formatCF(user?.carry_forward_original ?? user?.carry_forward_balance_original ?? user?.carry_forward ?? 0)}</span>
 
         <div class="cf-tip-wrap">
           <button class="info-btn tiny">ⓘ</button>
           <span class="tooltip">
-            Carry-forward is capped at 7 days and expires before 1st of April.
+            Carry-forward is capped at maximum 7 days and expires before 1st of April.
           </span>
         </div>
       </div>
 
-        {/if}
+{/if}
       </div>
         <div
           class="donut fancy"
@@ -701,7 +751,14 @@ async function submitLeave(e) {
           <div class="legend-item"><span class="chip spent"></span><span>Taken Leave</span></div>
           <div class="legend-item"><span class="chip unspent"></span><span>Remaining Leave</span></div>
         </div>
-        <div class="total-line">Total spent: {d.spent}/{d.total}</div>
+        <div class="total-line">
+          Provided: {d.total} |
+          Spent: {d.spent} |
+          {#if d.pending > 0}
+            Pending: {d.pending} |
+          {/if}
+          Remaining: {d.remaining}
+      </div>
       </div>
     {/each}
 

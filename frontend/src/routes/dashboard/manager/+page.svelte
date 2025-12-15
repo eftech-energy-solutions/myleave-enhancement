@@ -4,6 +4,7 @@
   import { onMount } from 'svelte';
   import { tick } from "svelte";
   import Chart from "chart.js/auto";
+  const BASE_ANNUAL = 14;
 
   let profileMenuOpen = false;
 
@@ -211,34 +212,59 @@ onMount(async () => {
         }
       });
 
-// ================= FETCH ALL STAFF (INCLUDING ZERO LEAVE) =================
+// ================= FETCH ALL STAFF (FILTER BY DEPARTMENT) =================
 const empRes = await fetch("/api/employee");
 const allEmployees = await empRes.json();
 
+// 🔥 FILTER: Only employees in manager's department
+const deptEmployees = allEmployees.filter(emp => 
+  emp.department === user?.department
+);
+
 const staffMap = {};
-allEmployees.forEach(emp => {
+const today = new Date();
+
+deptEmployees.forEach(emp => {
+  // ✅ Check if CF expired (same logic as employee donut)
+  const cfExpiry = emp.carry_forward_expiry ? new Date(emp.carry_forward_expiry) : null;
+  const validCF = (cfExpiry && today > cfExpiry) ? 0 : (emp.carry_forward_balance ?? 0);
+
   staffMap[emp.staff_id] = {
     name: emp.full_name,
     department: emp.department,
+
+    // Annual Leave
     annual_taken: 0,
+    annual_entitlement: Number(emp.leave_entitlement_annual ?? 14),
+    annual_original: Number(emp.leave_entitlement_annual_original ?? 14),
+    carry_forward: validCF,  // ✅ Only valid CF
+    carry_forward_raw: Number(emp.carry_forward_balance ?? 0),  // Raw value for tooltip
+
+    // Medical Leave
     medical_taken: 0,
+    medical_entitlement: Number(emp.leave_entitlement_medical ?? 14),
+
+    // Hospital Leave
     hospital_taken: 0,
-    annual_remaining: emp.leave_entitlement_annual ?? 0,
-    medical_remaining: emp.leave_entitlement_medical ?? 0,
-    carry: 0
+    hospital_entitlement: 60
   };
 });
 
-// ================= FETCH LEAVE DATA =================
+// ================= FETCH LEAVE DATA (FILTER BY DEPARTMENT) =================
 const leaveRes = await fetch("/api/leave-requests?status=approved");
-const leaveData = await leaveRes.json();
+const allLeaveData = await leaveRes.json();
 
-// Merge leave summary into full staff list
+// 🔥 FILTER: Only leaves from manager's department
+const leaveData = allLeaveData.filter(r => 
+  r.department === user?.department
+);
+
+// Merge leave summary into staff list
 leaveData.forEach(r => {
   const id = r.staff_id;
   if (!staffMap[id]) return;
 
-  const days = Number(r.total_days);
+  const days = Number(r.total_days || 0);
 
   if (r.leave_type === "AL" || r.leave_type === "EL")
     staffMap[id].annual_taken += days;
@@ -253,63 +279,82 @@ leaveData.forEach(r => {
 // ================= BUILD DONUT CHART DATA =================
 staffLeaveData = {
   annual: {
-    taken: Object.values(staffMap).map(s => ({
-    name: s.name,
-    days: s.annual_taken,       // atau medical, hospital
-    department: s.department    // ← WAJIB ADA
-  })),
-    remaining: Object.values(staffMap).map(s => ({
-    name: s.name,
-    days: s.annual_taken,       // atau medical, hospital
-    department: s.department    // ← WAJIB ADA
-  })),
-    carry: Object.values(staffMap).map(s => ({
-    name: s.name,
-    days: s.annual_taken,       // atau medical, hospital
-    department: s.department    // ← WAJIB ADA
-  }))
+    // ✅ TAKEN: Staff with approved leave
+    taken: Object.values(staffMap)
+      .filter(s => s.annual_taken > 0)
+      .map(s => ({
+        name: s.name,
+        days: s.annual_taken,
+        department: s.department
+      })),
+
+    // ✅ REMAINING: Current AL + Valid CF - Taken
+    remaining: Object.values(staffMap)
+    .map(s => {
+      const al = Number(s.annual_entitlement);
+      const cf = Number(s.carry_forward);
+      const taken = Number(s.annual_taken);
+      const remaining = al + cf - taken;
+      
+      return {
+        name: s.name,
+        days: Math.max(0, remaining),
+        department: s.department
+      };
+    })
+    .filter(s => s.days > 0),  // Only show if remaining > 0
+
+    // ✅ CARRY FORWARD: Only valid (non-expired) CF
+    carry: Object.values(staffMap)
+      .filter(s => s.carry_forward > 0)
+      .map(s => ({
+        name: s.name,
+        days: s.carry_forward,
+        department: s.department
+      }))
   },
-    medical: {
-      taken: Object.values(staffMap).map(s => ({
-    name: s.name,
-    days: s.annual_taken,       // atau medical, hospital
-    department: s.department    // ← WAJIB ADA
-  })),
 
-      remaining: Object.values(staffMap).map(s => ({
-    name: s.name,
-    days: s.annual_taken,       // atau medical, hospital
-    department: s.department    // ← WAJIB ADA
-  })),
+  medical: {
+    taken: Object.values(staffMap)
+      .filter(s => s.medical_taken > 0)
+      .map(s => ({
+        name: s.name,
+        days: s.medical_taken,
+        department: s.department
+      })),
 
-      carry: Object.values(staffMap).map(s => ({
-    name: s.name,
-    days: s.annual_taken,       // atau medical, hospital
-    department: s.department    // ← WAJIB ADA
-  }))
+    remaining: Object.values(staffMap)
+      .map(s => ({
+        name: s.name,
+        days: Math.max(0, s.medical_entitlement - s.medical_taken),
+        department: s.department
+      }))
+      .filter(s => s.days > 0),
 
-    },
-    hospital: {
-      taken: Object.values(staffMap).map(s => ({
-    name: s.name,
-    days: s.annual_taken,       // atau medical, hospital
-    department: s.department    // ← WAJIB ADA
-  })),
+    carry: []
+  },
 
-      remaining: Object.values(staffMap).map(s => ({
-    name: s.name,
-    days: s.annual_taken,       // atau medical, hospital
-    department: s.department    // ← WAJIB ADA
-  })),
-      carry: Object.values(staffMap).map(s => ({
-    name: s.name,
-    days: s.annual_taken,       // atau medical, hospital
-    department: s.department    // ← WAJIB ADA
-  }))
+  hospital: {
+    taken: Object.values(staffMap)
+      .filter(s => s.hospital_taken > 0)
+      .map(s => ({
+        name: s.name,
+        days: s.hospital_taken,
+        department: s.department
+      })),
+
+    remaining: Object.values(staffMap)
+      .map(s => ({
+        name: s.name,
+        days: Math.max(0, s.hospital_entitlement - s.hospital_taken),
+        department: s.department
+      }))
+      .filter(s => s.days > 0),
+
+    carry: []
+  }
+};
     }
-  };
-    }
-    // ✅ DONUT CHARTS
 // ✅ DONUT CHARTS
 donuts.forEach(d => {
   const data = staffLeaveData[d.key];
@@ -357,17 +402,23 @@ donuts.forEach(d => {
           displayColors: false,
           padding: 12,
           callbacks: {
-            title: (items) => items[0].label,
-            label: (ctx) => {
-              let slice;
-              if (ctx.label.includes('Taken')) slice = 'taken';
-              else if (ctx.label.includes('Remaining')) slice = 'remaining';
-              else slice = 'carry';
+          title: (items) => items[0].label,
+          label: (ctx) => {
+            let slice;
+            if (ctx.label.includes('Taken')) slice = 'taken';
+            else if (ctx.label.includes('Remaining')) slice = 'remaining';
+            else slice = 'carry';
 
-              const list = staffLeaveData[d.key][slice];
-              return list.map(s => `${s.name}: ${s.days}`);
-            }
+            const list = staffLeaveData[d.key][slice];
+            
+            // ✅ Format numbers to remove unnecessary decimals
+            return list.map(s => {
+              const days = Number(s.days);
+              const formatted = days % 1 === 0 ? days.toFixed(0) : days.toFixed(1);
+              return `${s.name}: ${formatted}`;
+            });
           }
+        }
         },
         legend: {
           display: false

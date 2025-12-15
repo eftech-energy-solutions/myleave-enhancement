@@ -30,45 +30,90 @@ router.post('/', async (req, res) => {
   try {
     const randomPassword = crypto.randomBytes(6).toString('hex');
 
-  await pool.query(
-    `INSERT INTO profiles (
-      full_name, staff_id, email, password, role, department,
-      employment_date, confirmation_date, termination_date, gender,
-      notes, leave_entitlement_annual, leave_entitlement_medical,
-      photourl, position
-    )
-    VALUES (
-      $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15
-    )`,
-    [
-      name,              // full_name
-      empId,             // staff_id
-      email,
-      randomPassword,
-      role,
-      department,
-      employmentDate || null,
-      confirmationDate || null,
-      terminationDate || null,
-      gender,
-      notes,
-      annualLeave,
-      medicalLeave,
-      photoUrl,
-      position
-    ]
-  );
-      await pool.query(`
-            INSERT INTO leave_entitlements (staff_id, leave_type, entitlement, balance, year)
-            VALUES 
-            ($1, 'HOSP', 60, 60, $2),
-            ($1, 'MAT', 98, 98, $2),
-            ($1, 'PAT', 7, 7, $2),
-            ($1, 'COMP_A', 3, 3, $2),
-            ($1, 'COMP_B', 1, 1, $2),
-            ($1, 'MAR', 3, 3, $2)
-          `, [empId, new Date().getFullYear()]);
+    // =============================
+    // INSERT EMPLOYEE INTO PROFILES
+    // =============================
+await pool.query(
+  `INSERT INTO profiles (
+    full_name,
+    staff_id,
+    email,
+    password,
+    role,
+    department,
+    employment_date,
+    confirmation_date,
+    termination_date,
+    gender,
+    notes,
 
+    -- Original fields (never change)
+    leave_entitlement_annual_original,
+    leave_entitlement_medical_original,
+    
+    -- Current fields (will be deducted)
+    leave_entitlement_annual,
+    leave_entitlement_medical,
+    
+    carry_forward_original,
+    carry_forward_balance,
+    carry_forward_expiry,
+
+    photourl,
+    position
+  )
+  VALUES (
+    $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,
+    $12,$13,$14,$15,$16,$17,$18,$19,$20
+  )`,
+  [
+    name,                     // $1
+    empId,                    // $2
+    email,                    // $3
+    randomPassword,           // $4
+    role,                     // $5
+    department,               // $6
+    employmentDate || null,   // $7
+    confirmationDate || null, // $8
+    terminationDate || null,  // $9
+    gender,                   // $10
+    notes,                    // $11
+
+    annualLeave,              // $12 (original)
+    medicalLeave,             // $13 (original)
+    
+    annualLeave,              // $14 (current - same as original) ✅
+    medicalLeave,             // $15 (current - same as original) ✅
+    
+    0,                        // $16 carry_forward_original
+    0,                        // $17 carry_forward_balance
+    null,                     // $18 carry_forward_expiry
+
+    photoUrl,                 // $19
+    position                  // $20
+  ]
+);
+      await pool.query(
+        `UPDATE profiles
+          SET remaining_leave = leave_entitlement_annual_original
+        WHERE staff_id = $1`,
+        [empId]
+      );
+    // =============================
+    // INSERT FIXED LEAVE TYPES
+    // =============================
+    await pool.query(`
+      INSERT INTO leave_entitlements (staff_id, leave_type, entitlement, balance, year)
+      VALUES 
+      ($1, 'HOSP', 60, 60, $2),
+      ($1, 'MAT', 98, 98, $2),
+      ($1, 'PAT', 7, 7, $2),
+      ($1, 'COMP_A', 3, 3, $2),
+      ($1, 'COMP_B', 1, 1, $2),
+      ($1, 'MAR', 3, 3, $2)
+    `, [empId, new Date().getFullYear()]);
+
+    // EMAIL SETUP
     const transporter = nodemailer.createTransport({
       host: "mail.eftech.com.my",
       port: 465,
@@ -79,7 +124,7 @@ router.post('/', async (req, res) => {
       }
     });
 
-    // Email to employee
+    // EMAIL TO EMPLOYEE
     await transporter.sendMail({
       from: '"Eftech HR" <no-reply@eftech.com.my>',
       to: email,
@@ -87,7 +132,7 @@ router.post('/', async (req, res) => {
       text: `Hi ${name},\n\nYour MyLeave account has been created.\n\nEmail: ${email}\nPassword: ${randomPassword}\n\nPlease log in and change your password.`,
     });
 
-    // Email admin
+    // EMAIL TO ADMIN
     await transporter.sendMail({
       from: '"Eftech HR" <no-reply@eftech.com.my>',
       to: "aziraazman0105@gmail.com",
@@ -126,25 +171,37 @@ router.get("/", async (req, res) => {
 
     // ADMIN → see all
     if (meData.role?.toLowerCase() === "admin") {
-      result = await pool.query(`
-        SELECT id, staff_id, full_name, role, position, department, email,
-               employment_date, confirmation_date, termination_date,
-               gender, leave_entitlement_annual, leave_entitlement_medical,
-               photourl, notes
-          FROM profiles
-        ORDER BY id DESC
-      `);
+    result = await pool.query(`
+      SELECT id, staff_id, full_name, role, position, department, email,
+            employment_date, confirmation_date, termination_date,
+            gender,
+            leave_entitlement_annual_original,
+            leave_entitlement_medical_original,
+            carry_forward_original,
+            carry_forward_balance,
+            carry_forward_expiry,
+            photourl,
+            notes
+        FROM profiles
+      ORDER BY id DESC
+    `);
 
     // MANAGER → only same department
     } else if (meData.role?.toLowerCase() === "manager") {
       result = await pool.query(`
-        SELECT id, staff_id, full_name, role, position, department, email,
-               employment_date, confirmation_date, termination_date,
-               gender, leave_entitlement_annual, leave_entitlement_medical,
-               photourl, notes
-          FROM profiles
-         WHERE department = $1
-        ORDER BY id DESC
+      SELECT id, staff_id, full_name, role, position, department, email,
+            employment_date, confirmation_date, termination_date,
+            gender,
+            leave_entitlement_annual_original,
+            leave_entitlement_medical_original,
+            carry_forward_original,
+            carry_forward_balance,
+            carry_forward_expiry,
+            photourl,
+            notes
+      FROM profiles
+      WHERE department = $1
+      ORDER BY id DESC
       `, [meData.department]);
 
     // STAFF → cannot see
@@ -271,52 +328,97 @@ router.put("/:staff_id", async (req, res) => {
         [hash, staffId]
       );
     }
+    /* ------------------------------
+      1.5) CHECK IF EMPLOYEE HAS USED ANY LEAVE
+    ------------------------------ */
+    const usedQuery = await pool.query(
+      `SELECT COALESCE(SUM(total_days), 0) as used
+      FROM leave_requests
+      WHERE staff_id = $1 
+      AND leave_type IN ('AL', 'EL')
+      AND status = 'approved'`,
+      [staffId]
+    );
+
+    const daysUsed = Number(usedQuery.rows[0].used);
+    const hasUsedLeave = daysUsed > 0;
+
+    console.log('📊 Leave usage check:', { staffId, daysUsed, hasUsedLeave });
 
     /* ------------------------------
        2) PROFILE UPDATE
     ------------------------------ */
-    const result = await pool.query(
-      `
-      UPDATE profiles
-         SET staff_id                = $1,
-             full_name              = $2,
-             email                  = $3,
-             role                   = $4,  
-             position               = $5,
-             department             = $6,
-             employment_date        = $7,
-             confirmation_date      = $8,
-             termination_date       = $9,
-             gender                 = $10,
-             leave_entitlement_annual  = $11,
-             leave_entitlement_medical = $12,
-             notes                  = $13,
-             photourl               = COALESCE($14, photourl)
-       WHERE staff_id = $15
-       RETURNING *;
-      `,
-      [
-        staff_id,                  // $1 – staff_id baru (dari form)
-        full_name,                 // $2
-        email,                     // $3
-        role,                      // $4
-        position,                   // $5
-        department,                // $6
-        employment_date || null,   // $7
-        confirmation_date || null, // $8
-        termination_date || null,  // $9
-        gender,                    // $10
-        (leave_entitlement_annual == null || leave_entitlement_annual === "" ? null : Number(leave_entitlement_annual)), // $11
-        (leave_entitlement_medical == null || leave_entitlement_medical === "" ? null : Number(leave_entitlement_medical)), // $12
-        notes,                     // $13
-        photo_url || null,         // $14
-        staffId                    // $15 – staff_id lama
-      ]
-    );
+const result = await pool.query(
+  `
+  UPDATE profiles
+    SET staff_id = $1,
+        full_name = $2,
+        email = $3,
+        role = $4,
+        position = $5,
+        department = $6,
+        employment_date = $7,
+        confirmation_date = $8,
+        termination_date = $9,
+        gender = $10,
+
+        -- Always update original (for next year reset)
+        leave_entitlement_annual_original = $11::numeric,
+        leave_entitlement_medical_original = $12::numeric,
+        
+        -- Only update current if no leave used yet
+        leave_entitlement_annual = CASE 
+          WHEN $16 THEN leave_entitlement_annual
+          ELSE $11::numeric
+        END,
+        
+        leave_entitlement_medical = CASE 
+          WHEN $16 THEN leave_entitlement_medical
+          ELSE $12::numeric
+        END,
+
+        notes = $13,
+        photourl = COALESCE($14, photourl)
+  WHERE staff_id = $15
+  RETURNING *;
+  `,
+  [
+    staff_id,                  // $1
+    full_name,                 // $2
+    email,                     // $3
+    role,                      // $4
+    position,                  // $5
+    department,                // $6
+    employment_date || null,   // $7
+    confirmation_date || null, // $8
+    termination_date || null,  // $9
+    gender,                    // $10
+
+    (leave_entitlement_annual == null || leave_entitlement_annual === "" 
+        ? null 
+        : Number(leave_entitlement_annual)),    // $11
+
+    (leave_entitlement_medical == null || leave_entitlement_medical === "" 
+        ? null 
+        : Number(leave_entitlement_medical)),    // $12
+
+    notes,                     // $13
+    photo_url || null,         // $14
+    staffId,                   // $15
+    hasUsedLeave               // $16
+  ]
+);
 
     if (!result.rowCount) {
       return res.status(404).json({ error: "Employee not found." });
     }
+
+    await pool.query(
+      `UPDATE profiles 
+      SET remaining_leave = leave_entitlement_annual + carry_forward_balance
+      WHERE staff_id = $1`,
+      [staff_id]  // Use NEW staff_id in case it was changed
+    );
 
     /* ------------------------------
        3) RESEND ORIGINAL TEMP PASSWORD IF EMAIL CHANGED
@@ -351,10 +453,17 @@ Thank you.`
       });
     }
 
-    res.json({
+res.json({
       success: true,
-      message: "Profile updated successfully",
-      employee: result.rows[0]
+      message: hasUsedLeave 
+        ? `Profile updated. Note: Employee has already used ${daysUsed} days of Annual Leave. New entitlement (${leave_entitlement_annual} days) will apply from next year's reset.`
+        : 'Profile updated successfully',
+      employee: result.rows[0],
+      warning: hasUsedLeave ? {
+        daysUsed,
+        newEntitlement: leave_entitlement_annual,
+        appliesNextYear: true
+      } : null
     });
 
   } catch (err) {

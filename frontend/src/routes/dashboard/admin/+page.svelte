@@ -70,7 +70,7 @@
   const todayISO = isoLocal(today);
 
   let minDate = new Date(new Date().getFullYear(), 0, 1);
-  let maxDate = new Date(new Date().getFullYear(), 11, 31);
+  let maxDate = new Date(new Date().getFullYear() + 3, 11, 31);
   const monthStart = (d) => new Date(d.getFullYear(), d.getMonth(), 1);
   let minMonthStart = monthStart(minDate);
   let maxMonthStart = monthStart(maxDate);
@@ -79,8 +79,24 @@
   let days = [];
 
   const canGoPrev = () => monthStart(viewBase) > minMonthStart;
-  const canGoNext = () => monthStart(viewBase) < maxMonthStart;
+  const canGoNext = () => {
+  const next = new Date(viewBase);
+  next.setMonth(next.getMonth() + 1);
+  return monthStart(next) <= maxMonthStart;
+};
   
+const canGoPrevYear = () => {
+  const prev = new Date(viewBase);
+  prev.setFullYear(prev.getFullYear() - 1);
+  return monthStart(prev) >= minMonthStart;
+};
+
+const canGoNextYear = () => {
+  const next = new Date(viewBase);
+  next.setFullYear(next.getFullYear() + 1);
+  return monthStart(next) <= maxMonthStart;
+};
+
   function clampToWindowMonth(d) {
     if (!d || !minMonthStart || !maxMonthStart || !minMonthStart.getTime() || !maxMonthStart.getTime()) {
       const fallbackYear = new Date().getFullYear();
@@ -97,8 +113,8 @@
 
   function prevMonth() { if (canGoPrev()) { const d = new Date(viewBase); d.setMonth(d.getMonth() - 1, 1); viewBase = clampToWindowMonth(d); buildMonth(viewBase); } }
   function nextMonth() { if (canGoNext()) { const d = new Date(viewBase); d.setMonth(d.getMonth() + 1, 1); viewBase = clampToWindowMonth(d); buildMonth(viewBase); } }
-  function prevYear() { if (canGoPrev()) { const d = new Date(viewBase); d.setFullYear(d.getFullYear() - 1); viewBase = clampToWindowMonth(d); buildMonth(viewBase); } }
-  function nextYear() { if (canGoNext()) { const d = new Date(viewBase); d.setFullYear(d.getFullYear() + 1); viewBase = clampToWindowMonth(d); buildMonth(viewBase); } }
+  function prevYear() { if (canGoPrevYear()) { const d = new Date(viewBase); d.setFullYear(d.getFullYear() - 1); viewBase = clampToWindowMonth(d); buildMonth(viewBase); } }
+  function nextYear() { if (canGoNextYear()) { const d = new Date(viewBase); d.setFullYear(d.getFullYear() + 1); viewBase = clampToWindowMonth(d); buildMonth(viewBase); } }
   function goToday() { viewBase = clampToWindowMonth(atStartOfDay(new Date())); buildMonth(viewBase); }
 
   const isHoliday = (d) => holidayDatesByYear[d.getFullYear()]?.has(isoLocal(d)) ?? false;
@@ -509,7 +525,7 @@
       <div class="calendar calendar-wide">
         <div class="month">
           <div class="nav">
-            <button class="nav-btn" on:click={prevYear} aria-label="Previous year" disabled={!canGoPrev()}>«</button>
+            <button class="nav-btn" on:click={prevYear} aria-label="Previous year" disabled={!canGoPrevYear()}>«</button>
             <button class="nav-btn" on:click={prevMonth} aria-label="Previous month" disabled={!canGoPrev()}>‹</button>
           </div>
           
@@ -540,7 +556,7 @@
           <div class="nav">
             <button class="nav-btn" on:click={goToday} aria-label="Go to current month">Today</button>
             <button class="nav-btn" on:click={nextMonth} aria-label="Next month" disabled={!canGoNext()}>›</button>
-            <button class="nav-btn" on:click={nextYear} aria-label="Next year" disabled={!canGoNext()}>»</button>
+            <button class="nav-btn" on:click={nextYear} aria-label="Next year" disabled={!canGoNextYear()}>»</button>
           </div>
         </div>
         <div class="weekdays">
