@@ -613,48 +613,67 @@ const totalUsed = {
   await tick();
 }
 
+// Place this AFTER openLeaveForm function (around line 570)
+// DELETE any duplicate submitLeave functions!
+
 async function submitLeave(e) {
   const formEl = e.currentTarget;
   e.preventDefault();
 
   if (!formEl.reportValidity()) return;
-    const limit = {
-        AL: Number(user.leave_entitlement_annual_original ?? 14),
-        MC: Number(user.leave_entitlement_medical_original ?? 14),
-        HOSP: Number(user.hosp_entitlement ?? 60),
-        MAT: 98,
-        PAT: 7,
-        COMP_A: 3,
-        COMP_B: 1,
-        MAR: 3
-      }[leaveType];
 
-      const totalUsed = {
-      AL: totalALUsed,
-      MC: totalMCUsed,
-      HOSP: totalHOSPUsed,
+  // ✅ CHECK FOR OVERLAPPING DATES
+  const overlapping = checkDateRangeOverlap(dateFrom, dateUntil);
+  if (overlapping.length > 0) {
+    const dates = overlapping.map(iso => {
+      const d = parseLocalISO(iso);
+      return d.toLocaleDateString(undefined, {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric'
+      });
+    }).join(', ');
+    
+    alert(`You have already applied for leave on the following date(s):\n${dates}\n\nPlease select different dates.`);
+    return;
+  }
 
-      MAT: 0,
-      PAT: 0,
-      COMP_A: 0,
-      COMP_B: 0,
-      MAR: 0,
-      UNPAID: 0
-    }[leaveType];
+  const limit = {
+    AL: Number(user.leave_entitlement_annual_original ?? 14),
+    MC: Number(user.leave_entitlement_medical_original ?? 14),
+    HOSP: Number(user.hosp_entitlement ?? 60),
+    MAT: 98,
+    PAT: 7,
+    COMP_A: 3,
+    COMP_B: 1,
+    MAR: 3,
+    UNPAID: Infinity
+  }[leaveType];
 
+  const totalUsed = {
+    AL: totalALUsed,
+    MC: totalMCUsed,
+    HOSP: totalHOSPUsed,
+    MAT: 0,
+    PAT: 0,
+    COMP_A: 0,
+    COMP_B: 0,
+    MAR: 0,
+    UNPAID: 0
+  }[leaveType];
 
-      if (limit !== Infinity && (totalUsed + totalDays) > limit)  {
-        alert(`${getLeaveFullName(leaveType)} leave application limit (${limit} days) has been reached.`);
-        return;
-      }
-      const fd = new FormData(formEl);
+  if (limit !== Infinity && (totalUsed + totalDays) > limit) {
+    alert(`${getLeaveFullName(leaveType)} leave application limit (${limit} days) has been reached.`);
+    return;
+  }
 
-      fd.set("type", leaveType);
-      fd.set("requestType", requestType);
-      fd.set("duration", duration);
-      fd.set("dateFrom", dateFrom);
-      fd.set("dateUntil", dateUntil);
-      fd.set("totalDays", String(totalDays));
+  const fd = new FormData(formEl);
+  fd.set("type", leaveType);
+  fd.set("requestType", requestType);
+  fd.set("duration", duration);
+  fd.set("dateFrom", dateFrom);
+  fd.set("dateUntil", dateUntil);
+  fd.set("totalDays", String(totalDays));
 
   try {
     const res = await fetch("/api/leave-requests", {
@@ -667,17 +686,16 @@ async function submitLeave(e) {
       const data = await res.json().catch(() => null);
 
       if (data?.message) {
-        alert(data.message);  
+        alert(data.message);
       } else {
         alert(
-          `${getLeaveFullName(type)} limit exceeded.\n` +
-          `Entitlement: ${err.entitlement} days\n` +
-          `Used: ${err.used} days\n` +
-          `Requested: ${err.requested} days\n\n` +
-          `Remaining balance: ${err.remaining} days`
+          `${getLeaveFullName(leaveType)} limit exceeded.\n` +
+          `Entitlement: ${data?.entitlement || 'N/A'} days\n` +
+          `Used: ${data?.used || 'N/A'} days\n` +
+          `Requested: ${data?.requested || 'N/A'} days\n\n` +
+          `Remaining balance: ${data?.remaining || 'N/A'} days`
         );
       }
-
       return;
     }
 
@@ -689,15 +707,16 @@ async function submitLeave(e) {
     await loadAppliedLeave();
     buildMonth(viewBase);
 
-    modal?.close(); 
+    modal?.close();
 
   } catch (err) {
     console.error("Error submit leave:", err);
     alert("Something went wrong while submitting your leave.");
   }
 }
-  
-  const fmt = (iso) =>
+
+// Continue with fmt function...
+const fmt = (iso) =>
   new Date(iso).toLocaleDateString(undefined, {
     day: "2-digit",
     month: "short",
@@ -743,6 +762,25 @@ async function loadAppliedLeave() {
       }
     });
 }
+
+function checkDateRangeOverlap(fromISO, untilISO) {
+  const start = parseLocalISO(fromISO);
+  const end = parseLocalISO(untilISO || fromISO);
+  
+  const overlappingDates = [];
+  const current = new Date(start);
+  
+  while (current <= end) {
+    const iso = localISO(current);
+    if (blockedDates.has(iso)) {
+      overlappingDates.push(iso);
+    }
+    current.setDate(current.getDate() + 1);
+  }
+  
+  return overlappingDates;
+}
+
 async function loadApprovedUsedDays() {
   const res = await fetch("/api/leave-requests", { credentials: "include" });
   const all = await res.json();

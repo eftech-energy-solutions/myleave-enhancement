@@ -105,6 +105,9 @@ router.post("/reset-year", async (req, res) => {
 /* ============================================================
     CREATE NEW LEAVE REQUEST
 ============================================================ */
+/* ============================================================
+    CREATE NEW LEAVE REQUEST (WITH OVERLAP CHECK)
+============================================================ */
 router.post("/", upload.single("attachment"), async (req, res) => {
   try {
     const {
@@ -133,12 +136,37 @@ router.post("/", upload.single("attachment"), async (req, res) => {
     if (serverDays <= 0)
       return res.status(400).json({ message: "Invalid date range or no working days" });
 
+    // ✅ CHECK FOR OVERLAPPING DATES FIRST (BACKEND VALIDATION)
+    const overlapCheck = await pool.query(
+      `SELECT date_from, date_until FROM leave_requests
+       WHERE staff_id = $1
+       AND status IN ('pending', 'approved', 'cancellation_pending')
+       AND (
+         (date_from <= $2 AND date_until >= $2) OR
+         (date_from <= $3 AND date_until >= $3) OR
+         (date_from >= $2 AND date_until <= $3)
+       )`,
+      [staffId, dateFrom, dateUntil]
+    );
+
+    if (overlapCheck.rows.length > 0) {
+      return res.status(400).json({
+        message: "You have already applied for leave on one or more dates in this range. Please check your existing applications."
+      });
+    }
+
     // LOAD ENTITLEMENT + USED
     let entitlement = 0;
     let used = 0;
 
+    // ===== UNPAID LEAVE (NO LIMITS, NO DB TRACKING) =====
+    if (type === "UNPAID") {
+      entitlement = Infinity;
+      used = 0;
+    }
+
     // ===== ANNUAL / EMERGENCY =====
-    if (type === "AL" || type === "EL") {
+    else if (type === "AL" || type === "EL") {
       const p = await pool.query(
         `SELECT leave_entitlement_annual, carry_forward_balance, carry_forward_expiry
          FROM profiles WHERE staff_id=$1`,
@@ -273,47 +301,32 @@ router.post("/", upload.single("attachment"), async (req, res) => {
 
     const leave = result.rows[0];
 
-    // ======================
-    // SEND EMAIL TO STAFF (submitter)
-    // ======================
+    // Send emails...
     sendLeaveSubmitted(user.email, user.full_name, leave);
 
-    // ======================
-    // FIND WHO SHOULD APPROVE
-    // ======================
     let approverEmail = null;
-
     if (user.role === "Manager") {
-      // Manager applying leave → Admin must approve
       const adminRes = await pool.query(
         `SELECT email FROM profiles WHERE role='Admin' LIMIT 1`
       );
-
       if (adminRes.rows.length) {
         approverEmail = adminRes.rows[0].email;
       }
-
     } else {
-      // Staff applying leave → Manager approves
       const mgrRes = await pool.query(
         `SELECT email FROM profiles 
          WHERE role='Manager' AND department=$1`,
         [user.department]
       );
-
       if (mgrRes.rows.length) {
         approverEmail = mgrRes.rows[0].email;
       }
     }
 
-    // ======================
-    // SEND PENDING APPROVAL EMAIL
-    // ======================
     if (approverEmail) {
       sendPendingApproval(approverEmail, user.full_name, leave);
     }
 
-    // RETURN TO FRONTEND
     return res.status(201).json(leave);
 
   } catch (err) {
@@ -356,7 +369,7 @@ router.get("/", async (req, res) => {
 });
 
 /* ============================================================
-   4) EDIT LEAVE DETAILS
+   EDIT LEAVE DETAILS (FIXED OVERLAP CHECK)
    PATCH /api/leave-requests/:id/edit
    ============================================================ */
 router.patch("/:id/edit", upload.single("attachment"), async (req, res) => {
@@ -375,7 +388,7 @@ router.patch("/:id/edit", upload.single("attachment"), async (req, res) => {
 
     const staffId = find.rows[0].staff_id;
 
-  let serverDays;
+    let serverDays;
     if (duration === 'Half') {
       serverDays = 0.5;
     } else {
@@ -385,14 +398,38 @@ router.patch("/:id/edit", upload.single("attachment"), async (req, res) => {
     if (serverDays <= 0)
       return res.status(400).json({ message: "Invalid date range or no working days" });
 
-    // ---- ENTITLEMENT CHECKS (copy same logic as your POST) ----
-    // (kept 100% the same, no change)
+    // ✅ CHECK FOR OVERLAPPING DATES (excluding current leave being edited)
+    const overlapCheck = await pool.query(
+      `SELECT date_from, date_until FROM leave_requests
+       WHERE staff_id = $1
+       AND leave_id != $2
+       AND status IN ('pending', 'approved', 'cancellation_pending')
+       AND (
+         (date_from <= $3 AND date_until >= $3) OR
+         (date_from <= $4 AND date_until >= $4) OR
+         (date_from >= $3 AND date_until <= $4)
+       )`,
+      [staffId, leaveId, date_from, date_until]
+    );
 
+    if (overlapCheck.rows.length > 0) {
+      return res.status(400).json({
+        message: "You have already applied for leave on one or more dates in this range. Please check your existing applications."
+      });
+    }
+
+    // ---- ENTITLEMENT CHECKS ----
     let entitlement = 0;
     let used = 0;
 
+    // ===== UNPAID LEAVE (NO LIMITS) =====
+    if (leave_type === "UNPAID") {
+      entitlement = Infinity;
+      used = 0;
+    }
+
     // ====== ANNUAL / EMERGENCY ======
-    if (leave_type === "AL" || leave_type === "EL") {
+    else if (leave_type === "AL" || leave_type === "EL") {
       const p = await pool.query(
         `SELECT leave_entitlement_annual, carry_forward_balance, carry_forward_expiry
          FROM profiles WHERE staff_id=$1`,
@@ -463,10 +500,6 @@ router.patch("/:id/edit", upload.single("attachment"), async (req, res) => {
 
       used = Number(u.rows[0].used);
     }
-    else if (leave_type === "UNPAID") {
-   entitlement = Infinity;
-   used = 0;
-}
 
     // ===== SPECIAL LEAVES =====
     else {
@@ -488,12 +521,6 @@ router.patch("/:id/edit", upload.single("attachment"), async (req, res) => {
 
       used = Number(u.rows[0].used);
     }
-// ⭐ UNPAID LEAVE HAS NO LIMIT — ALWAYS ALLOWED
-if (leave_type === "UNPAID") {
-  entitlement = Infinity;
-  used = 0;
-}
-
 
     if (used + serverDays > entitlement) {
       return res.status(400).json({
@@ -507,7 +534,9 @@ if (leave_type === "UNPAID") {
     // ======================================================
     // UPDATE DATA (allowed)
     // ======================================================
-     const updated = await pool.query(
+    const newAttachmentPath = req.file ? req.file.path : find.rows[0].attachment_path;
+
+    const updated = await pool.query(
       `UPDATE leave_requests
          SET leave_type = $1,
              duration = $2,
@@ -529,8 +558,6 @@ if (leave_type === "UNPAID") {
         leaveId
       ]
     );
-
-    res.json(updated.rows[0]);
 
     return res.json(updated.rows[0]);
   } catch (err) {
@@ -589,16 +616,16 @@ router.patch("/:id", async (req, res) => {
 
       if (leaveType === "AL" || leaveType === "EL") {
 
-  const { deduct_cf, deduct_al } = leave;
+        const { deduct_cf, deduct_al } = leave;
 
-  await pool.query(
-    `UPDATE profiles
-     SET carry_forward_balance = carry_forward_balance + $1,
-         leave_entitlement_annual = leave_entitlement_annual + $2
-     WHERE staff_id=$3`,
-    [deduct_cf, deduct_al, staffId]
-  );
-}
+        await pool.query(
+          `UPDATE profiles
+           SET carry_forward_balance = carry_forward_balance + $1,
+               leave_entitlement_annual = leave_entitlement_annual + $2
+           WHERE staff_id=$3`,
+          [deduct_cf, deduct_al, staffId]
+        );
+      }
       // UPDATE REMAINING
       await updateRemainingLeave(staffId);
 
@@ -611,110 +638,116 @@ router.patch("/:id", async (req, res) => {
       return res.json(updated.rows[0]);
     }
 
-/* ============================================================
-    APPROVE (AL / EL) — DEDUCT LEAVE
-============================================================ */
-if (status === "approved" && (leaveType === "AL" || leaveType === "EL")) {
+    /* ============================================================
+        APPROVE (AL / EL) — DEDUCT LEAVE
+    ============================================================ */
+    if (status === "approved" && (leaveType === "AL" || leaveType === "EL")) {
 
-  const p = await pool.query(
-    `SELECT leave_entitlement_annual,
-            carry_forward_balance,
-            carry_forward_expiry
-     FROM profiles
-     WHERE staff_id = $1`,
-    [staffId]
-  );
+      const p = await pool.query(
+        `SELECT leave_entitlement_annual,
+                carry_forward_balance,
+                carry_forward_expiry
+         FROM profiles
+         WHERE staff_id = $1`,
+        [staffId]
+      );
 
-  let AL = Number(p.rows[0].leave_entitlement_annual);
-  let CF = Number(p.rows[0].carry_forward_balance);
-  let expiry = p.rows[0].carry_forward_expiry
-    ? new Date(p.rows[0].carry_forward_expiry)
-    : null;
+      let AL = Number(p.rows[0].leave_entitlement_annual);
+      let CF = Number(p.rows[0].carry_forward_balance);
+      let expiry = p.rows[0].carry_forward_expiry
+        ? new Date(p.rows[0].carry_forward_expiry)
+        : null;
 
-  console.log('🔍 BEFORE APPROVAL:', { AL, CF, expiry, days, leaveDate });
+      console.log('🔍 BEFORE APPROVAL:', { AL, CF, expiry, days, leaveDate });
 
-  // 🔥 FIX: Check if CF has already expired at TODAY'S date
-  const today = new Date();
-  if (expiry && today > expiry) {
-    CF = 0;
-    console.log('⚠️ CF already expired, setting CF to 0');
-  }
-
-  let deductCF = 0;
-  let deductAL = 0;
-
-  // Only use CF if it's still valid AND leave starts before expiry
-  if (CF > 0 && expiry && leaveDate <= expiry) {
-    // 🔥 FIX: Check if leave spans across expiry date
-    const leaveEnd = new Date(leave.date_until);
-    
-    if (leaveEnd > expiry) {
-      // Leave crosses expiry - split calculation
-      const msDay = 1000 * 60 * 60 * 24;
-      const daysBeforeExpiry = Math.floor((expiry - leaveDate) / msDay) + 1;
-      const daysAfterExpiry = days - daysBeforeExpiry;
-      
-      console.log(`📅 Leave crosses expiry: ${daysBeforeExpiry} days before, ${daysAfterExpiry} days after`);
-      
-      // Use CF for days before expiry only
-      if (CF >= daysBeforeExpiry) {
-        deductCF = daysBeforeExpiry;
-        deductAL = daysAfterExpiry;
-      } else {
-        deductCF = CF;
-        deductAL = days - CF;
+      // 🔥 FIX: Check if CF has already expired at TODAY'S date
+      const today = new Date();
+      if (expiry && today > expiry) {
+        CF = 0;
+        console.log('⚠️ CF already expired, setting CF to 0');
       }
-    } else {
-      // Entire leave is before expiry - use CF first as usual
-      if (CF >= days) {
-        deductCF = days;
+
+      let deductCF = 0;
+      let deductAL = 0;
+
+      // Only use CF if it's still valid AND leave starts before expiry
+      if (CF > 0 && expiry && leaveDate <= expiry) {
+        // 🔥 FIX: Check if leave spans across expiry date
+        const leaveEnd = new Date(leave.date_until);
+        
+        if (leaveEnd > expiry) {
+          // Leave crosses expiry - split calculation
+          const msDay = 1000 * 60 * 60 * 24;
+          const daysBeforeExpiry = Math.floor((expiry - leaveDate) / msDay) + 1;
+          const daysAfterExpiry = days - daysBeforeExpiry;
+          
+          console.log(`📅 Leave crosses expiry: ${daysBeforeExpiry} days before, ${daysAfterExpiry} days after`);
+          
+          // Use CF for days before expiry only
+          if (CF >= daysBeforeExpiry) {
+            deductCF = daysBeforeExpiry;
+            deductAL = daysAfterExpiry;
+          } else {
+            deductCF = CF;
+            deductAL = days - CF;
+          }
+        } else {
+          // Entire leave is before expiry - use CF first as usual
+          if (CF >= days) {
+            deductCF = days;
+          } else {
+            deductCF = CF;
+            deductAL = days - CF;
+          }
+        }
       } else {
-        deductCF = CF;
-        deductAL = days - CF;
+        // CF expired or leave starts after expiry - use AL only
+        deductAL = days;
       }
+
+      // Validate sufficient balance
+      if (deductAL > AL) {
+        return res.status(400).json({
+          message: "Insufficient Annual Leave balance.",
+          required: deductAL,
+          available: AL
+        });
+      }
+
+      console.log('💰 Calculated Deduction:', { deductCF, deductAL, totalDays: days });
+      console.log('📊 Expected New Balance:', { newCF: CF - deductCF, newAL: AL - deductAL });
+
+      // Update profile
+      await pool.query(
+        `UPDATE profiles
+         SET carry_forward_balance = carry_forward_balance - $1,
+             leave_entitlement_annual = leave_entitlement_annual - $2
+         WHERE staff_id = $3`,
+        [deductCF, deductAL, staffId]
+      );
+
+      console.log('✅ Profile updated with:', { deductCF, deductAL, staffId });
+
+      // 🔥 IMPORTANT: Save deductions for cancellation restoration
+      await pool.query(
+        `UPDATE leave_requests
+         SET deduct_cf=$1, deduct_al=$2
+         WHERE leave_id=$3`,
+        [deductCF, deductAL, leaveId]
+      );
+
+      console.log('✅ Leave request updated with deductions');
+
+      await updateRemainingLeave(staffId);
+      
+      console.log('✅ Remaining leave updated');
     }
-  } else {
-    // CF expired or leave starts after expiry - use AL only
-    deductAL = days;
-  }
 
-  // Validate sufficient balance
-  if (deductAL > AL) {
-    return res.status(400).json({
-      message: "Insufficient Annual Leave balance.",
-      required: deductAL,
-      available: AL
-    });
-  }
+    /* ============================================================
+        APPROVE (UNPAID) — NO DEDUCTION
+    ============================================================ */
+    // Unpaid leave requires no balance deduction
 
-  console.log('💰 Calculated Deduction:', { deductCF, deductAL, totalDays: days });
-  console.log('📊 Expected New Balance:', { newCF: CF - deductCF, newAL: AL - deductAL });
-
-  // Update profile
-  await pool.query(
-    `UPDATE profiles
-     SET carry_forward_balance = carry_forward_balance - $1,
-         leave_entitlement_annual = leave_entitlement_annual - $2
-     WHERE staff_id = $3`,
-    [deductCF, deductAL, staffId]
-  );
-
-  console.log('✅ Profile updated with:', { deductCF, deductAL, staffId });
-
-  // 🔥 IMPORTANT: Save deductions for cancellation restoration
-  await pool.query(
-    `UPDATE leave_requests
-     SET deduct_cf=$1, deduct_al=$2
-     WHERE leave_id=$3`,
-    [deductCF, deductAL, leaveId]
-  );
-
-  console.log('✅ Leave request updated with deductions');
-
-  await updateRemainingLeave(staffId);
-  
-  console.log('✅ Remaining leave updated');
-}
     /* ============================================================
         OTHER TYPES (MC, HOSP, SPECIAL)
     ============================================================ */
@@ -755,6 +788,27 @@ if (status === "approved" && (leaveType === "AL" || leaveType === "EL")) {
       );
     }
 
+    // For special leaves (not UNPAID)
+    if (status === "approved" && 
+        !["AL", "EL", "MC", "HOSP", "UNPAID"].includes(leaveType)) {
+      
+      const s = await pool.query(
+        `SELECT balance FROM leave_entitlements
+         WHERE staff_id=$1 AND leave_type=$2`,
+        [staffId, leaveType]
+      );
+
+      if (!s.rows.length || s.rows[0].balance < days)
+        return res.status(400).json({ message: `Insufficient ${leaveType}` });
+
+      await pool.query(
+        `UPDATE leave_entitlements
+         SET balance = balance - $1
+         WHERE staff_id=$2 AND leave_type=$3`,
+        [days, staffId, leaveType]
+      );
+    }
+
     // FINAL: UPDATE STATUS
     const updated = await pool.query(
       `UPDATE leave_requests
@@ -763,10 +817,6 @@ if (status === "approved" && (leaveType === "AL" || leaveType === "EL")) {
        RETURNING *`,
       [status, leaveId]
     );
-
-    if (status !== "cancellation_pending") {
-      await recalcAnnualLeave(staffId);
-    }
 
     res.json(updated.rows[0]);
 
@@ -812,8 +862,8 @@ router.delete("/:id", async (req, res) => {
     const leaveType = String(leave.leave_type || "").trim().toUpperCase();
     const days = Number(leave.total_days);
 
-    // 🔥 NEW: Restore balance if leave was approved
-    if (leave.status === "approved") {
+    // 🔥 Restore balance if leave was approved (NOT for UNPAID)
+    if (leave.status === "approved" && leaveType !== "UNPAID") {
       if (leaveType === "AL" || leaveType === "EL") {
         const { deduct_cf, deduct_al } = leave;
         
@@ -838,14 +888,24 @@ router.delete("/:id", async (req, res) => {
            WHERE staff_id=$2 AND leave_type='HOSP'`,
           [days, staffId]
         );
+      } else {
+        // Other special leaves
+        await pool.query(
+          `UPDATE leave_entitlements
+           SET balance = balance + $1
+           WHERE staff_id=$2 AND leave_type=$3`,
+          [days, staffId, leaveType]
+        );
       }
     }
 
     // Delete the record
     await pool.query(`DELETE FROM leave_requests WHERE leave_id=$1`, [req.params.id]);
 
-    // Update remaining leave
-    await updateRemainingLeave(staffId);
+    // Update remaining leave (only for AL/EL)
+    if (leaveType === "AL" || leaveType === "EL") {
+      await updateRemainingLeave(staffId);
+    }
 
     return res.json({ success: true });
   } catch (err) {
@@ -853,6 +913,7 @@ router.delete("/:id", async (req, res) => {
     return res.status(500).json({ message: "Failed" });
   }
 });
+
 /* ============================================================
     HISTORY
 ============================================================ */
