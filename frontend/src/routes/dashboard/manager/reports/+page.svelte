@@ -331,7 +331,9 @@ async function loadRecent() {
       const hol = isHoliday(d);
       const holName = hol ? holidayTitle(d) : null;
       const holDesc = hol ? holidayDescription(d) : null; // BARU
-      
+      const weekend = isWeekend(d);
+      const appliedPH = hol && (blockedDates?.has?.(iso) ?? false);
+
       let title = undefined;
       if (hol) {
         title = holName;
@@ -351,6 +353,8 @@ async function loadRecent() {
           outOfWindow,
           blocked: blockedDates?.has?.(iso) ?? false,
           beyondSixMonths,
+          weekend,
+          appliedPH,
           limitMessage: beyondSixMonths
             ? "You can only apply for leave within the next 6 months."
             : null
@@ -474,6 +478,12 @@ async function loadRecent() {
     holidayNamesByYear = newHolidayNamesByYear;
     holidayDescsByYear = newHolidayDescsByYear; // BARU
   }
+
+  const isWeekend = (d) => {
+  const day = d.getDay();
+  return day === 0 || day === 6; // Sunday = 0, Saturday = 6
+};
+
 
   // Nav
   function prevMonth() {
@@ -829,14 +839,16 @@ async function submitLeave(e) {
             <button
               class:muted={d.muted}
               class:today={d.today}
-              class:holiday={d.holiday}
+              class:holiday={d.holiday && !d.appliedPH}
               class:out={d.outOfWindow}
-              class:blocked={d.blocked}
+              class:blocked={d.blocked && !d.appliedPH}
+              class:applied-ph={d.appliedPH}
+              class:weekend={d.weekend && !d.blocked}
               disabled={
                 d.outOfWindow ||
-                d.blocked ||
-                d.holiday ||
                 d.beyondSixMonths ||
+                d.holiday ||
+                (!d.blocked && d.weekend) ||   // 👈 KEY PART
                 (!d.today && atStartOfDay(d.date) < today)
               }
               on:click={() => {
@@ -1234,7 +1246,6 @@ max-width: 150px;         /* optional — so it wraps instead of going super lon
   font-variant-numeric: tabular-nums !important;
 }
 
-
   .days button.today {
     border: 2px solid #49bdb3; font-weight: 700; color: #111827; background: #ffff;
   }
@@ -1257,6 +1268,12 @@ max-width: 150px;         /* optional — so it wraps instead of going super lon
   color: #78350f !important;
   cursor: not-allowed !important;
   opacity: 1;
+}
+.days button.applied-ph {
+  background: #fed83fdb !important;   /* pekat */
+  border-color: #fed83fdb !important;
+  color: #000 !important;
+  cursor: not-allowed !important;
 }
 
   .recent-wrap{ display:grid; gap: 6px;  }

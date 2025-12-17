@@ -292,6 +292,10 @@ approvedHOSP = all
 
   const canGoPrev = () => monthStart(viewBase) > minMonthStart;
   const canGoNext = () => monthStart(viewBase) < maxMonthStart;
+  const isWeekend = (d) => {
+  const day = d.getDay();
+  return day === 0 || day === 6; // Sunday = 0, Saturday = 6
+};
 
   // let monthLabel = ''; // DIBUANG
   let days = [];
@@ -318,7 +322,9 @@ approvedHOSP = all
       const hol = isHoliday(d);
       const holName = hol ? holidayTitle(d) : null;
       const holDesc = hol ? holidayDescription(d) : null; // BARU
-      
+      const weekend = isWeekend(d);
+      const appliedPH = hol && (blockedDates?.has?.(iso) ?? false);
+
       let title = undefined;
       if (hol) {
         title = holName;
@@ -338,6 +344,8 @@ approvedHOSP = all
         outOfWindow,
         blocked: blockedDates?.has?.(iso) ?? false,
         beyondSixMonths,
+        weekend,
+        appliedPH,
          limitMessage: beyondSixMonths
           ? "You can only apply for leave within the next 6 months."
           : null
@@ -911,14 +919,16 @@ async function loadApprovedUsedDays() {
             <button
               class:muted={d.muted}
               class:today={d.today}
-              class:holiday={d.holiday}
+              class:holiday={d.holiday && !d.appliedPH}
               class:out={d.outOfWindow}
-              class:blocked={d.blocked}
+              class:blocked={d.blocked && !d.appliedPH}
+              class:applied-ph={d.appliedPH}
+              class:weekend={d.weekend && !d.blocked} 
               disabled={
                 d.outOfWindow ||
-                d.blocked ||
-                d.holiday ||
                 d.beyondSixMonths ||
+                d.holiday ||
+                (!d.blocked && d.weekend) ||   // 👈 KEY PART
                 (!d.today && atStartOfDay(d.date) < today)
               }
               on:click={() => {
@@ -1334,6 +1344,12 @@ max-width: 150px;         /* optional — so it wraps instead of going super lon
   color: #78350f !important;
   cursor: not-allowed !important;
   opacity: 1;
+}
+.days button.applied-ph {
+  background: #fed83fdb !important;   /* pekat */
+  border-color: #fed83fdb !important;
+  color: #000 !important;
+  cursor: not-allowed !important;
 }
 
   .recent-wrap{ display:grid; gap: 6px;  }
