@@ -176,6 +176,12 @@ $: donuts = user ? [
     const iso = localISO(d);
     return holidayDatesByYear[y]?.has(iso) ?? false;
   }
+
+  function isWeekend(d) {
+  const day = d.getDay();
+  return day === 0 || day === 6; // Sunday = 0, Saturday = 6
+}
+
   function holidayTitle(d) {
     const y = d.getFullYear();
     const iso = localISO(d);
@@ -332,6 +338,7 @@ approvedHOSP = all
         muted: d.getMonth() !== m,
         today: sameDay(d, today),
         holiday: hol,
+        weekend: isWeekend(d),
         holidayName: holName,
         holidayDescription: holDesc,
         title: title || (hol ? 'Public Holiday' : null),
@@ -637,7 +644,17 @@ async function submitLeave(e) {
     alert(`You have already applied for leave on the following date(s):\n${dates}\n\nPlease select different dates.`);
     return;
   }
+  const fromDate = parseLocalISO(dateFrom);
+  const toDate = parseLocalISO(dateUntil);
+  const current = new Date(fromDate);
 
+  while (current <= toDate) {
+    if (isWeekend(current)) {
+      alert("Your leave application includes weekend dates. Please select only weekdays.");
+      return;
+    }
+    current.setDate(current.getDate() + 1);
+  }
   const limit = {
     AL: Number(user.leave_entitlement_annual_original ?? 14),
     MC: Number(user.leave_entitlement_medical_original ?? 14),
@@ -915,12 +932,13 @@ async function loadApprovedUsedDays() {
               class:out={d.outOfWindow}
               class:blocked={d.blocked}
               disabled={
-                d.outOfWindow ||
-                d.blocked ||
-                d.holiday ||
-                d.beyondSixMonths ||
-                (!d.today && atStartOfDay(d.date) < today)
-              }
+              d.outOfWindow ||
+              d.blocked ||
+              d.holiday ||
+              d.weekend ||
+              d.beyondSixMonths ||
+              (!d.today && atStartOfDay(d.date) < today)
+            }
               on:click={() => {
                 if (d.beyondSixMonths) {
                   alert("You can only apply for leave within the next 6 months.");
@@ -934,6 +952,11 @@ async function loadApprovedUsedDays() {
 
                 if (d.holiday) {
                   alert("You cannot apply leave on a public holiday.");
+                  return;
+                }
+
+                if (d.weekend) {
+                  alert("You cannot apply for leave on weekends.");
                   return;
                 }
 
