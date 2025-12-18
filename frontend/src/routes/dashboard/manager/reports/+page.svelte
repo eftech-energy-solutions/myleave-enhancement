@@ -337,7 +337,9 @@ async function loadRecent() {
       const hol = isHoliday(d);
       const holName = hol ? holidayTitle(d) : null;
       const holDesc = hol ? holidayDescription(d) : null; // BARU
-      
+      const weekend = isWeekend(d);
+      const appliedPH = hol && (blockedDates?.has?.(iso) ?? false);
+
       let title = undefined;
       if (hol) {
         title = holName;
@@ -345,23 +347,24 @@ async function loadRecent() {
       }
 
       arr.push({
-        key: iso,
-        label: d.getDate(),
-        date: d,
-        muted: d.getMonth() !== m,
-        today: sameDay(d, today),
-        holiday: hol,
-        weekend: isWeekend(d),  // ✅ ADD THIS LINE
-        holidayName: holName,
-        holidayDescription: holDesc,
-        title: title || (hol ? 'Public Holiday' : null),
-        outOfWindow,
-        blocked: blockedDates?.has?.(iso) ?? false,
-        beyondSixMonths,
-        limitMessage: beyondSixMonths
-          ? "You can only apply for leave within the next 6 months."
-          : null
-      });
+          key: iso,
+          label: d.getDate(),
+          date: d,
+          muted: d.getMonth() !== m,
+          today: sameDay(d, today),
+          holiday: hol,
+          holidayName: holName,
+          holidayDescription: holDesc,
+          title: title || (hol ? 'Public Holiday' : null),
+          outOfWindow,
+          blocked: blockedDates?.has?.(iso) ?? false,
+          beyondSixMonths,
+          weekend,
+          appliedPH,
+          limitMessage: beyondSixMonths
+            ? "You can only apply for leave within the next 6 months."
+            : null
+        });
     }
     // monthLabel = new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(first); // DIBUANG
     days = arr;
@@ -672,17 +675,17 @@ async function submitLeave(e) {
     return;
   }
 
-  const fromDate = parseLocalISO(dateFrom);
-  const toDate = parseLocalISO(dateUntil);
-  const current = new Date(fromDate);
+  // const fromDate = parseLocalISO(dateFrom);
+  // const toDate = parseLocalISO(dateUntil);
+  // const current = new Date(fromDate);
 
-  while (current <= toDate) {
-    if (isWeekend(current)) {
-      alert("Your leave application includes weekend dates. Please select only weekdays.");
-      return;
-    }
-    current.setDate(current.getDate() + 1);
-  }
+  // while (current <= toDate) {
+  //   if (isWeekend(current)) {
+  //     alert("Your leave application includes weekend dates. Please select only weekdays.");
+  //     return;
+  //   }
+  //   current.setDate(current.getDate() + 1);
+  // }
 
   const limit = {
     AL: Number(user.leave_entitlement_annual_original ?? 14),
@@ -879,17 +882,18 @@ async function submitLeave(e) {
             <button
               class:muted={d.muted}
               class:today={d.today}
-              class:holiday={d.holiday}
+              class:holiday={d.holiday && !d.appliedPH}
               class:out={d.outOfWindow}
-              class:blocked={d.blocked}
+              class:blocked={d.blocked && !d.appliedPH}
+              class:applied-ph={d.appliedPH}
+              class:weekend={d.weekend && !d.blocked}
               disabled={
-              d.outOfWindow ||
-              d.blocked ||
-              d.holiday ||
-              d.weekend ||
-              d.beyondSixMonths ||
-              (!d.today && atStartOfDay(d.date) < today)
-            }
+                d.outOfWindow ||
+                d.beyondSixMonths ||
+                d.holiday ||
+                (!d.blocked && d.weekend) ||   // 👈 KEY PART
+                (!d.today && atStartOfDay(d.date) < today)
+              }
               on:click={() => {
                 if (d.beyondSixMonths) {
                   alert("You can only apply for leave within the next 6 months.");
@@ -1290,7 +1294,6 @@ max-width: 150px;         /* optional — so it wraps instead of going super lon
   font-variant-numeric: tabular-nums !important;
 }
 
-
   .days button.today {
     border: 2px solid #49bdb3; font-weight: 700; color: #111827; background: #ffff;
   }
@@ -1313,6 +1316,12 @@ max-width: 150px;         /* optional — so it wraps instead of going super lon
   color: #78350f !important;
   cursor: not-allowed !important;
   opacity: 1;
+}
+.days button.applied-ph {
+  background: #fed83fdb !important;   /* pekat */
+  border-color: #fed83fdb !important;
+  color: #000 !important;
+  cursor: not-allowed !important;
 }
 
   .recent-wrap{ display:grid; gap: 6px;  }
