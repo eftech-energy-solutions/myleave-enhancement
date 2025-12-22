@@ -2,6 +2,7 @@ import express from "express";
 import pool from "../db.js";
 import { fetchMalaysiaHolidays } from "../utils/fetchMalaysiaHolidays.js";
 import { recalculateAffectedLeaves, checkHolidayImpact } from "../utils/holidayImpactHandler.js";
+import { logAdminAction } from '../middleware/adminLogger.js';
 
 const router = express.Router();
 
@@ -68,7 +69,11 @@ router.post("/", async (req, res) => {
     // 🔥 NEW: Recalculate affected leaves
     const impact = await recalculateAffectedLeaves(date);
     console.log(`✅ Holiday added. Recalculated ${impact.affectedCount} leave(s)`);
-
+    await logAdminAction(
+          req, 
+          'Added Holiday', 
+          `Added public holiday: ${title} on ${date}`
+        );
     res.json({ 
       success: true,
       message: impact.affectedCount > 0 
@@ -117,7 +122,11 @@ router.delete("/:id", async (req, res) => {
     // Recalculate affected leaves
     const recalcResult = await recalculateAffectedLeaves(holidayDate);
     console.log(`✅ Holiday deleted. Recalculated ${recalcResult.affectedCount} leave(s)`);
-
+    await logAdminAction(
+          req, 
+          'Deleted Holiday', 
+          `Deleted public holiday on ${holidayDate}`
+        );
     res.json({ 
       success: true,
       message: recalcResult.affectedCount > 0
