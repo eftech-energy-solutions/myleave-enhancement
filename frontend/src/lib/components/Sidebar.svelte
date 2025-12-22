@@ -470,6 +470,7 @@ async function saveProfile(e) {
         <span class="ico">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17 7-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>
         </span>
+        <span class="text">Sign out</span>
       </a>
     </div>
   </aside>
@@ -798,7 +799,7 @@ async function saveProfile(e) {
 
   /* Bottom Bar (Tidak berubah) */
   .bottom{ margin-top:auto; display:flex; justify-content:space-between; align-items:center; }
-  .signout{ color:#e34040; display:flex; align-items:center; gap:12px; padding:10px; border-radius:12px; text-decoration:none; }
+  .signout{ color:#e34040; display:flex; align-items:center; gap:12px; padding:10px; border-radius:12px; text-decoration:none; width: 100%; }
   .signout:hover{ background:#feecec; }
   .settings-btn{ display:flex; align-items:center; padding:10px; border-radius:12px; color:#217859; background:transparent; border:none; cursor:pointer; }
   .settings-btn:hover{ background:#f3f4f6; }
