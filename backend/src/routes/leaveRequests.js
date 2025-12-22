@@ -11,6 +11,7 @@ import {
   sendCancellationPending,
   sendCancellationApproved
 } from "../utils/emailService.js";
+import { logAdminAction } from '../middleware/adminLogger.js';
 
 const leaveTypeFullName = {
   AL: "Annual / Emergency",
@@ -558,7 +559,7 @@ router.patch("/:id/edit", upload.single("attachment"), async (req, res) => {
         leaveId
       ]
     );
-
+    
     return res.json(updated.rows[0]);
   } catch (err) {
     console.error("PATCH /api/leave-requests/:id/edit error:", err);
@@ -592,7 +593,7 @@ router.patch("/:id", async (req, res) => {
     }
 
     // VALID STATUS
-    if (!["approved", "rejected", "cancelled"].includes(status))
+    if (!["approved", "rejected", "cancelled", "cancellation_rejected"].includes(status))
       return res.status(400).json({ message: "Invalid status" });
 
     const find = await pool.query(
@@ -626,6 +627,7 @@ router.patch("/:id", async (req, res) => {
           [deduct_cf, deduct_al, staffId]
         );
       }
+      
       // UPDATE REMAINING
       await updateRemainingLeave(staffId);
 
@@ -634,10 +636,38 @@ router.patch("/:id", async (req, res) => {
         `UPDATE leave_requests SET status='cancelled' WHERE leave_id=$1 RETURNING *`,
         [leaveId]
       );
-
+      
+      // ✅ CORRECT: Log AFTER status is updated
+      await logAdminAction(
+        req, 
+        'Approved Cancellation Request', 
+        `Approved cancellation request #${leaveId} for ${leave.staff_name}. Leave cancelled and balance restored.`
+      );
+      
       return res.json(updated.rows[0]);
     }
-
+ /* ============================================================
+        CANCELLATION REJECTED — KEEP STATUS AS APPROVED
+    ============================================================ */
+    if (status === "cancellation_rejected") {
+      
+      // Keep the leave as approved
+      const updated = await pool.query(
+        `UPDATE leave_requests 
+         SET status='approved', request_type='new'
+         WHERE leave_id=$1 
+         RETURNING *`,
+        [leaveId]
+      );
+      
+      await logAdminAction(
+        req, 
+        'Rejected Cancellation Request', 
+        `Rejected cancellation request #${leaveId} for ${leave.staff_name}. Leave remains approved.`
+      );
+      
+      return res.json(updated.rows[0]);
+    }
     /* ============================================================
         APPROVE (AL / EL) — DEDUCT LEAVE
     ============================================================ */
@@ -810,6 +840,7 @@ router.patch("/:id", async (req, res) => {
     }
 
     // FINAL: UPDATE STATUS
+    console.log('📝 About to update status to:', status);
     const updated = await pool.query(
       `UPDATE leave_requests
        SET status=$1
@@ -817,8 +848,23 @@ router.patch("/:id", async (req, res) => {
        RETURNING *`,
       [status, leaveId]
     );
+    console.log('✅ Status updated successfully');
+    if (status === 'approved') {
+          await logAdminAction(
+            req, 
+            'Approved Leave Request', 
+            `Approved leave request #${leaveId} for ${leave.staff_name}`
+          );
+        
+        } else if (status === 'rejected') {
+          await logAdminAction(
+            req, 
+            'Rejected Leave Request', 
+            `Rejected leave request #${leaveId} for ${leave.staff_name}`
+          );
+        }
 
-    res.json(updated.rows[0]);
+        res.json(updated.rows[0]);
 
   } catch (err) {
     console.error("PATCH /:id error:", err);

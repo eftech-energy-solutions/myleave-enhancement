@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import nodemailer from 'nodemailer';
 import pool from '../db.js';
 import dotenv from 'dotenv';
+import { logAdminAction } from '../middleware/adminLogger.js';
 dotenv.config();
 
 const router = express.Router();

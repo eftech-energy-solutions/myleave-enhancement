@@ -695,7 +695,7 @@ async function rejectCancellation(item) {
     method: "PATCH",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ status: "rejected" })  // ✔️ FIX
+    body: JSON.stringify({ status: "cancellation_rejected" })  // ✅ FIXED!
   });
 
   await loadPendingRequests();

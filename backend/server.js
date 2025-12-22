@@ -6,6 +6,8 @@ import dotenv from 'dotenv';
 import bcrypt from 'bcryptjs';
 
 import pool from './src/db.js';
+import { autoLogMiddleware } from './src/middleware/adminLogger.js';
+import adminLogsRoutes from './src/routes/adminLogs.js';
 import profileRoutes from './src/routes/profile.js';
 import uploadRoute from './src/routes/uploadRoute.js';
 import holidayRoutes from './src/routes/holidayRoutes.js';
@@ -28,6 +30,8 @@ app.use(cors({
 }));
 app.use(bodyParser.json());
 app.use(cookieParser());
+app.use(autoLogMiddleware);
+app.use(adminLogsRoutes);
 
 // static uploads folder
 app.use('/uploads', express.static('uploads'));

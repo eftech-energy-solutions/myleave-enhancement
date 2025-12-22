@@ -3,6 +3,7 @@ import pool from '../db.js';
 import nodemailer from 'nodemailer';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
+import { logAdminAction } from '../middleware/adminLogger.js';
 
 const router = express.Router();
 
@@ -139,7 +140,11 @@ await pool.query(
       subject: `New employee added: ${name}`,
       text: `New employee added:\n\nName: ${name}\nEmail: ${email}\nRole: ${role}\nPosition: ${position}\nPassword: ${randomPassword}`,
     });
-
+    await logAdminAction(
+          req, 
+          'Added Employee', 
+          `Added new employee: ${name} (${empId})`
+        );
     res.json({ success: true, message: 'Employee added and emails sent.' });
 
   } catch (err) {
@@ -452,7 +457,11 @@ Please log in and change your password.
 Thank you.`
       });
     }
-
+await logAdminAction(
+      req, 
+      'Updated Employee', 
+      `Updated employee profile: ${full_name} (${staff_id})`
+    );
 res.json({
       success: true,
       message: hasUsedLeave 
@@ -487,7 +496,11 @@ router.delete("/:staff_id", async (req, res) => {
 
     // Delete profile (main table)
     await pool.query("DELETE FROM profiles WHERE staff_id = $1", [staffId]);
-
+    await logAdminAction(
+          req, 
+          'Deleted Employee', 
+          `Deleted employee: ${staffId}`
+        );
     return res.json({ success: true, message: "Employee deleted fully." });
 
   } catch (err) {
