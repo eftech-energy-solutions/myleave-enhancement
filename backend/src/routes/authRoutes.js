@@ -42,41 +42,63 @@ router.post("/login", async (req, res) => {
       [email]
     );
 
-    if (!userRes.rows.length)
-      return res.status(400).json({ error: "Invalid email or password" });
+    // ❌ EMAIL TAK WUJUD
+    if (userRes.rows.length === 0) {
+      return res.status(400).json({
+        error: "Email is wrong"
+      });
+    }
 
     const user = userRes.rows[0];
 
-    const valid = await bcrypt.compare(password, user.password);
-    if (!valid)
-      return res.status(400).json({ error: "Invalid email or password" });
+    // ❌ PASSWORD SALAH
+    const match = await bcrypt.compare(password, user.password);
+    if (!match) {
+      return res.status(400).json({
+        error: "Wrong password"
+      });
+    }
 
-    // SET COOKIE
-    res.cookie("session", JSON.stringify({
-      staffId: user.staff_id,
-      name: user.full_name,
-      email: user.email,
-      role: user.role,
-      department: user.department,
-      photoUrl: user.photourl
-    }), {
-      httpOnly: true,
-      sameSite: "lax",
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-    });
+    // ✅ LOGIN BERJAYA — JANGAN SENTUH
+   let finalRole = user.role;
 
-    // Decide redirect based on role
-    let redirectTo = "/dashboard/staff";
-    if (user.role === "admin") redirectTo = "/dashboard/admin";
-    if (user.role === "manager") redirectTo = "/dashboard/manager";
+        // 2) OPTIONAL: override role ikut email (kalau guna table role_setting)
+        const overrideQ = await pool.query(
+          `SELECT role FROM role_setting WHERE LOWER(email) = LOWER($1) LIMIT 1`,
+          [email]
+        );
 
-    res.json({ success: true, redirectTo });
+        if (overrideQ.rows.length) {
+          finalRole = overrideQ.rows[0].role;
+        }
 
-  } catch (err) {
-    console.error("Login error:", err);
-    res.status(500).json({ error: "Server error" });
-  }
-});
+        // 3) SET AUTH TOKEN (SATU COOKIE SAHAJA)
+        res.cookie("auth_token", JSON.stringify({
+          staffId: user.staff_id,
+          name: user.full_name,
+          email: user.email,
+          role: finalRole,
+          department: user.department,
+          photoUrl: user.photourl
+        }), {
+          httpOnly: true,
+          sameSite: "lax",
+          maxAge: 7 * 24 * 60 * 60 * 1000
+        });
+
+        // 4) REDIRECT IKUT ROLE
+        let redirectTo = "/dashboard/staff";
+        if (String(finalRole).toLowerCase() === "admin") redirectTo = "/dashboard/admin";
+        if (String(finalRole).toLowerCase() === "manager") redirectTo = "/dashboard/manager";
+
+        return res.json({ success: true, redirectTo });
+
+          } catch (err) {
+            console.error("Login error:", err);
+            res.status(500).json({ error: "Server error" });
+          }
+        });
+
 
 // ---------- CHANGE PASSWORD (email + current + new) ----------
 router.post('/change-password', async (req, res) => {

@@ -154,7 +154,7 @@ app.post('/api/login', async (req, res) => {
       position: user.position
     };
 
-    res.cookie('auth_token', JSON.stringify(payload), {
+    res.cookie("auth_token", JSON.stringify(payload), {
       httpOnly: false,
       sameSite: 'lax',
       path: '/',

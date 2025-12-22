@@ -31,21 +31,26 @@
 		loginError = '';
 		loginLoading = true;
 		try {
-			const res = await fetch('http://localhost:5000/api/login', {
+			const res = await fetch('http://localhost:5000/api/auth/login', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				credentials: 'include',
 				body: JSON.stringify({ email: email.trim().toLowerCase(), password })
 			});
 			const data = await res.json();
+			loginError = '';
 
 			if (!res.ok) {
-    loginError =
-        data?.error === 'Invalid email or password'
-            ? 'Wrong password'
-            : data?.error || 'Login failed';
-    return;
-}
+				if (data?.error === 'Email is wrong') {
+					loginError = 'Email is wrong';
+				} else if (data?.error === 'Wrong password') {
+					loginError = 'Wrong password';
+				} else {
+					loginError = data?.error || 'Login failed';
+				}
+				return;
+				}
+
 			window.location.href = data.redirectTo || '/dashboard/staff';
 		} catch (err) {
 			console.error(err);
