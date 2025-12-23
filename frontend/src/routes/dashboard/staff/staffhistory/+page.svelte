@@ -13,6 +13,19 @@
     UNPAID: "Unpaid"
   };
 
+  const leaveTypeShortName = {
+  AL: "Annual / Emergency",
+  MC: "Medical",
+  MAT: "Maternity",
+  PAT: "Paternity",
+  COMP_A: "Compassionate A",
+  COMP_B: "Compassionate B",
+  MAR: "Marriage",
+  HOSP: "Hospitalization",
+  UNPAID: "Unpaid"
+};
+
+
   function formatDays(n) {
   return Number(n).toFixed(1);
 }
@@ -503,16 +516,19 @@ function onUntilChange() {
       </select>
     </div>
 
-    <div class="filter">
+   <div class="filter">
   <label>LEAVE TYPE</label>
-  <select bind:value={selectedLeaveType} aria-label="Filter by leave type">
-    {#each leaveTypes as t}
+  <select bind:value={selectedLeaveType}>
+    <option value="All">All</option>
+
+    {#each leaveTypes.slice(1) as t}
       <option value={t}>
-        {t === "All" ? "All" : getLeaveFullName(t)}
+        {leaveTypeShortName[t] || t}
       </option>
     {/each}
   </select>
 </div>
+
 
     <div class="filter">
       <label>YEAR</label>
