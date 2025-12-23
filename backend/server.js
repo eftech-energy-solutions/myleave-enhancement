@@ -84,96 +84,96 @@ function roleRedirect(role) {
 // ============================
 // LOGIN
 // ============================
-app.post('/api/login', async (req, res) => {
-  try {
-    let { email, password } = req.body || {};
-    if (!email || !password) {
-      return res.status(400).json({ success: false, error: 'Email and password are required' });
-    }
+// app.post('/api/login', async (req, res) => {
+//   try {
+//     let { email, password } = req.body || {};
+//     if (!email || !password) {
+//       return res.status(400).json({ success: false, error: 'Email and password are required' });
+//     }
 
-    email = String(email).trim().toLowerCase();
+//     email = String(email).trim().toLowerCase();
 
-    // ====== FETCH USER ASAL ======
-    const q = await pool.query(
-      `SELECT id, staff_id, full_name, email, role, photourl, department,
-              TRIM(CAST(password AS TEXT)) AS password
-         FROM profiles
-        WHERE LOWER(email) = $1
-        LIMIT 1`,
-      [email]
-    );
+//     // ====== FETCH USER ASAL ======
+//     const q = await pool.query(
+//       `SELECT id, staff_id, full_name, email, role, photourl, department,
+//               TRIM(CAST(password AS TEXT)) AS password
+//          FROM profiles
+//         WHERE LOWER(email) = $1
+//         LIMIT 1`,
+//       [email]
+//     );
 
-    if (!q.rows.length) {
-      return res.status(401).json({ success: false, error: 'Invalid email or password' });
-    }
+//     if (!q.rows.length) {
+//       return res.status(401).json({ success: false, error: 'Invalid email or password' });
+//     }
 
-    const user = q.rows[0];
+//     const user = q.rows[0];
 
-    // ====== PASSWORD CHECK ======
-    const stored = String(user.password ?? '').trim();
-    const input = String(password);
+//     // ====== PASSWORD CHECK ======
+//     const stored = String(user.password ?? '').trim();
+//     const input = String(password);
 
-    let ok = false;
-    try {
-      if (stored.startsWith('$2')) {
-        ok = await bcrypt.compare(input, stored);
-      } else {
-        ok = stored === input;
-      }
-    } catch (err) {
-      ok = stored === input;
-    }
+//     let ok = false;
+//     try {
+//       if (stored.startsWith('$2')) {
+//         ok = await bcrypt.compare(input, stored);
+//       } else {
+//         ok = stored === input;
+//       }
+//     } catch (err) {
+//       ok = stored === input;
+//     }
 
-    if (!ok) {
-      return res.status(401).json({ success: false, error: 'Invalid email or password' });
-    }
+//     if (!ok) {
+//       return res.status(401).json({ success: false, error: 'Invalid email or password' });
+//     }
 
-    // ======================================================
-    // CHECK ROLE OVERRIDE DARI role_setting
-    // ======================================================
-    const overrideQ = await pool.query(
-      `SELECT role FROM role_setting WHERE LOWER(email) = $1 LIMIT 1`,
-      [email]
-    );
+//     // ======================================================
+//     // CHECK ROLE OVERRIDE DARI role_setting
+//     // ======================================================
+//     const overrideQ = await pool.query(
+//       `SELECT role FROM role_setting WHERE LOWER(email) = $1 LIMIT 1`,
+//       [email]
+//     );
 
-    let finalRole = user.role; // default
+//     let finalRole = user.role; // default
 
-    if (overrideQ.rows.length) {
-      finalRole = overrideQ.rows[0].role;  // override dari table role_setting
-      console.log("🔄 Role override applied:", finalRole);
-    } else {
-      console.log("➡ No override, using default role:", finalRole);
-    }
+//     if (overrideQ.rows.length) {
+//       finalRole = overrideQ.rows[0].role;  // override dari table role_setting
+//       console.log("🔄 Role override applied:", finalRole);
+//     } else {
+//       console.log("➡ No override, using default role:", finalRole);
+//     }
 
-    // =======================================================
-    // SET COOKIE PAYLOAD (role sudah override)
-    // =======================================================
-    const payload = {
-      staffId: user.staff_id,
-      email: user.email,
-      role: finalRole,          // ← guna finalRole
-      name: user.full_name,
-      department: user.department,
-      photoUrl: user.photourl,
-      position: user.position
-    };
+//     // =======================================================
+//     // SET COOKIE PAYLOAD (role sudah override)
+//     // =======================================================
+//     const payload = {
+//       staffId: user.staff_id,
+//       email: user.email,
+//       role: finalRole,          // ← guna finalRole
+//       name: user.full_name,
+//       department: user.department,
+//       photoUrl: user.photourl,
+//       position: user.position
+//     };
 
-    res.cookie("auth_token", JSON.stringify(payload), {
-      httpOnly: false,
-      sameSite: 'lax',
-      path: '/',
-    });
+//     res.cookie("auth_token", JSON.stringify(payload), {
+//       httpOnly: false,
+//       sameSite: 'lax',
+//       path: '/',
+//     });
 
-    return res.json({
-      success: true,
-      redirectTo: roleRedirect(finalRole) // ← guna finalRole
-    });
+//     return res.json({
+//       success: true,
+//       redirectTo: roleRedirect(finalRole) // ← guna finalRole
+//     });
 
-  } catch (err) {
-    console.error('Login error:', err);
-    return res.status(500).json({ success: false, error: 'Server error' });
-  }
-});
+//   } catch (err) {
+//     console.error('Login error:', err);
+//     return res.status(500).json({ success: false, error: 'Server error' });
+//   }
+// });
 
 
 // ============================

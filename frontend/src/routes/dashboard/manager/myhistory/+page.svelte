@@ -25,6 +25,7 @@
   let user = null;
 
   let selectedStatus = "All";
+  let selectedLeaveType = "All";
   let selectedMonth = "All";
   let selectedYear = "All";
   let showEditModal = false;
@@ -49,6 +50,20 @@ const fixedDurations = {
   "COMP_B": 1,
   MAR : 3
 };
+
+const leaveTypes = [
+  "All",
+  "AL",
+  "MC",
+  "MAT",
+  "PAT",
+  "COMP_A",
+  "COMP_B",
+  "MAR",
+  "HOSP",
+  "UNPAID"
+];
+
 
 let leaveType = "AL";
 let duration = "Full";
@@ -161,12 +176,14 @@ $: {
           attachment_path: l.attachment_path, 
 
           status:
-            l.status === "pending" ? "Pending" :
-            l.status === "approved" ? "Approved" :
-            l.status === "rejected" ? "Rejected" :
-            l.status === "cancelled" ? "Cancelled" :
-            l.status === "cancellation_pending" ? "Cancellation Pending" :
-            l.status
+            Number(l.total_days) === 0
+              ? "Invalid"
+              : l.status === "pending" ? "Pending"
+              : l.status === "approved" ? "Approved"
+              : l.status === "rejected" ? "Rejected"
+              : l.status === "cancelled" ? "Cancelled"
+              : l.status === "cancellation_pending" ? "Cancellation Pending"
+              : l.status
         }));
 
     } catch (err) {
@@ -193,7 +210,12 @@ $: filteredLeaves = leaves
       selectedYear === "All" ||
       y === Number(selectedYear);
 
-    return matchStatus && matchMonth && matchYear;
+    const matchType =
+      selectedLeaveType === "All" ||
+      l.type === selectedLeaveType;
+
+  return matchStatus && matchMonth && matchYear && matchType;
+
   })
   .sort((a, b) => (a.dateFrom < b.dateFrom ? 1 : -1));
 
@@ -474,6 +496,17 @@ function onUntilChange() {
         {/each}
       </select>
     </div>
+
+    <div class="filter">
+  <label>LEAVE TYPE</label>
+  <select bind:value={selectedLeaveType} aria-label="Filter by leave type">
+    {#each leaveTypes as t}
+      <option value={t}>
+        {t === "All" ? "All" : getLeaveFullName(t)}
+      </option>
+    {/each}
+  </select>
+</div>
 
     <div class="filter">
       <label>YEAR</label>
@@ -768,6 +801,11 @@ function onUntilChange() {
   background: #ffe7bb;    /* soft orange / light gold */
   color: #b45309;         /* darker amber text */
   border: 1px solid #f5c66c;
+}
+.badge.invalid {
+  background: #a5a5a7;
+  color: #ffff;
+  border: 1px  #cbd5e1;
 }
 
   /* ===== ACTION BUTTON ===== */

@@ -12,7 +12,8 @@
     COMP_A: "Compassionate A (Parent/Child/Spouse)",
     COMP_B: "Compassionate B (Grandparent/Sibling)",
     MAR: "Marriage",
-    HOSP: "Hospitalization"
+    HOSP: "Hospitalization",
+    UNPAID: "Unpaid"
   };
 
   function getLeaveFullName(code) {
@@ -31,7 +32,7 @@
   const railTabs = [{ label: 'All', value: 'All' }, ...months.map((m,i)=>({label:monthShort[i+1], value:m}))];
 
   let statusFilter = "";
-  let deptFilter = "";
+  let leaveTypeFilter = "";
   let q = "";
   let monthFilter = "All";
 
@@ -147,30 +148,45 @@ function makeEmployeeRecord(item) {
 
   const dateRange = (a,b) => a===b ? fmt(a) : `${fmt(a)} – ${fmt(b)}`;
 
-  const applyFilters = (list=[]) => {
-    let out = list;
+ const applyFilters = (list = []) => {
+  let out = list;
 
-    if (selected?.month === 'All' && monthFilter !== 'All')
-      out = out.filter(e => e._month === monthFilter);
+  if (statusFilter)
+    out = out.filter(e => e.status.toLowerCase() === statusFilter.toLowerCase());
 
-    if (statusFilter)
-      out = out.filter(e => e.status.toLowerCase() === statusFilter.toLowerCase());
+  if (leaveTypeFilter)
+    out = out.filter(e => e.leaveType === leaveTypeFilter);
 
-    if (deptFilter)
-      out = out.filter(e => e.department === deptFilter);
+  if (q.trim()) {
+    const term = q.trim().toLowerCase();
+    out = out.filter(e =>
+      e.name.toLowerCase().includes(term) ||
+      e.id.toLowerCase().includes(term)
+    );
+  }
 
-    if (q.trim()) {
-      const term = q.trim().toLowerCase();
-      out = out.filter(e =>
-        e.name.toLowerCase().includes(term) ||
-        e.id.toLowerCase().includes(term)
-      );
-    }
+  return out;
+};
 
-    return out;
-  };
+$: filtered = (() => {
+  // 👇 force Svelte to track these
+  statusFilter;
+  leaveTypeFilter;
+  q;
+  monthFilter;
+  selected;
 
-  $: filtered = selected ? applyFilters(selected.employees) : [];
+  if (!selected) return [];
+
+  const base = allCombined.filter(e =>
+    selected.month === 'All'
+      ? monthFilter === 'All' || e._month === monthFilter
+      : e._month === selected.month
+  );
+
+  return applyFilters(base);
+})();
+
   $: total = filtered.length;
 </script>
 <svelte:head>
@@ -237,10 +253,18 @@ function makeEmployeeRecord(item) {
             </label>
 
             <label class="control">
-              <span>Department</span>
-              <select bind:value={deptFilter}>
+              <span>Leave Type</span>
+              <select bind:value={leaveTypeFilter}>
                 <option value="">All</option>
-                {#each allDepartments as d}<option>{d}</option>{/each}
+                <option value="AL">Annual / Emergency</option>
+                <option value="MC">Medical</option>
+                <option value="MAT">Maternity</option>
+                <option value="PAT">Paternity</option>
+                <option value="COMP_A">Compassionate A</option>
+                <option value="COMP_B">Compassionate B</option>
+                <option value="MAR">Marriage</option>
+                <option value="HOSP">Hospitalization</option>
+                <option value="UNPAID">Unpaid</option>
               </select>
             </label>
 
@@ -263,7 +287,6 @@ function makeEmployeeRecord(item) {
               {#if selected.month === 'All' && monthFilter === 'All'}Showing: <b>All months</b>. {/if}
               {#if selected.month === 'All' && monthFilter !== 'All'}Month: <b>{monthFilter}</b>. {/if}
               {#if statusFilter}Status: <b>{statusFilter}</b>. {/if}
-              {#if deptFilter}Dept: <b>{deptFilter}</b>. {/if}
               {#if q}Search: <b>{q}</b>. {/if}
               {#if !showAll && total > 10}
                 Showing first 10 of {total}. <button class="linkbtn" on:click={() => showAll = true}>Show all</button>
@@ -304,12 +327,9 @@ function makeEmployeeRecord(item) {
             </table>
           {:else}
             <div class="empty">
-              {#if selected}
-                No results for {selected.month}
-                {#if statusFilter || deptFilter || q || (selected.month==='All' && monthFilter!=='All')} with current filters.{/if}
-              {/if}
-            </div>
-          {/if}
+            No results found.
+          </div>
+        {/if}
         </section>
       </div>
 

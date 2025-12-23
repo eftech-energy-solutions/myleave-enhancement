@@ -9,7 +9,8 @@
     COMP_A: "Compassionate A (Parent/Child/Spouse)",
     COMP_B: "Compassionate B (Grandparent/Sibling)",
     MAR: "Marriage",
-    HOSP: "Hospitalization"
+    HOSP: "Hospitalization",
+    UNPAID: "Unpaid"
   };
 
   function getLeaveFullName(code) {
@@ -30,6 +31,7 @@
 
   let statusFilter = "";
   let deptFilter = "";
+  let leaveTypeFilter = "";
   let q = "";
   let monthFilter = "All";
 
@@ -146,18 +148,19 @@ function makeEmployeeRecord(item) {
   }
   const dateRange = (a,b) => a===b ? fmt(a) : `${fmt(a)} – ${fmt(b)}`;
 
-  const applyFilters = (list=[]) => {
+  const applyFilters = (list = []) => {
     let out = list;
-    if (selected?.month === 'All' && monthFilter !== 'All')
-      out = out.filter(e => e._month === monthFilter);
 
-    if (statusFilter) {
-      const s = statusFilter.toLowerCase();
-      out = out.filter(e => (e.status || '').toLowerCase() === s);
-    }
+    if (statusFilter)
+      out = out.filter(e =>
+        (e.status || '').toLowerCase() === statusFilter.toLowerCase()
+      );
+    
+      if (deptFilter)
+    out = out.filter(e => e.department === deptFilter);
 
-    if (deptFilter)
-      out = out.filter(e => e.department === deptFilter);
+    if (leaveTypeFilter)
+      out = out.filter(e => e.leaveType === leaveTypeFilter);
 
     if (q.trim()) {
       const term = q.trim().toLowerCase();
@@ -170,7 +173,25 @@ function makeEmployeeRecord(item) {
     return out;
   };
 
-  $: filtered = selected ? applyFilters(selected.employees) : [];
+  $: filtered = (() => {
+  selected;
+  statusFilter;
+  deptFilter;  
+  leaveTypeFilter;
+  q;
+  monthFilter;
+
+  if (!selected) return [];
+
+  const base = allCombined.filter(e =>
+    selected.month === 'All'
+      ? monthFilter === 'All' || e._month === monthFilter
+      : e._month === selected.month
+  );
+
+  return applyFilters(base);
+})();
+
   $: total = filtered.length;
 
  // ===== Print Report Logic =====
@@ -315,21 +336,38 @@ function makeEmployeeRecord(item) {
               </select>
             </label>
             <label class="control">
+              <span>Name / ID</span>
+              <input type="text" placeholder="Search…" bind:value={q} />
+            </label>
+            <label class="control">
               <span>Department</span>
               <select bind:value={deptFilter}>
                 <option value="">All</option>
-                {#each allDepartments as d}<option>{d}</option>{/each}
+                {#each allDepartments as d}
+                  <option value={d}>{d}</option>
+                {/each}
               </select>
-            </label>
-            <label class="control">
-              <span>Name / ID</span>
-              <input type="text" placeholder="Search…" bind:value={q} />
             </label>
             <label class="control">
               <span>Month</span>
               <select on:change={(e)=>onMonthFilterChange(e.target.value)} bind:value={monthFilter}>
                 <option>All</option>
                 {#each months as m}<option>{m}</option>{/each}
+              </select>
+            </label>
+            <label class="control">
+              <span>Leave Type</span>
+              <select bind:value={leaveTypeFilter}>
+                <option value="">All</option>
+                <option value="AL">Annual / Emergency</option>
+                <option value="MC">Medical</option>
+                <option value="MAT">Maternity</option>
+                <option value="PAT">Paternity</option>
+                <option value="COMP_A">Compassionate A</option>
+                <option value="COMP_B">Compassionate B</option>
+                <option value="MAR">Marriage</option>
+                <option value="HOSP">Hospitalization</option>
+                <option value="UNPAID">Unpaid</option>
               </select>
             </label>
           </div>
