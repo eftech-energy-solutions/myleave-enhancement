@@ -92,6 +92,41 @@ async function updateRemainingLeave(staffId) {
     [remaining, staffId]
   );
 }
+// ============================================================
+// MARK APPROVED LEAVES AS INVALID IF TOTAL_DAYS = 0
+// ============================================================
+async function markInvalidApprovedLeaves() {
+  try {
+    const result = await pool.query(`
+      UPDATE leave_requests
+      SET status = 'invalid'
+      WHERE status = 'approved'
+        AND total_days <= 0
+      RETURNING leave_id
+    `);
+
+    if (result.rows.length) {
+      console.log(
+        `⚠️ Marked ${result.rows.length} approved leave(s) as INVALID due to zero total_days`
+      );
+    }
+  } catch (err) {
+    console.error("❌ Failed to mark invalid approved leaves:", err);
+  }
+}
+// ============================================================
+// FORCE RECALC + MARK INVALID (FOR FRONTEND REFRESH)
+// ============================================================
+router.post("/recalc-invalid", async (req, res) => {
+  try {
+    await markInvalidApprovedLeaves();
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("Recalc invalid error:", err);
+    return res.status(500).json({ success: false });
+  }
+});
+
 
 /* ============================================================
     API — TRIGGER RESET
@@ -103,9 +138,6 @@ router.post("/reset-year", async (req, res) => {
     : res.status(500).json({ success: false });
 });
 
-/* ============================================================
-    CREATE NEW LEAVE REQUEST
-============================================================ */
 /* ============================================================
     CREATE NEW LEAVE REQUEST (WITH OVERLAP CHECK)
 ============================================================ */
@@ -1064,6 +1096,13 @@ cron.schedule('0 0 1 1 *', async () => {
 });
 
 console.log('⏰ Cron job scheduled: Yearly reset on January 1 at midnight');
+// ============================================================
+// AUTO MARK APPROVED LEAVES AS INVALID (SAFETY NET)
+// ============================================================
+cron.schedule('*/1 * * * *', async () => {
+  console.log('🧹 Checking approved leaves with zero days...');
+  await markInvalidApprovedLeaves();
+});
 
 export default router;
 

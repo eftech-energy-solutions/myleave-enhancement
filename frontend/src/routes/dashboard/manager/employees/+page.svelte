@@ -11,6 +11,22 @@
     HOSP: "Hospitalization"
   };
 
+  const leaveTypeShortName = {
+  AL: "Annual / Emergency",
+  MC: "Medical",
+  MAT: "Maternity",
+  PAT: "Paternity",
+  COMP_A: "Compassionate A",
+  COMP_B: "Compassionate B",
+  MAR: "Marriage",
+  HOSP: "Hospitalization",
+  UNPAID: "Unpaid"
+};
+
+function getLeaveShortName(code) {
+  return leaveTypeShortName[code] || code;
+}
+
   function getLeaveFullName(code) {
     return leaveTypeFullName[code] || code;
   }
@@ -336,6 +352,8 @@ pendingCancel = view.filter(
     await loadPendingRequests();
     await loadPending();
     await loadEmployees();
+
+    window.dispatchEvent(new Event('pending-updated'));
   }
 
   async function reject(id) {
@@ -352,6 +370,8 @@ pendingCancel = view.filter(
     await loadPendingRequests();
     await loadPending();
     await loadEmployees();
+
+    window.dispatchEvent(new Event('pending-updated'));
   }
   async function approveCancellation(item) {
   const id = item.leave_id;
@@ -366,6 +386,8 @@ pendingCancel = view.filter(
   await loadPendingRequests();
   await loadPending();
   await loadEmployees();
+
+  window.dispatchEvent(new Event('pending-updated'));
 }
 
 async function rejectCancellation(item) {
@@ -381,6 +403,8 @@ async function rejectCancellation(item) {
   await loadPendingRequests();
   await loadPending();
   await loadEmployees();
+
+  window.dispatchEvent(new Event('pending-updated'));
 }
 
 
@@ -577,14 +601,9 @@ async function rejectCancellation(item) {
                   {item.profile_department || item.department}
                 </div>
               </div>
-              <span
-                  class={`pill type ${item.leave_type === "UNPAID" ? "unpaid-pill" : ""}`}
-                >
-                  {item.leave_type === "UNPAID"
-                    ? "Unpaid"
-                    : getLeaveFullName(item.leave_type) || "Leave"}
-                </span>
-
+              <span class={`pill type ${item.leave_type === "UNPAID" ? "unpaid-pill" : ""}`}>
+              {getLeaveShortName(item.leave_type)}
+            </span>
             </div>
 
             <!-- Dates -->
@@ -674,8 +693,8 @@ async function rejectCancellation(item) {
                 </div>
               </div>
               <span class="pill type" style="background:#fee2e2; color:#b91c1c;">
-                Cancellation: {getLeaveFullName(item.leave_type)}
-              </span>
+                  Cancellation: {getLeaveShortName(item.leave_type)}
+                </span>
             </div>
 
             <!-- Dates -->

@@ -66,7 +66,31 @@
     }
 
     loadingUser = false;
+    await loadPendingCount();
+
   });
+
+  let pendingCount = 0;
+
+async function loadPendingCount() {
+  try {
+    const res = await fetch("http://localhost:5000/api/leave-requests", {
+      credentials: "include"
+    });
+    if (!res.ok) return;
+
+    const data = await res.json();
+
+    pendingCount = data.filter(
+      r => r.status === "pending" || r.status === "cancellation_pending"
+    ).length;
+  } catch (err) {
+    console.error("Failed to load pending count:", err);
+  }
+  await loadPendingCount(); 
+
+}
+
 
   // Profile modal state
   let profileModalOpen = false;
@@ -411,7 +435,7 @@ async function saveProfile(e) {
     $page.url.pathname === roleBase
       ? 'Dashboard'
       : $page.url.pathname.startsWith('/dashboard/admin/history')
-      ? 'Leave History'
+      ? 'Approved Leave History'
       : $page.url.pathname.startsWith('/dashboard/admin/employees')
       ? 'Employees'
       : 'My Dashboard';
@@ -446,7 +470,14 @@ async function saveProfile(e) {
           <span class="ico">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
           </span>
-          <span class="text">Employees</span>
+           <span class="text">
+              Employees
+              {#if pendingCount > 0}
+                <span class="nav-badge">
+                  {pendingCount > 9 ? '9+' : pendingCount}
+                </span>
+              {/if}
+          </span>
         </a>
          <a href="/dashboard/admin/logs" class:active={isActive('/dashboard/admin/logs')}>
           <span class="ico">
@@ -828,6 +859,20 @@ async function saveProfile(e) {
     color: #fff;
   }
   .page-title{ margin:0; font-size:55px; line-height:1.1; font-weight:700; color:#fff; }
+
+  .nav-badge {
+  margin-left: 10px;
+  background: #dc2626;   /* red */
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  line-height: 1.4;
+  position: relative;
+  top: -1.5px; 
+}
+
 
   /* Profile Dropdown (Tidak berubah) */
   .profile{ position:relative; display:flex; align-items:center; gap:10px; }

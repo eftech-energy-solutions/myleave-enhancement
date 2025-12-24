@@ -39,18 +39,24 @@
   let allDepartments = [];
 
   // ===== Fetch Manager-filtered data =====
-  onMount(async () => {
-    const res = await fetch("/api/leave-requests/history/all");
-    const data = await res.json();
-
-    // group by month (same as dummy data)
-    rows = groupByMonth(data);
-
-    // dynamic department list from DB
-    allDepartments = Array.from(
-      new Set(data.map(e => e.department).filter(Boolean))
-    ).sort();
+  async function loadHistory() {
+  const res = await fetch("/api/leave-requests/history/all", {
+    credentials: "include"
+    
   });
+  const data = await res.json();
+
+  rows = groupByMonth(data);
+
+  allDepartments = Array.from(
+    new Set(data.map(e => e.department).filter(Boolean))
+  ).sort();
+  
+}
+onMount(async () => {
+  await loadHistory();
+});
+
 function groupByMonth(list) {
   const out = months.map(m => ({ month: m, employees: [] }));
 
@@ -107,12 +113,17 @@ function makeEmployeeRecord(item) {
   };
 }
   // ===== UI handlers =====
-  const count = row =>
-    row.employees.filter(e =>
-      e.status === "Approved" || e.status === "Pending"
-    ).length;
+  const count = (row) =>
+  row.employees.filter(e => e.status === "Approved").length;
 
-  function onDetails(row){ selected = row; resetFiltersForMonthView(); showModal = true; }
+  async function onDetails(row){
+  await loadHistory();  
+  selected = row;
+  resetFiltersForMonthView();
+  showModal = true;
+}
+
+
   function closeModal(){ showModal = false; selected = null; showAll = false; }
   function handleKey(e){ if(e.key === 'Escape') closeModal(); }
 
@@ -206,7 +217,7 @@ $: filtered = (() => {
       {#each rows as row}
         <div class="month-card" on:click={() => onDetails(row)}>
           <h2>{row.month}</h2>
-          <p>Number of Leave Applied</p>
+          <p>Number of Approved Leaves</p>
           <div class="count">{count(row)}</div>
         </div>
       {/each}
@@ -249,6 +260,7 @@ $: filtered = (() => {
                 <option>Pending</option>
                 <option>Rejected</option>
                 <option>Cancelled</option>
+                <option>Invalid</option>
               </select>
             </label>
 
@@ -475,8 +487,11 @@ $: filtered = (() => {
   border-color: #fddc63;
   white-space: nowrap;
 }
-
-
+.status.invalid {
+  background: #a5a5a7;     /* soft grey */
+  color: #ffffff;         /* white text */
+  border: 1px solid #cbd5e1;
+}
 
   .empty{ padding:22px; color:#567; text-align:center; }
   .dialog-foot{ padding:12px 16px; border-top:1px solid #eee; display:flex; justify-content:flex-end; }

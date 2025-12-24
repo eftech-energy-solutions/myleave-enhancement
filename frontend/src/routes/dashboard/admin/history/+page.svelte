@@ -36,18 +36,20 @@
   let monthFilter = "All";
 
   // ===== Fetch real DB data =====
-  onMount(async () => {
-    const res = await fetch("/api/leave-requests/history/all");
-    const data = await res.json();
-
-    // group by month (same format as your dummy)
-    rows = groupByMonth(data);
-
-    // generate department list (dynamic)
-    allDepartments = Array.from(
-      new Set(data.map(e => e.department).filter(Boolean))
-    ).sort();
+  async function loadHistory() {
+  const res = await fetch("/api/leave-requests/history/all", {
+    credentials: "include"
   });
+  const data = await res.json();
+
+  rows = groupByMonth(data);
+
+  allDepartments = Array.from(
+    new Set(data.map(e => e.department).filter(Boolean))
+  ).sort();
+}
+
+onMount(loadHistory);
 
   // ===== Group into your existing display structure =====
   function groupByMonth(list) {
@@ -90,9 +92,11 @@ function makeEmployeeRecord(item) {
   const raw = item.status.toLowerCase();
 
   let formatted =
-    raw === "cancellation_pending"
-      ? "Cancellation pending"
-      : raw.charAt(0).toUpperCase() + raw.slice(1);
+    raw === "invalid"
+      ? "Invalid"
+      : raw === "cancellation_pending"
+        ? "Cancellation pending"
+        : raw.charAt(0).toUpperCase() + raw.slice(1);
 
   return {
     id: item.staff_id,
@@ -100,17 +104,16 @@ function makeEmployeeRecord(item) {
     department: item.department,
     totalDays: item.total_days,
     leaveType: item.leave_type,
-    status: formatted,     
+    status: formatted,
     dateFrom: item.date_from,
     dateTo: item.date_until
   };
 }
 
+
   // ===== UI Calculation Logic (same as before) =====
   const count = (row) =>
-    row.employees.filter(e =>
-      e.status === "Approved" || e.status === "Pending"
-    ).length;
+  row.employees.filter(e => e.status === "Approved").length;
 
   function onDetails(row){ selected = row; resetFiltersForMonthView(); showModal = true; }
   function closeModal(){ showModal = false; selected = null; showAll = false; }
@@ -292,7 +295,7 @@ function makeEmployeeRecord(item) {
       {#each rows as row}
         <div class="month-card" on:click={() => onDetails(row)}>
           <h2>{row.month}</h2>
-          <p>Number of Leave Applied</p>
+          <p>Number of Approved Leaves</p>
           <div class="count">{count(row)}</div>
         </div>
       {/each}
@@ -333,6 +336,7 @@ function makeEmployeeRecord(item) {
                 <option>Pending</option>
                 <option>Rejected</option>
                 <option>Cancelled</option>
+                <option>Invalid</option>
               </select>
             </label>
             <label class="control">
@@ -578,6 +582,12 @@ function makeEmployeeRecord(item) {
   border-color: #fddc63;
   white-space: nowrap;
 }
+.status.invalid {
+  background: #a5a5a7;     /* soft grey */
+  color: #ffffff;         /* white text */
+  border: 1px solid #cbd5e1;
+}
+
 
   .empty{ padding:22px; color:#567; text-align:center; }
   .dialog-foot{ padding:12px 16px; border-top:1px solid #eee; display:flex; justify-content:flex-end; }

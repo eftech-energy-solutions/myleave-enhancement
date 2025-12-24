@@ -364,6 +364,11 @@ const canGoNextYear = () => {
       return;
     }
 
+    await fetch("/api/leave-requests/recalc-invalid", {
+    method: "POST",
+    credentials: "include"
+  });
+
     addModal?.close();
     await loadHolidays();
   }

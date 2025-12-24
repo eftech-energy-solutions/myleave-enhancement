@@ -58,9 +58,56 @@
     } catch (err) {
       console.error('Error fetching user (possible JSON error):', err);
     }
+   // 1️⃣ load sekali masa mount
+  await loadPendingCount();
 
+  // 2️⃣ DENGAR EVENT dari Employees page
+  const handler = () => {
+    loadPendingCount(); // 🔥 auto refresh badge
+  };
+
+  window.addEventListener('pending-updated', handler);
+
+  // 3️⃣ cleanup bila component destroy
+  return () => {
+    window.removeEventListener('pending-updated', handler);
+  };
     // NOTE: intentionally not calling /api/employee/me (avoid duplicate source of truth)
   });
+
+  async function loadPendingCount() {
+  try {
+    const res = await fetch('/api/leave-requests', {
+      credentials: 'include'
+    });
+
+    if (!res.ok) return;
+
+    const all = await res.json();
+
+    const view =
+      safeUser?.role === 'Manager'
+        ? all.filter(r => {
+            const dept =
+              r.profile_department ||
+              r.staff_department ||
+              r.department ||
+              '';
+
+            return (
+              r.requester_role !== 'Manager' &&
+              dept === safeUser.department &&
+              (r.status === 'pending' ||
+               r.status === 'cancellation_pending')
+            );
+          })
+        : [];
+
+    pendingCount = view.length; // ✅ SATU-SATU TEMPAT SAHAJA
+  } catch (e) {
+    console.error('Failed to load pending count', e);
+  }
+}
 
   // Profile modal
   let profileModalOpen = false;
@@ -320,10 +367,18 @@ async function saveProfile(e) {
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
               <path
                 d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"
-              ></path>
+              ></path><s></s>
             </svg>
           </span>
-          <span class="text">Employees</span>
+           <span class="text">Employees</span>
+            <!-- {#if pendingCount > 0}
+              <span class="nav-badge">{pendingCount}</span>
+            {/if} kira tanpa 9+ --> 
+            {#if pendingCount > 0}
+              <span class="nav-badge">
+                {pendingCount > 9 ? '9+' : pendingCount}
+              </span>
+            {/if}
         </a>
       </nav>
     </div>
@@ -354,7 +409,7 @@ async function saveProfile(e) {
         {:else if $page.url.pathname.startsWith('/dashboard/manager/myhistory')}
           <h1 class="page-title">My Leave History</h1>
         {:else if $page.url.pathname.startsWith('/dashboard/manager/history')}
-          <h1 class="page-title">Leave History</h1>
+          <h1 class="page-title">Approved Leave History</h1>
         {:else if $page.url.pathname.startsWith('/dashboard/history')}
           <h1 class="page-title">Leave Timeline</h1>
         {:else if $page.url.pathname.startsWith('/dashboard/manager/employees')}
@@ -615,6 +670,18 @@ async function saveProfile(e) {
     background: #eaf6f7;
     color: #1fb3b2;
   }
+  .nav-badge {
+  margin-left: 10px;
+  background: #dc2626;   /* red */
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  line-height: 1.4;
+  position: relative;
+  top: 1.5px; 
+}
 
   /* Sub-links specific styling */
   .sub-links {
@@ -952,4 +1019,5 @@ async function saveProfile(e) {
     font-weight: 600;
     font-size: 14px;
   }
+  
 </style>
