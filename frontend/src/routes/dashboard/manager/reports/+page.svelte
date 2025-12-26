@@ -16,6 +16,28 @@
   function getLeaveFullName(code) {
     return leaveTypeFullName[code] || code;
   }
+
+  function calculateWorkingDays(fromDate, toDate) {
+    if (!fromDate || !toDate) return 0;
+    
+    const start = new Date(fromDate);
+    const end = new Date(toDate);
+    
+    let count = 0;
+    let current = new Date(start);
+    
+    while (current <= end) {
+      const dayOfWeek = current.getDay();
+      // 0 = Sunday, 6 = Saturday
+      if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+        count++;
+      }
+      current.setDate(current.getDate() + 1);
+    }
+    
+    return count;
+  }
+
   // ----- state -----
   let loading = true;
   let error = "";
@@ -572,16 +594,40 @@ async function loadRecent() {
   }
 }
 
-  $: {
-    if (duration === 'Half') {
-      totalDays = 0.5;
-      if (dateFrom) dateUntil = dateFrom;
-    } else if (endLocked) {
-      totalDays = dateFrom ? fixedDurations[leaveType] : 0;
-    } else {
-      totalDays = dateFrom ? diffDays(parseLocalISO(dateFrom), parseLocalISO(dateUntil || dateFrom)) : 0;
+$: {
+  if (duration === 'Half') {
+    totalDays = 0.5;
+    if (dateFrom) dateUntil = dateFrom;
+  } else if (leaveType === 'MAR') {
+    // ✅ FOR MARRIAGE LEAVE: Auto-calculate 3 working days from start date
+    totalDays = 3; // Fixed at 3 days
+    
+    if (dateFrom) {
+      // Calculate the end date that gives exactly 3 working days
+      let count = 0;
+      let current = new Date(dateFrom);
+      
+      while (count < 3) {
+        const dayOfWeek = current.getDay();
+        // Count only weekdays (Mon-Fri)
+        if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+          count++;
+        }
+        
+        // If we haven't reached 3 working days yet, move to next day
+        if (count < 3) {
+          current.setDate(current.getDate() + 1);
+        }
+      }
+      
+      dateUntil = current.toISOString().split('T')[0];
     }
+  } else if (endLocked) {
+    totalDays = dateFrom ? fixedDurations[leaveType] : 0;
+  } else {
+    totalDays = dateFrom ? diffDays(parseLocalISO(dateFrom), parseLocalISO(dateUntil || dateFrom)) : 0;
   }
+}
 
   function onFromChange() {
     if (!dateFrom) return;
