@@ -79,24 +79,27 @@ $: donuts = user ? [
     
     // ✅ FIX: Check if CF expired
     carryForward: (() => {
-      const cf = Number(user.carry_forward_balance ?? 0);
+      const cfOriginal = Number(user.carry_forward_original ?? 0); // Show 7
+      const cfRemaining = Number(user.carry_forward_balance ?? 0); // Show 5
       const expiry = user.carry_forward_expiry ? new Date(user.carry_forward_expiry) : null;
       const today = new Date();
       
       // If expired, show 0 instead of actual balance
-      return (expiry && today > expiry) ? 0 : cf;
+      if (expiry && today > expiry) return 0;
+      
+      return cfRemaining; // Or return `${cfRemaining}/${cfOriginal}` for "5/7" display
     })(),
     
-    // ✅ FIX: Calculate remaining without expired CF
     remaining: (() => {
       const al = Number(user.leave_entitlement_annual ?? 14);
-      const cf = Number(user.carry_forward_balance ?? 0);
+      const remainingCF = Number(user.carry_forward_balance ?? 0); // Already has deductions
       const expiry = user.carry_forward_expiry ? new Date(user.carry_forward_expiry) : null;
       const today = new Date();
       
-      const validCF = (expiry && today > expiry) ? 0 : cf;
+      const validCF = (expiry && today > expiry) ? 0 : remainingCF;
       
-      return al + validCF - Number(approvedAL || 0);
+      // ✅ Don't subtract approvedAL - it's already reflected in carry_forward_balance
+      return al + validCF;
     })()
   },
   {
