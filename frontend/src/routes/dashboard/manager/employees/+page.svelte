@@ -581,7 +581,7 @@ async function rejectCancellation(item) {
 
     {#if pending.length === 0}
       <p style="color:#64748b; text-align:center;">No pending requests.</p>
-    {:else}
+    {:else}w
 
       <!-- ================================================= -->
       <!--                 PENDING LEAVE APPROVAL           -->

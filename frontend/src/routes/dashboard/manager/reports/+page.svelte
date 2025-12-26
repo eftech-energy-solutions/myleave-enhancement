@@ -635,8 +635,17 @@ async function loadAppliedLeave() {
         const end = new Date(r.date_until);
 
         for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-          blockedDates.add(localISO(d));
-        }
+            const iso = localISO(d);
+
+            // ❌ Skip public holiday
+            if (isHoliday(d)) continue;
+
+            // ❌ Skip weekend (Sat & Sun)
+            if (isWeekend(d)) continue;
+
+            // ✅ Only actual leave days
+            blockedDates.add(iso);
+          }
       }
     });
 }
