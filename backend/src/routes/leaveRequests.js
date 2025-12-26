@@ -422,10 +422,17 @@ router.patch("/:id/edit", upload.single("attachment"), async (req, res) => {
     const staffId = find.rows[0].staff_id;
 
     let serverDays;
-    if (duration === 'Half') {
+    if (type === "MAR") {
+      serverDays = await calculateWorkingDays(dateFrom, dateUntil);
+      
+      if (serverDays <= 0)
+        return res.status(400).json({ message: "Invalid date range or no working days" });
+    }
+    // For other leave types: respect duration
+    else if (duration === 'Half') {
       serverDays = 0.5;
     } else {
-      serverDays = await calculateWorkingDays(date_from, date_until);
+      serverDays = await calculateWorkingDays(dateFrom, dateUntil);
     }
     
     if (serverDays <= 0)
