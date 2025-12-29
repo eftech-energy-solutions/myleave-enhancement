@@ -1102,10 +1102,10 @@ async function rejectCancellation(item) {
                   margin-top:10px;
                 "
               >
-                <div>
-                  <strong style="color:#0c4a6e; font-size:13px;">Reason:</strong>
-                  <div style="margin-top:4px; color:#334155; font-size:12px;">{item.reason}</div>
-                </div>
+                <strong style="color:#0c4a6e; font-size:13px;">Cancellation Reason:</strong>
+                  <div style="margin-top:4px; color:#334155; font-size:12px;">
+                    {item.cancellation_reason || "-"}
+                  </div>
 
                 <div style="margin-top:8px;">
                   <strong style="color:#0c4a6e; font-size:13px;">Attachment:</strong>

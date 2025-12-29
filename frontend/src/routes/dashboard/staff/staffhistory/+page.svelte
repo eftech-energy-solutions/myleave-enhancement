@@ -36,6 +36,9 @@
   // =============== STATE =================
   let leaves = [];
   let filteredLeaves = [];
+  let cancelReason = "";
+  let showCancelReason = false;
+
 
   let selectedStatus = "All";
   let selectedLeaveType = "All";
@@ -88,8 +91,26 @@ const leaveTypes = [
     "All", "January", "February", "March", "April", "May", "June",
     "July", "August", "September", "October", "November", "December"
   ];
+  const START_YEAR = 2025;
+  const MAX_YEARS = 5;
+
   const currentYear = new Date().getFullYear();
-  const years = ["All", ...Array.from({ length: 10 }, (_, i) => currentYear - i)];
+
+  // determine earliest year to show
+  const earliestYear = Math.max(
+    START_YEAR,
+    currentYear - (MAX_YEARS - 1)
+  );
+
+  // build rolling list
+  const years = [
+    "All",
+    ...Array.from(
+      { length: currentYear - earliestYear + 1 },
+      (_, i) => earliestYear + i
+    )
+  ];
+
 const leaveLabels = {
   AL: "Annual / Emergency",
   MC: "Medical",
@@ -160,6 +181,7 @@ const leaveCodes = {
     reason: l.reason,
     duration: l.duration,
     attachment_path: l.attachment_path, 
+    cancellationReason: l.cancellation_reason,
     status:
   Number(l.total_days) === 0
     ? "Invalid"
@@ -198,9 +220,12 @@ const leaveCodes = {
 
   // =========== DELETE/CANCEL ============
   function requestCancellation(leaveItem) {
-    leaveToCancel = leaveItem;
-    showConfirmationModal = true;
-  }
+  leaveToCancel = leaveItem;
+  cancelReason = "";
+  showCancelReason = false;   // mula tanpa input
+  showConfirmationModal = true;
+}
+
 
   function closeConfirmationModal() {
     leaveToCancel = null;
@@ -299,21 +324,26 @@ async function confirmCancellation() {
   const id = leaveToCancel.uuid;
 
   // ---------------- PENDING → DELETE ----------------
-  if (leaveToCancel.status === "Pending") {
-    console.log('🔍 DELETE DEBUG:', {
-      id,
-      leaveToCancel,
-      uuid: leaveToCancel.uuid
-    });
-
-    await fetch(`/api/leave-requests/${id}`, {
-      method: "DELETE",
-      credentials: "include"
-    });
-
-    window.location.reload(); 
+  if (leaveToCancel.status === "Approved") {
+  if (!cancelReason.trim()) {
+    alert("Cancellation reason is required.");
     return;
   }
+
+  await fetch(`/api/leave-requests/${id}`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      status: "cancellation_pending",
+      cancellation_reason: cancelReason
+    })
+  });
+
+  window.location.reload();
+  return;
+}
+
 
   // ---------------- APPROVED → CANCELLATION PENDING ----------------
   if (leaveToCancel.status === "Approved") {
@@ -495,14 +525,55 @@ function onUntilChange() {
   <div class="modal-backdrop">
     <div class="modal-dialog">
       <h3>Confirm Cancellation</h3>
-      <p>Are you sure you want to cancel your leave application?</p>
-      <div class="modal-actions">
-        <button class="btn-danger" on:click={confirmCancellation}>Yes, cancel</button>
-        <button class="btn-secondary" on:click={closeConfirmationModal}>No, keep it</button>
-      </div>
+
+      {#if !showCancelReason}
+        <p>Are you sure you want to cancel your leave application?</p>
+
+        <div class="modal-actions">
+          <button
+            class="btn-danger"
+            on:click={() => showCancelReason = true}
+          >
+            Yes, continue
+          </button>
+          <button
+            class="btn-secondary"
+            on:click={closeConfirmationModal}
+          >
+            No, keep it
+          </button>
+        </div>
+
+      {:else}
+        <p>Please state your reason for cancellation:</p>
+
+        <textarea
+          rows="3"
+          bind:value={cancelReason}
+          placeholder="Enter cancellation reason..."
+          style="width:100%; padding:8px; border-radius:8px; border:1px solid #d1d5db;"
+        ></textarea>
+
+        <div class="modal-actions" style="margin-top:12px;">
+          <button
+            class="btn-danger"
+            disabled={!cancelReason.trim()}
+            on:click={confirmCancellation}
+          >
+            Submit Cancellation
+          </button>
+          <button
+            class="btn-secondary"
+            on:click={closeConfirmationModal}
+          >
+            Cancel
+          </button>
+        </div>
+      {/if}
     </div>
   </div>
 {/if}
+
 
 <!-- ===== FILTER BAR (Right aligned) ===== -->
 <div class="filter-bar">
