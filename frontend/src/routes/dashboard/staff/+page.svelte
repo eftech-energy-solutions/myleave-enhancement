@@ -758,7 +758,10 @@ async function submitLeave(e) {
     const created = await res.json().catch(() => null);
     console.log("Leave created:", created);
 
-    alert("Your leave application has been successfully submitted!");
+    showToast(
+    "Your leave application has been successfully submitted!",
+    "success"
+  );
 
     await loadAppliedLeave();
     buildMonth(viewBase);
@@ -767,7 +770,10 @@ async function submitLeave(e) {
 
   } catch (err) {
     console.error("Error submit leave:", err);
-    alert("Something went wrong while submitting your leave.");
+    showToast(
+      "Something went wrong while submitting your leave.",
+      "error"
+    );
   }
 }
 
@@ -779,6 +785,33 @@ const fmt = (iso) =>
     year: "numeric"
   });
 let blockedDates = new Set();
+let toast = {
+  show: false,
+  closing: false, 
+  type: "success", // success | error | info | warning
+  title: "",
+  message: ""
+};
+
+function showToast(message, type = "success", title = "", duration = 3000) {
+  toast = {
+    show: true,
+    type,
+    title: title || type.charAt(0).toUpperCase() + type.slice(1),
+    message
+  };
+
+  setTimeout(() => {
+    toast.closing = true;          // 🆕 trigger fade out
+
+    setTimeout(() => {
+      toast.show = false;          // 🆕 buang DOM lepas animation
+      toast.closing = false;
+    }, 250);
+  }, duration);
+}
+
+
 
 async function loadAppliedLeave() {
   const res = await fetch("/api/leave-requests", {
@@ -893,7 +926,7 @@ async function loadApprovedUsedDays() {
         <div class="cf-tip-wrap">
           <button class="info-btn tiny">ⓘ</button>
           <span class="tooltip">
-            Carry-forward is capped at 7 days and expires before 1st of April.
+            Carry-forward is capped at 7 days and expires by 30th of April.
           </span>
         </div>
       </div>
@@ -1137,6 +1170,45 @@ async function loadApprovedUsedDays() {
     <button type="submit" class="submit-btn">SUBMIT</button>
   </form>
 </dialog>
+
+{#if toast.show}
+  <div class="toast-stack">
+    <div class="toast-item {toast.type} {toast.closing ? 'closing' : ''}">
+      <div class="toast-icon">
+        {#if toast.type === 'success'}
+          <svg viewBox="0 0 24 24" class="toast-svg">
+            <path d="M9.5 16.2L4.8 11.5l1.4-1.4 3.3 3.3 8.1-8.1 1.4 1.4z"/>
+          </svg>
+        {/if}
+
+        {#if toast.type === 'error'}
+          <svg viewBox="0 0 24 24" class="toast-svg">
+            <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm3.5 13.1-1.4 1.4L12 13.4l-2.1 2.1-1.4-1.4L10.6 12 8.5 9.9l1.4-1.4 2.1 2.1 2.1-2.1 1.4 1.4L13.4 12z"/>
+          </svg>
+        {/if}
+
+        {#if toast.type === 'info'}
+          <svg viewBox="0 0 24 24" class="toast-svg">
+            <path d="M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2z"/>
+          </svg>
+        {/if}
+
+        {#if toast.type === 'warning'}
+          <svg viewBox="0 0 24 24" class="toast-svg">
+            <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
+          </svg>
+        {/if}
+      </div>
+
+      <div class="toast-body">
+        <strong>{toast.title}</strong>
+        <p>{toast.message}</p>
+      </div>
+
+      <button class="toast-close" on:click={() => (toast.show = false)}>×</button>
+    </div>
+  </div>
+{/if}
 
 <style>
   .main { padding: 18px; }
@@ -1491,6 +1563,149 @@ max-width: 150px;         /* optional — so it wraps instead of going super lon
     padding: 4px;
   }
 
+ /* =========================
+   TOAST NOTIFICATION
+========================= */
+/* ===== TOAST STACK ===== */
+.toast-stack {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 9999;
+}
+
+/* ===== TOAST ITEM ===== */
+.toast-item {
+  display: flex;
+  align-items: flex-start; 
+  background: #fff;
+  border-radius: 8px;
+  min-width: 340px;
+  max-width: 400px;
+  padding: 12px 14px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+  animation: slideIn 0.25s ease;
+  border-left: 5px solid;
+}
+
+/* ICON */
+.toast-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 12px;
+  margin-top: 2px;
+}
+
+.toast-svg {
+  width: 20px;
+  height: 20px;
+  fill: #fff;
+}
+
+/* BODY */
+.toast-body {
+  flex: 1;
+}
+
+.toast-body strong {
+  display: block;
+  font-size: 14px;
+  color: #111827;
+  margin-bottom: 2px;
+}
+
+.toast-body p {
+  margin: 0;
+  font-size: 13px;
+  color: #4b5563;
+}
+
+/* CLOSE */
+.toast-close {
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  color: #9ca3af;
+  margin-left: 10px;
+}
+.toast-close:hover {
+  color: #111827;
+}
+
+/* ===== TYPES ===== */
+.toast-item.success {
+  border-color: #22c55e;
+}
+.toast-item.success .toast-icon {
+  background: #22c55e;
+}
+
+.toast-item.error {
+  border-color: #ef4444;
+}
+.toast-item.error .toast-icon {
+  background: #ef4444;
+}
+
+.toast-item.info {
+  border-color: #3b82f6;
+}
+.toast-item.info .toast-icon {
+  background: #3b82f6;
+}
+
+.toast-item.warning {
+  border-color: #f59e0b;
+}
+.toast-item.warning .toast-icon {
+  background: #f59e0b;
+}
+
+/* ===== ANIMATION ===== */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+
+.toast-item.closing {
+  animation: fadeOut 0.25s ease forwards;
+}
+
+
+
+/* =========================
+   MOBILE RESPONSIVE
+========================= */
+@media (max-width: 640px) {
+  .toast {
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    width: calc(100% - 32px);
+    max-width: none;
+  }
+}
 
 
 </style>

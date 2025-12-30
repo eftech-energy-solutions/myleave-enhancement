@@ -26,7 +26,31 @@
   let dataByDept = [];
   let totalEmployees = 0;
   // 🟢 helper untuk Svelte binding (fix ternary bind:value)
+  let toast = {
+  show: false,
+  type: "success",
+  title: "",
+  message: "",
+  closing: false
+};
 
+function showToast(message, type = "success", title = "", duration = 3000) {
+  toast = {
+    show: true,
+    type,
+    title: title || type.charAt(0).toUpperCase() + type.slice(1),
+    message,
+    closing: false
+  };
+
+  setTimeout(() => {
+    toast.closing = true;
+    setTimeout(() => {
+      toast.show = false;
+      toast.closing = false;
+    }, 300);
+  }, duration);
+}
 
   const palette = [
     "#FFD9CC", "#C6DEF1", "#F2C6DE",
@@ -138,30 +162,53 @@ const canGoNextYear = () => {
     modalMode = 'viewPublic';
   }
 
-  async function saveEdit() {
+ async function saveEdit() {
   if (!editingId) return;
-  if (!editDate || !editTitle) return alert("Please fill date & title");
-
-  const res = await fetch(`/api/holidays/${editingId}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({
-      date: editDate,
-      title: editTitle,
-      description: editDescription
-    })
-  });
-
-  if (!res.ok) {
-    const j = await res.json().catch(()=>({}));
-    return alert(j.error || "Failed to update holiday");
+  if (!editDate || !editTitle) {
+    showToast("Please fill in date and leave name.", "warning", "Missing Fields");
+    return;
   }
 
-  await loadHolidays();     // refresh data dari server
-  addModal?.close();        // ⬅️ tutup modal supaya tak “nampak” state lama
-  cancelEdit();             // reset field edit
+  try {
+    const res = await fetch(`/api/holidays/${editingId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        date: editDate,
+        title: editTitle,
+        description: editDescription
+      })
+    });
+
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      throw new Error(j.error || "Failed to update holiday");
+    }
+
+    // ✅ SUCCESS TOAST
+    showToast(
+      "Public holiday updated successfully.",
+      "success",
+      "Holiday Updated"
+    );
+
+    await loadHolidays();
+    addModal?.close();
+    cancelEdit();
+
+  } catch (err) {
+    console.error("❌ Edit holiday error:", err);
+
+    // ❌ ERROR TOAST
+    showToast(
+      err.message || "Unable to update public holiday.",
+      "error",
+      "Update Failed"
+    );
+  }
 }
+
 
   async function handleSubmit(e) {
   const form = e.currentTarget;
@@ -350,28 +397,50 @@ const canGoNextYear = () => {
    * Ini adalah fungsi 'addHoliday' dari skrip baru, digabungkan ke sini.
    */
   async function addHolidayAPI() {
-    // 'addDateISO', 'addName', 'addDesc' digunakan dari skop komponen
+  try {
     const res = await fetch("/api/holidays", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      credentials: "include", // Kekalkan 'credentials'
-      body: JSON.stringify({ date: addDateISO, title: addName, description: addDesc })
+      credentials: "include",
+      body: JSON.stringify({
+        date: addDateISO,
+        title: addName,
+        description: addDesc
+      })
     });
 
     if (!res.ok) {
       const j = await res.json().catch(() => ({}));
-      alert(j.error || "Failed to add holiday"); // Guna alert() seperti dalam skrip baru
-      return;
+      throw new Error(j.error || "Failed to add public holiday");
     }
 
+    // 🔁 Recalculate leave
     await fetch("/api/leave-requests/recalc-invalid", {
-    method: "POST",
-    credentials: "include"
-  });
+      method: "POST",
+      credentials: "include"
+    });
+
+    // ✅ TOAST SUCCESS — LETAK SINI
+    showToast(
+      `Public holiday "${addName}" added successfully.`,
+      "success",
+      "Holiday Added"
+    );
 
     addModal?.close();
     await loadHolidays();
+
+  } catch (err) {
+    console.error("❌ Error adding holiday:", err);
+
+    // ❌ TOAST ERROR — LETAK SINI
+    showToast(
+      err.message || "Failed to add public holiday.",
+      "error",
+      "Action Failed"
+    );
   }
+}
 
 
   // ===================================
@@ -409,49 +478,73 @@ const canGoNextYear = () => {
   }
 
   // FUNGSI INI DIKEMASKINI SEPENUHNYA DENGAN LOGIK 'deleteItem' BARU
-  async function deletePublicHoliday() {
-    // Dapatkan data yang disimpan semasa 'openFormForDate'
-    const source = selectedHolidaySource;
-    const uid = selectedHolidayUID;
-    const date = addDateISO;
-    const id = selectedHolidayId;
-    
-    // Logik 'confirm' dikekalkan dari kod sedia ada
-    if (!confirm("Are you sure you want to delete/hide this holiday?")) return;
+ async function deletePublicHoliday() {
+  const source = selectedHolidaySource;
+  const uid = selectedHolidayUID;
+  const date = addDateISO;
+  const id = selectedHolidayId;
 
-    try {
-      if (source === "official") {
-        const res = await fetch("/api/holidays/official/hide", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include", // Kekalkan 'credentials'
-          body: JSON.stringify({ uid: uid, date: date, reason: "Hidden by admin" })
-        });
-        if (!res.ok) {
-          const j = await res.json().catch(()=>({}));
-          throw new Error(j.error || "Failed to hide official holiday");
-        }
-      } else { // 'custom' atau lain-lain
-        if (!id) throw new Error("No holiday id found (custom)");
-        
-        const res = await fetch(`/api/holidays/${id}`, { 
-          method: "DELETE",
-          credentials: "include" // Kekalkan 'credentials'
-        });
-        if (!res.ok) {
-          const j = await res.json().catch(()=>({}));
-          throw new Error(j.error || "Failed to delete custom holiday");
-        }
+  if (!confirm("Are you sure you want to delete/hide this holiday?")) return;
+
+  try {
+    if (source === "official") {
+      const res = await fetch("/api/holidays/official/hide", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          uid,
+          date,
+          reason: "Hidden by admin"
+        })
+      });
+
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || "Failed to hide official holiday");
       }
-      
-      // Jika berjaya
-      addModal?.close();
-      await loadHolidays();
 
-    } catch (err) {
-      alert(err.message); // Guna alert() seperti dalam skrip baru
+      // ✅ SUCCESS TOAST (OFFICIAL)
+      showToast(
+        "Official public holiday has been hidden.",
+        "success",
+        "Holiday Hidden"
+      );
+
+    } else {
+      const res = await fetch(`/api/holidays/${id}`, {
+        method: "DELETE",
+        credentials: "include"
+      });
+
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || "Failed to delete public holiday");
+      }
+
+      // ✅ SUCCESS TOAST (CUSTOM)
+      showToast(
+        "Public holiday deleted successfully.",
+        "success",
+        "Holiday Deleted"
+      );
     }
+
+    addModal?.close();
+    await loadHolidays();
+
+  } catch (err) {
+    console.error("❌ Delete holiday error:", err);
+
+    // ❌ ERROR TOAST
+    showToast(
+      err.message || "Unable to delete public holiday.",
+      "error",
+      "Action Failed"
+    );
   }
+}
+
 
   // ===================================
   // 6. LIFECYCLE & INITIALIZATION
@@ -692,6 +785,46 @@ const canGoNextYear = () => {
     </div>
   </form>
 </dialog>
+
+{#if toast.show}
+  <div class="toast-stack">
+    <div class="toast-item {toast.type} {toast.closing ? 'closing' : ''}">
+      <div class="toast-icon">
+      {#if toast.type === 'success'}
+        <svg viewBox="0 0 24 24" class="toast-svg">
+          <path d="M9.5 16.2L4.8 11.5l1.4-1.4 3.3 3.3 8.1-8.1 1.4 1.4z"/>
+        </svg>
+      {/if}
+
+      {#if toast.type === 'error'}
+        <svg viewBox="0 0 24 24" class="toast-svg">
+          <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm3.5 13.1-1.4 1.4L12 13.4l-2.1 2.1-1.4-1.4L10.6 12 8.5 9.9l1.4-1.4 2.1 2.1 2.1-2.1 1.4 1.4L13.4 12z"/>
+        </svg>
+      {/if}
+
+      {#if toast.type === 'info'}
+        <svg viewBox="0 0 24 24" class="toast-svg">
+          <path d="M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2z"/>
+        </svg>
+      {/if}
+
+      {#if toast.type === 'warning'}
+        <svg viewBox="0 0 24 24" class="toast-svg">
+          <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
+        </svg>
+      {/if}
+    </div>
+
+      <div class="toast-body">
+        <strong>{toast.title}</strong>
+        <p>{toast.message}</p>
+      </div>
+
+      <button class="toast-close" on:click={() => (toast.show = false)}>×</button>
+    </div>
+  </div>
+{/if}
+
 <!-- ======================= -->
 <!--         STYLES          -->
 <!-- ======================= -->
@@ -822,4 +955,132 @@ const canGoNextYear = () => {
   .danger-btn:hover{ background:#b91c1c; }
   .close-btn{ position:absolute; right:10px; top:8px; border:none; background:transparent; font-size:16px; cursor:pointer; }
 
+/* =========================
+   TOAST NOTIFICATION
+========================= */
+/* ===== TOAST STACK ===== */
+.toast-stack {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 9999;
+}
+
+/* ===== TOAST ITEM ===== */
+.toast-item {
+  display: flex;
+  align-items: flex-start; 
+  background: #fff;
+  border-radius: 8px;
+  min-width: 340px;
+  max-width: 400px;
+  padding: 12px 14px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+  animation: slideIn 0.25s ease;
+  border-left: 5px solid;
+}
+
+/* ICON */
+.toast-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 12px;
+  margin-top: 2px;
+}
+
+.toast-svg {
+  width: 20px;
+  height: 20px;
+  fill: #fff;
+}
+
+/* BODY */
+.toast-body {
+  flex: 1;
+}
+
+.toast-body strong {
+  display: block;
+  font-size: 14px;
+  color: #111827;
+  margin-bottom: 2px;
+}
+
+.toast-body p {
+  margin: 0;
+  font-size: 13px;
+  color: #4b5563;
+}
+
+/* CLOSE */
+.toast-close {
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  color: #9ca3af;
+  margin-left: 10px;
+}
+.toast-close:hover {
+  color: #111827;
+}
+
+/* ===== TYPES ===== */
+.toast-item.success {
+  border-color: #22c55e;
+}
+.toast-item.success .toast-icon {
+  background: #22c55e;
+}
+
+.toast-item.error {
+  border-color: #ef4444;
+}
+.toast-item.error .toast-icon {
+  background: #ef4444;
+}
+
+.toast-item.info {
+  border-color: #3b82f6;
+}
+.toast-item.info .toast-icon {
+  background: #3b82f6;
+}
+
+.toast-item.warning {
+  border-color: #f59e0b;
+}
+.toast-item.warning .toast-icon {
+  background: #f59e0b;
+}
+
+/* ===== ANIMATION ===== */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+
+.toast-item.closing {
+  animation: fadeOut 0.25s ease forwards;
+}
 </style>

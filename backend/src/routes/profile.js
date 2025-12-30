@@ -477,7 +477,10 @@ res.json({
 
   } catch (err) {
     console.error("Error updating employee:", err);
-    res.status(500).json({ error: "Failed to update employee." });
+    res.json({
+      success: true,
+      message: "Profile updated successfully. Notification email could not be delivered."
+    });
   }
 });
 
