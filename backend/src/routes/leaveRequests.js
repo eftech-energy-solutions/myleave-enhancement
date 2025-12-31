@@ -424,7 +424,8 @@ router.patch("/:id/edit", upload.single("attachment"), async (req, res) => {
     const staffId = find.rows[0].staff_id;
 
     let serverDays;
-    if (type === "MAR") {
+    if (leave_type === "MAR") { 
+    // sebelum ni type === MAR
       serverDays = await calculateWorkingDays(dateFrom, dateUntil);
       
       if (serverDays <= 0)
@@ -619,19 +620,78 @@ router.patch("/:id", async (req, res) => {
     const leaveId = req.params.id;
 
     // EMPLOYEE REQUESTS CANCEL
-    if (status === "cancellation_pending") {
-      await pool.query(
-        `UPDATE leave_requests
-         SET request_type='cancellation_request', status='cancellation_pending'
-         WHERE leave_id=$1`,
-        [leaveId]
-      );
+    // if (status === "cancellation_pending") {
+    //   await pool.query(
+    //     `UPDATE leave_requests
+    //      SET request_type='cancellation_request', status='cancellation_pending'
+    //      WHERE leave_id=$1`,
+    //     [leaveId]
+    //   );
 
-      return res.json({
-        success: true,
-        message: "Cancellation request submitted"
-      });
-    }
+    //   return res.json({
+    //     success: true,
+    //     message: "Cancellation request submitted"
+    //   });
+    // }
+    // EMPLOYEE REQUESTS CANCEL
+    if (status === "cancellation_pending") {
+  const { cancellation_reason } = req.body;
+
+  if (!cancellation_reason || !cancellation_reason.trim()) {
+    return res.status(400).json({
+      message: "Cancellation reason is required"
+    });
+  }
+
+  // ==========================
+  // ⏱ CANCELLATION RULE (NEW)
+  // ==========================
+  const find = await pool.query(
+    `SELECT date_from FROM leave_requests WHERE leave_id = $1`,
+    [leaveId]
+  );
+
+  if (!find.rows.length) {
+    return res.status(404).json({ message: "Leave not found" });
+  }
+
+  const leaveStart = new Date(find.rows[0].date_from);
+  const today = new Date();
+
+  const msInDay = 1000 * 60 * 60 * 24;
+  const diffDays = Math.floor((today - leaveStart) / msInDay);
+
+  /*
+    RULE:
+    - diffDays < 0  → BEFORE leave → allowed
+    - diffDays 0–7  → within 7 days after start → allowed
+    - diffDays > 7  → NOT allowed
+  */
+  if (diffDays > 7) {
+    return res.status(400).json({
+      message:
+        "Cancellation is only allowed within 7 days after the leave start date."
+    });
+  }
+
+  // ==========================
+  // ✅ ALLOW CANCELLATION
+  // ==========================
+  await pool.query(
+    `UPDATE leave_requests
+     SET 
+       request_type = 'cancellation_request',
+       status = 'cancellation_pending',
+       cancellation_reason = $1
+     WHERE leave_id = $2`,
+    [cancellation_reason, leaveId]
+  );
+
+  return res.json({
+    success: true,
+    message: "Cancellation request submitted"
+  });
+}
 
     // VALID STATUS
     if (!["approved", "rejected", "cancelled", "cancellation_rejected"].includes(status))
@@ -695,9 +755,12 @@ router.patch("/:id", async (req, res) => {
       // Keep the leave as approved
       const updated = await pool.query(
         `UPDATE leave_requests 
-         SET status='approved', request_type='new'
-         WHERE leave_id=$1 
-         RETURNING *`,
+          SET 
+            status = 'approved',
+            request_type = 'new',
+            cancellation_reason = NULL
+          WHERE leave_id = $1
+          RETURNING *`,
         [leaveId]
       );
       

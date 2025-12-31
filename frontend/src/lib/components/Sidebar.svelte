@@ -22,6 +22,31 @@
   let staffId = "";
   let error = "";
   let msg = "";
+  let toast = {
+  show: false,
+  type: "success",
+  title: "",
+  message: "",
+  closing: false
+};
+
+function showToast(message, type = "success", title = "", duration = 3000) {
+  toast = {
+    show: true,
+    type,
+    title: title || type.charAt(0).toUpperCase() + type.slice(1),
+    message,
+    closing: false
+  };
+
+  setTimeout(() => {
+    toast.closing = true;
+    setTimeout(() => {
+      toast.show = false;
+      toast.closing = false;
+    }, 300);
+  }, duration);
+}
 
   // NAVIGATION (unchanged)
   const roleBase = '/dashboard/admin';
@@ -33,8 +58,8 @@
   };
 
   $: headerAvatarUrl = safeUser.photoUrl 
-    ? `http://localhost:5000${safeUser.photoUrl}` 
-    : '/images/icontest1.png';
+  ? `http://localhost:5000${safeUser.photoUrl}?v=${Date.now()}`
+  : '/images/icontest1.png';
 
   // FETCH USER
   onMount(async () => {
@@ -45,9 +70,13 @@
       if (res.ok) {
         const data = await res.json();
         safeUser = { ...safeUser, ...data };
-        profilePhotoUrl = safeUser.photoUrl
-          ? `http://localhost:5000${safeUser.photoUrl}`
-          : '';
+        const bust = `?v=${Date.now()}`;
+
+        safeUser.photoUrl = data.photoUrl;
+        profilePhotoUrl = data.photoUrl.startsWith('http')
+          ? `${data.photoUrl}${bust}`
+          : `http://localhost:5000${data.photoUrl}${bust}`;
+
       }
     } catch (err) {
       console.error('Error fetching user:', err);
@@ -258,7 +287,11 @@ async function saveProfile(e) {
   // ----------------- PICTURE BRANCH -----------------
   if (activeProfilePane === 'picture') {
     if (!selectedFile) {
-      alert('Please select a photo');
+      showToast(
+        "Please select a profile photo before saving.",
+        "warning",
+        "No File Selected"
+      );
       return;
     }
     try {
@@ -284,14 +317,30 @@ async function saveProfile(e) {
 
       // success
       safeUser.photoUrl = data.photoUrl;
-      profilePhotoUrl = data.photoUrl.startsWith('http') ? data.photoUrl : `http://localhost:5000${data.photoUrl}`;
+      profilePhotoUrl = data.photoUrl.startsWith('http')
+        ? data.photoUrl
+        : `http://localhost:5000${data.photoUrl}`;
+
       selectedFile = null;
-      alert('Profile photo updated!');
+
+      showToast(
+        "Your profile photo has been updated successfully.",
+        "success",
+        "Profile Updated"
+      );
+
       closeProfileModal();
       return;
+
     } catch (err) {
       console.error('[saveProfile][picture] error:', err);
-      alert(err.message || 'Upload failed.');
+
+      showToast(
+        err.message || "Failed to update profile photo.",
+        "error",
+        "Upload Failed"
+      );
+
       return;
     }
   }
@@ -683,6 +732,44 @@ async function saveProfile(e) {
   </div>
 {/if}
 
+{#if toast.show}
+  <div class="toast-stack">
+    <div class="toast-item {toast.type} {toast.closing ? 'closing' : ''}">
+      <div class="toast-icon">
+      {#if toast.type === 'success'}
+        <svg viewBox="0 0 24 24" class="toast-svg">
+          <path d="M9.5 16.2L4.8 11.5l1.4-1.4 3.3 3.3 8.1-8.1 1.4 1.4z"/>
+        </svg>
+      {/if}
+
+      {#if toast.type === 'error'}
+        <svg viewBox="0 0 24 24" class="toast-svg">
+          <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm3.5 13.1-1.4 1.4L12 13.4l-2.1 2.1-1.4-1.4L10.6 12 8.5 9.9l1.4-1.4 2.1 2.1 2.1-2.1 1.4 1.4L13.4 12z"/>
+        </svg>
+      {/if}
+
+      {#if toast.type === 'info'}
+        <svg viewBox="0 0 24 24" class="toast-svg">
+          <path d="M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2z"/>
+        </svg>
+      {/if}
+
+      {#if toast.type === 'warning'}
+        <svg viewBox="0 0 24 24" class="toast-svg">
+          <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
+        </svg>
+      {/if}
+    </div>
+
+      <div class="toast-body">
+        <strong>{toast.title}</strong>
+        <p>{toast.message}</p>
+      </div>
+
+      <button class="toast-close" on:click={() => (toast.show = false)}>×</button>
+    </div>
+  </div>
+{/if}
 <!-- ================= SETTINGS MODAL (ROLE) =================
 {#if settingsModalOpen}
   <div class="modal-wrap">
@@ -852,12 +939,18 @@ async function saveProfile(e) {
     color: #fff;
   }
   .hello {
-    font-size: 18px;
-    font-weight: 400;
-    opacity: 0.95;
-    margin: 0;
-    color: #fff;
-  }
+  max-width: 980px;       /* kekalkan limit ruang */
+  white-space: normal;    /* ❗ benarkan wrap */
+  word-break: break-word;
+  line-height: 1.3;
+
+  font-size: 18px;
+  font-weight: 400;
+  opacity: 0.95;
+  margin: 0;
+  color: #fff;
+}
+
   .page-title{ margin:0; font-size:55px; line-height:1.1; font-weight:700; color:#fff; }
 
   .nav-badge {
@@ -895,7 +988,15 @@ async function saveProfile(e) {
   place-items: center;
   background: #e5e7eb;
 }
-  .who .name{ font-size:14px; font-weight:700; }
+  .who .name{ 
+    font-size:14px; 
+    font-weight:700;  
+    max-width: 320px;     /* ikut ruang header */
+    white-space: normal;  /* ❗ allow wrap */
+    word-break: break-word;
+    line-height: 1.2;
+  }
+    
   .who .sub{ font-size:12px; opacity:.95; }
 
   .menu{ position:absolute; right:0; top:calc(100% + 8px); background:#fff; border:1px solid #e5e7eb; border-radius:10px; box-shadow:0 10px 30px rgba(0,0,0,.12); min-width:200px; padding:6px; z-index:30; }
@@ -1188,6 +1289,135 @@ async function saveProfile(e) {
 
 .add-email-row button:hover {
   filter: brightness(.92);
+}
+
+/* =========================
+   TOAST NOTIFICATION
+========================= */
+/* ===== TOAST STACK ===== */
+.toast-stack {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 9999;
+}
+
+/* ===== TOAST ITEM ===== */
+.toast-item {
+  display: flex;
+  align-items: flex-start; 
+  background: #fff;
+  border-radius: 8px;
+  min-width: 340px;
+  max-width: 400px;
+  padding: 12px 14px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+  animation: slideIn 0.25s ease;
+  border-left: 5px solid;
+}
+
+/* ICON */
+.toast-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 12px;
+  margin-top: 2px;
+}
+
+.toast-svg {
+  width: 20px;
+  height: 20px;
+  fill: #fff;
+}
+
+/* BODY */
+.toast-body {
+  flex: 1;
+}
+
+.toast-body strong {
+  display: block;
+  font-size: 14px;
+  color: #111827;
+  margin-bottom: 2px;
+}
+
+.toast-body p {
+  margin: 0;
+  font-size: 13px;
+  color: #4b5563;
+}
+
+/* CLOSE */
+.toast-close {
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  color: #9ca3af;
+  margin-left: 10px;
+}
+.toast-close:hover {
+  color: #111827;
+}
+
+/* ===== TYPES ===== */
+.toast-item.success {
+  border-color: #22c55e;
+}
+.toast-item.success .toast-icon {
+  background: #22c55e;
+}
+
+.toast-item.error {
+  border-color: #ef4444;
+}
+.toast-item.error .toast-icon {
+  background: #ef4444;
+}
+
+.toast-item.info {
+  border-color: #3b82f6;
+}
+.toast-item.info .toast-icon {
+  background: #3b82f6;
+}
+
+.toast-item.warning {
+  border-color: #f59e0b;
+}
+.toast-item.warning .toast-icon {
+  background: #f59e0b;
+}
+
+/* ===== ANIMATION ===== */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+
+.toast-item.closing {
+  animation: fadeOut 0.25s ease forwards;
 }
 
   @media (max-width:768px){

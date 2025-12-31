@@ -499,8 +499,17 @@
 		{/if}
 
 		<p class="footer-note">
-			Contact your company's administrator for registration and any problem occur.
-		</p>
+			Contact
+			<a
+				href="https://mail.google.com/mail/?view=cm&fs=1&to=hr-eds@eftech.com.my"
+				target="_blank"
+				rel="noopener noreferrer"
+				style="color:#149383; text-decoration: underline; font-weight: 600;"
+			>
+				hr-eds@eftech.com.my
+			</a>
+			for registration or any problem occur.
+			</p>
 	</section>
 
 	<section class="right"></section>

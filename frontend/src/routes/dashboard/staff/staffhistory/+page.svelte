@@ -36,6 +36,9 @@
   // =============== STATE =================
   let leaves = [];
   let filteredLeaves = [];
+  let cancelReason = "";
+  let showCancelReason = false;
+
 
   let selectedStatus = "All";
   let selectedLeaveType = "All";
@@ -60,6 +63,31 @@ let dateUntil = "";
 let totalDays = 0;
 let reason = "";
 let attachmentFiles = null;
+let toast = {
+  show: false,
+  closing: false, 
+  type: "success", // success | error | info | warning
+  title: "",
+  message: ""
+};
+
+function showToast(message, type = "success", title = "", duration = 3000) {
+  toast = {
+    show: true,
+    type,
+    title: title || type.charAt(0).toUpperCase() + type.slice(1),
+    message
+  };
+
+  setTimeout(() => {
+    toast.closing = true;          // 🆕 trigger fade out
+
+    setTimeout(() => {
+      toast.show = false;          // 🆕 buang DOM lepas animation
+      toast.closing = false;
+    }, 250);
+  }, duration);
+}
 
 const fixedDurations = {
   MAT: 98,
@@ -88,8 +116,26 @@ const leaveTypes = [
     "All", "January", "February", "March", "April", "May", "June",
     "July", "August", "September", "October", "November", "December"
   ];
+  const START_YEAR = 2025;
+  const MAX_YEARS = 5;
+
   const currentYear = new Date().getFullYear();
-  const years = ["All", ...Array.from({ length: 10 }, (_, i) => currentYear - i)];
+
+  // determine earliest year to show
+  const earliestYear = Math.max(
+    START_YEAR,
+    currentYear - (MAX_YEARS - 1)
+  );
+
+  // build rolling list
+  const years = [
+    "All",
+    ...Array.from(
+      { length: currentYear - earliestYear + 1 },
+      (_, i) => earliestYear + i
+    )
+  ];
+
 const leaveLabels = {
   AL: "Annual / Emergency",
   MC: "Medical",
@@ -160,6 +206,7 @@ const leaveCodes = {
     reason: l.reason,
     duration: l.duration,
     attachment_path: l.attachment_path, 
+    cancellationReason: l.cancellation_reason,
     status:
   Number(l.total_days) === 0
     ? "Invalid"
@@ -197,10 +244,36 @@ const leaveCodes = {
     .sort((a, b) => (a.dateFrom < b.dateFrom ? 1 : -1));
 
   // =========== DELETE/CANCEL ============
-  function requestCancellation(leaveItem) {
-    leaveToCancel = leaveItem;
-    showConfirmationModal = true;
-  }
+  function requestCancellation(l) {
+
+  // ✅ PENDING → DELETE TERUS (NO MODAL, NO REASON)
+  if (l.status === "Pending") {
+  fetch(`http://localhost:5000/api/leave-requests/${l.uuid}`, {
+    method: "DELETE",
+    credentials: "include"
+  })
+    .then(() => {
+      leaves = leaves.filter(x => String(x.uuid) !== String(l.uuid));
+
+      // ✅ TOAST SUCCESS
+      showToast("Leave application deleted successfully.", "success");
+    })
+    .catch(() => {
+      // ❌ TOAST ERROR
+      showToast("Failed to delete leave application.", "error");
+    });
+
+  return; // stop sini, tak buka modal
+}
+
+
+  // ✅ APPROVED → REQUEST CANCELLATION
+  leaveToCancel = l;
+  cancelReason = "";
+  showCancelReason = false;
+  showConfirmationModal = true;
+}
+
 
   function closeConfirmationModal() {
     leaveToCancel = null;
@@ -299,21 +372,26 @@ async function confirmCancellation() {
   const id = leaveToCancel.uuid;
 
   // ---------------- PENDING → DELETE ----------------
-  if (leaveToCancel.status === "Pending") {
-    console.log('🔍 DELETE DEBUG:', {
-      id,
-      leaveToCancel,
-      uuid: leaveToCancel.uuid
-    });
-
-    await fetch(`/api/leave-requests/${id}`, {
-      method: "DELETE",
-      credentials: "include"
-    });
-
-    window.location.reload(); 
+  if (leaveToCancel.status === "Approved") {
+  if (!cancelReason.trim()) {
+    alert("Cancellation reason is required.");
     return;
   }
+
+  await fetch(`/api/leave-requests/${id}`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      status: "cancellation_pending",
+      cancellation_reason: cancelReason
+    })
+  });
+
+  window.location.reload();
+  return;
+}
+
 
   // ---------------- APPROVED → CANCELLATION PENDING ----------------
   if (leaveToCancel.status === "Approved") {
@@ -495,14 +573,55 @@ function onUntilChange() {
   <div class="modal-backdrop">
     <div class="modal-dialog">
       <h3>Confirm Cancellation</h3>
-      <p>Are you sure you want to cancel your leave application?</p>
-      <div class="modal-actions">
-        <button class="btn-danger" on:click={confirmCancellation}>Yes, cancel</button>
-        <button class="btn-secondary" on:click={closeConfirmationModal}>No, keep it</button>
-      </div>
+
+      {#if !showCancelReason}
+        <p>Are you sure you want to cancel your leave application?</p>
+
+        <div class="modal-actions">
+          <button
+            class="btn-danger"
+            on:click={() => showCancelReason = true}
+          >
+            Yes, continue
+          </button>
+          <button
+            class="btn-secondary"
+            on:click={closeConfirmationModal}
+          >
+            No, keep it
+          </button>
+        </div>
+
+      {:else}
+        <p>Please state your reason for cancellation:</p>
+
+        <textarea
+          rows="3"
+          bind:value={cancelReason}
+          placeholder="Enter cancellation reason..."
+          style="width:100%; padding:8px; border-radius:8px; border:1px solid #d1d5db;"
+        ></textarea>
+
+        <div class="modal-actions" style="margin-top:12px;">
+          <button
+            class="btn-danger"
+            disabled={!cancelReason.trim()}
+            on:click={confirmCancellation}
+          >
+            Submit Cancellation
+          </button>
+          <button
+            class="btn-secondary"
+            on:click={closeConfirmationModal}
+          >
+            Cancel
+          </button>
+        </div>
+      {/if}
     </div>
   </div>
 {/if}
+
 
 <!-- ===== FILTER BAR (Right aligned) ===== -->
 <div class="filter-bar">
@@ -743,6 +862,45 @@ function onUntilChange() {
     {/each}
   </tbody>
 </table>
+
+{#if toast.show}
+  <div class="toast-stack">
+    <div class="toast-item {toast.type} {toast.closing ? 'closing' : ''}">
+      <div class="toast-icon">
+        {#if toast.type === 'success'}
+          <svg viewBox="0 0 24 24" class="toast-svg">
+            <path d="M9.5 16.2L4.8 11.5l1.4-1.4 3.3 3.3 8.1-8.1 1.4 1.4z"/>
+          </svg>
+        {/if}
+
+        {#if toast.type === 'error'}
+          <svg viewBox="0 0 24 24" class="toast-svg">
+            <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm3.5 13.1-1.4 1.4L12 13.4l-2.1 2.1-1.4-1.4L10.6 12 8.5 9.9l1.4-1.4 2.1 2.1 2.1-2.1 1.4 1.4L13.4 12z"/>
+          </svg>
+        {/if}
+
+        {#if toast.type === 'info'}
+          <svg viewBox="0 0 24 24" class="toast-svg">
+            <path d="M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2z"/>
+          </svg>
+        {/if}
+
+        {#if toast.type === 'warning'}
+          <svg viewBox="0 0 24 24" class="toast-svg">
+            <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
+          </svg>
+        {/if}
+      </div>
+
+      <div class="toast-body">
+        <strong>{toast.title}</strong>
+        <p>{toast.message}</p>
+      </div>
+
+      <button class="toast-close" on:click={() => (toast.show = false)}>×</button>
+    </div>
+  </div>
+{/if}
 
 <style>
   /* ===== FILTER BAR ===== */
@@ -1054,6 +1212,136 @@ function onUntilChange() {
   .view-attachment-btn:hover {
     color: #1d4ed8;
   }
+
+  /* =========================
+   TOAST NOTIFICATION
+========================= */
+/* ===== TOAST STACK ===== */
+.toast-stack {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 9999;
+}
+
+/* ===== TOAST ITEM ===== */
+.toast-item {
+  display: flex;
+  align-items: flex-start; 
+  background: #fff;
+  border-radius: 8px;
+  min-width: 340px;
+  max-width: 400px;
+  padding: 12px 14px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+  animation: slideIn 0.25s ease;
+  border-left: 5px solid;
+}
+
+/* ICON */
+.toast-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 12px;
+  margin-top: 2px;
+}
+
+.toast-svg {
+  width: 20px;
+  height: 20px;
+  fill: #fff;
+}
+
+/* BODY */
+.toast-body {
+  flex: 1;
+}
+
+.toast-body strong {
+  display: block;
+  font-size: 14px;
+  color: #111827;
+  margin-bottom: 2px;
+}
+
+.toast-body p {
+  margin: 0;
+  font-size: 13px;
+  color: #4b5563;
+}
+
+/* CLOSE */
+.toast-close {
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  color: #9ca3af;
+  margin-left: 10px;
+}
+.toast-close:hover {
+  color: #111827;
+}
+
+/* ===== TYPES ===== */
+.toast-item.success {
+  border-color: #22c55e;
+}
+.toast-item.success .toast-icon {
+  background: #22c55e;
+}
+
+.toast-item.error {
+  border-color: #ef4444;
+}
+.toast-item.error .toast-icon {
+  background: #ef4444;
+}
+
+.toast-item.info {
+  border-color: #3b82f6;
+}
+.toast-item.info .toast-icon {
+  background: #3b82f6;
+}
+
+.toast-item.warning {
+  border-color: #f59e0b;
+}
+.toast-item.warning .toast-icon {
+  background: #f59e0b;
+}
+
+/* ===== ANIMATION ===== */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+
+.toast-item.closing {
+  animation: fadeOut 0.25s ease forwards;
+}
+
 
 
   /* ===== Responsive (keep filters usable) ===== */

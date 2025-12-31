@@ -45,6 +45,31 @@ function getLeaveShortName(code) {
   let selectedEmp = null;
   let detailsForm = null;
   let leaveDetailsOpen = {};
+  let toast = {
+  show: false,
+  type: "success",
+  title: "",
+  message: "",
+  closing: false
+};
+
+function showToast(message, type = "success", title = "", duration = 3000) {
+  toast = {
+    show: true,
+    type,
+    title: title || type.charAt(0).toUpperCase() + type.slice(1),
+    message,
+    closing: false
+  };
+
+  setTimeout(() => {
+    toast.closing = true;
+    setTimeout(() => {
+      toast.show = false;
+      toast.closing = false;
+    }, 300);
+  }, duration);
+}
 
   const fmt = (iso) =>
     iso ? new Date(iso).toLocaleDateString() : "-";
@@ -338,75 +363,84 @@ pendingCancel = view.filter(
       6) APPROVE / REJECT
      ================================ */
 
-   async function approve(id) {
+  async function approve(id) {
+  try {
     await fetch(`/api/leave-requests/${id}`, {
       method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        status: "approved",
-      }),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "approved" }),
     });
+
+    showToast("Leave request approved successfully.", "success");
 
     await loadPendingRequests();
     await loadPending();
     await loadEmployees();
 
-    window.dispatchEvent(new Event('pending-updated'));
+    window.dispatchEvent(new Event("pending-updated"));
+  } catch (err) {
+    showToast("Failed to approve leave request.", "error");
   }
+}
 
   async function reject(id) {
+  try {
     await fetch(`/api/leave-requests/${id}`, {
       method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        status: "rejected",
-      }),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "rejected" }),
     });
+
+    showToast("Leave request rejected.", "success");
 
     await loadPendingRequests();
     await loadPending();
     await loadEmployees();
 
-    window.dispatchEvent(new Event('pending-updated'));
+    window.dispatchEvent(new Event("pending-updated"));
+  } catch (err) {
+    showToast("Failed to reject leave request.", "error");
   }
-  async function approveCancellation(item) {
-  const id = item.leave_id;
-
-  await fetch(`/api/leave-requests/${id}`, {
-    method: "PATCH",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ status: "cancelled" })
-  });
-
-  await loadPendingRequests();
-  await loadPending();
-  await loadEmployees();
-
-  window.dispatchEvent(new Event('pending-updated'));
 }
+
+  async function approveCancellation(item) {
+  try {
+    await fetch(`/api/leave-requests/${item.leave_id}`, {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "cancelled" })
+    });
+
+    showToast("Leave cancellation approved.", "success");
+
+    await loadPendingRequests();
+    await loadPending();
+    await loadEmployees();
+  } catch {
+    showToast("Failed to approve cancellation.", "error");
+  }
+}
+
 
 async function rejectCancellation(item) {
-  const id = item.leave_id;
+  try {
+    await fetch(`/api/leave-requests/${item.leave_id}`, {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "approved" })
+    });
 
-  await fetch(`/api/leave-requests/${id}`, {
-    method: "PATCH",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ status: "approved" }) // revert
-  });
+    showToast("Cancellation request rejected.", "success");
 
-  await loadPendingRequests();
-  await loadPending();
-  await loadEmployees();
-
-  window.dispatchEvent(new Event('pending-updated'));
+    await loadPendingRequests();
+    await loadPending();
+    await loadEmployees();
+  } catch {
+    showToast("Failed to reject cancellation.", "error");
+  }
 }
-
 
   function approveRequest(item) {
     const id =
@@ -524,6 +558,134 @@ async function rejectCancellation(item) {
   .ctl.date::after{ content:""; position:absolute; right:12px; top:50%; transform:translateY(-50%); width:18px; height:18px; opacity:.7; background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" stroke="%2364748b" fill="none" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2" ry="2" stroke-width="2"/><line x1="16" y1="3" x2="16" y2="7" stroke-width="2"/><line x1="8" y1="3" x2="8" y2="7" stroke-width="2"/><line x1="3" y1="11" x2="21" y2="11" stroke-width="2"/></svg>') no-repeat center / contain; pointer-events:none; }
   input[type="date"]{ padding-right:34px; }
 
+/* =========================
+   TOAST NOTIFICATION
+========================= */
+/* ===== TOAST STACK ===== */
+.toast-stack {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 9999;
+}
+
+/* ===== TOAST ITEM ===== */
+.toast-item {
+  display: flex;
+  align-items: flex-start; 
+  background: #fff;
+  border-radius: 8px;
+  min-width: 340px;
+  max-width: 400px;
+  padding: 12px 14px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+  animation: slideIn 0.25s ease;
+  border-left: 5px solid;
+}
+
+/* ICON */
+.toast-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 12px;
+  margin-top: 2px;
+}
+
+.toast-svg {
+  width: 20px;
+  height: 20px;
+  fill: #fff;
+}
+
+/* BODY */
+.toast-body {
+  flex: 1;
+}
+
+.toast-body strong {
+  display: block;
+  font-size: 14px;
+  color: #111827;
+  margin-bottom: 2px;
+}
+
+.toast-body p {
+  margin: 0;
+  font-size: 13px;
+  color: #4b5563;
+}
+
+/* CLOSE */
+.toast-close {
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  color: #9ca3af;
+  margin-left: 10px;
+}
+.toast-close:hover {
+  color: #111827;
+}
+
+/* ===== TYPES ===== */
+.toast-item.success {
+  border-color: #22c55e;
+}
+.toast-item.success .toast-icon {
+  background: #22c55e;
+}
+
+.toast-item.error {
+  border-color: #ef4444;
+}
+.toast-item.error .toast-icon {
+  background: #ef4444;
+}
+
+.toast-item.info {
+  border-color: #3b82f6;
+}
+.toast-item.info .toast-icon {
+  background: #3b82f6;
+}
+
+.toast-item.warning {
+  border-color: #f59e0b;
+}
+.toast-item.warning .toast-icon {
+  background: #f59e0b;
+}
+
+/* ===== ANIMATION ===== */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+
+.toast-item.closing {
+  animation: fadeOut 0.25s ease forwards;
+}
   /* ===== Responsive ===== */
   @media (max-width:740px){
     .add-grid, .details-grid-form{ grid-template-columns:1fr; }
@@ -579,9 +741,12 @@ async function rejectCancellation(item) {
 
   <div class="sidebar-body">
 
-    {#if pending.length === 0}
-      <p style="color:#64748b; text-align:center;">No pending requests.</p>
+    {#if pendingLeave.length === 0 && pendingCancel.length === 0}
+      <p style="color:#64748b; text-align:center;">
+        No pending requests.
+      </p>
     {:else}
+
 
       <!-- ================================================= -->
       <!--                 PENDING LEAVE APPROVAL           -->
@@ -734,10 +899,10 @@ async function rejectCancellation(item) {
                   margin-top:10px;
                 "
               >
-                <div>
-                  <strong style="color:#0c4a6e; font-size:13px;">Reason:</strong>
-                  <div style="margin-top:4px; color:#334155; font-size:12px;">{item.reason}</div>
-                </div>
+               <strong style="color:#0c4a6e; font-size:13px;">Cancellation Reason:</strong>
+                  <div style="margin-top:4px; color:#334155; font-size:12px;">
+                    {item.cancellation_reason || "-"}
+                  </div>
 
                 <div style="margin-top:8px;">
                   <strong style="color:#0c4a6e; font-size:13px;">Attachment:</strong>
@@ -843,3 +1008,41 @@ async function rejectCancellation(item) {
   </div>
 {/if}
 
+{#if toast.show}
+  <div class="toast-stack">
+    <div class="toast-item {toast.type} {toast.closing ? 'closing' : ''}">
+      <div class="toast-icon">
+      {#if toast.type === 'success'}
+        <svg viewBox="0 0 24 24" class="toast-svg">
+          <path d="M9.5 16.2L4.8 11.5l1.4-1.4 3.3 3.3 8.1-8.1 1.4 1.4z"/>
+        </svg>
+      {/if}
+
+      {#if toast.type === 'error'}
+        <svg viewBox="0 0 24 24" class="toast-svg">
+          <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm3.5 13.1-1.4 1.4L12 13.4l-2.1 2.1-1.4-1.4L10.6 12 8.5 9.9l1.4-1.4 2.1 2.1 2.1-2.1 1.4 1.4L13.4 12z"/>
+        </svg>
+      {/if}
+
+      {#if toast.type === 'info'}
+        <svg viewBox="0 0 24 24" class="toast-svg">
+          <path d="M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2z"/>
+        </svg>
+      {/if}
+
+      {#if toast.type === 'warning'}
+        <svg viewBox="0 0 24 24" class="toast-svg">
+          <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
+        </svg>
+      {/if}
+    </div>
+
+      <div class="toast-body">
+        <strong>{toast.title}</strong>
+        <p>{toast.message}</p>
+      </div>
+
+      <button class="toast-close" on:click={() => (toast.show = false)}>×</button>
+    </div>
+  </div>
+{/if}
