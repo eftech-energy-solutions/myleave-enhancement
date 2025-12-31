@@ -15,10 +15,10 @@ export async function recalculateAffectedLeaves(affectedDate) {
     // Find all APPROVED leaves that include this date
     const { rows: affectedLeaves } = await pool.query(
       `SELECT leave_id, staff_id, staff_name, leave_type, 
-              date_from, date_until, total_days, 
+              date_from, date_until, total_days, duration,
               deduct_cf, deduct_al
        FROM leave_requests
-       WHERE status = 'approved'
+       WHERE status IN ('approved', 'rejected', 'pending', 'cancellation_pending', 'cancelled')
          AND date_from <= $1
          AND date_until >= $1`,
       [affectedDate]
@@ -41,7 +41,13 @@ export async function recalculateAffectedLeaves(affectedDate) {
       const oldDays = Number(leave.total_days);
       
       // Recalculate working days with current holidays
-      const newDays = await calculateWorkingDays(leave.date_from, leave.date_until);
+      // 🔥 FIX: Handle half-day leaves correctly
+      let newDays;
+      if (leave.duration === 'Half') {
+        newDays = 0.5;
+      } else {
+        newDays = await calculateWorkingDays(leave.date_from, leave.date_until);
+      }
       
       const difference = newDays - oldDays;
 
@@ -65,7 +71,7 @@ export async function recalculateAffectedLeaves(affectedDate) {
 
       if (leaveType === "AL" || leaveType === "EL") {
         // For Annual/Emergency leave, we need to recalculate CF/AL split
-        await recalculateAnnualLeaveBalance(leave, oldDays, newDays, difference);
+        await recalculateAnnualLeaveBalance(leave, oldDays, newDays);
       } else if (leaveType === "MC") {
         // Medical leave - simple adjustment
         await pool.query(
@@ -82,8 +88,8 @@ export async function recalculateAffectedLeaves(affectedDate) {
            WHERE staff_id = $2 AND leave_type = 'HOSP'`,
           [difference, leave.staff_id]
         );
-      } else {
-        // Other special leaves
+      } else if (leaveType !== "UNPAID") {
+        // Other special leaves (skip UNPAID)
         await pool.query(
           `UPDATE leave_entitlements 
            SET balance = balance - $1 
@@ -91,6 +97,7 @@ export async function recalculateAffectedLeaves(affectedDate) {
           [difference, leave.staff_id, leaveType]
         );
       }
+      // UNPAID - no balance adjustment needed
 
       recalculated.push({
         leave_id: leave.leave_id,
@@ -118,8 +125,9 @@ export async function recalculateAffectedLeaves(affectedDate) {
 
 /**
  * Recalculate Annual Leave balance with proper CF/AL split
+ * 🔥 FIX: Removed unused difference parameter
  */
-async function recalculateAnnualLeaveBalance(leave, oldDays, newDays, difference) {
+async function recalculateAnnualLeaveBalance(leave, oldDays, newDays) {
   const staffId = leave.staff_id;
   const leaveDate = new Date(leave.date_from);
 
@@ -150,6 +158,7 @@ async function recalculateAnnualLeaveBalance(leave, oldDays, newDays, difference
   const today = new Date();
   if (expiry && today > expiry) {
     CF = 0;
+    console.log('⚠️ CF expired, setting to 0');
   }
 
   // Calculate new deductions
@@ -164,6 +173,8 @@ async function recalculateAnnualLeaveBalance(leave, oldDays, newDays, difference
       const msDay = 1000 * 60 * 60 * 24;
       const daysBeforeExpiry = Math.floor((expiry - leaveDate) / msDay) + 1;
       const daysAfterExpiry = newDays - daysBeforeExpiry;
+      
+      console.log(`📅 Leave crosses expiry: ${daysBeforeExpiry} before, ${daysAfterExpiry} after`);
       
       if (CF >= daysBeforeExpiry) {
         newDeductCF = daysBeforeExpiry;
@@ -188,13 +199,22 @@ async function recalculateAnnualLeaveBalance(leave, oldDays, newDays, difference
 
   console.log(`📤 New deductions: CF-${newDeductCF}, AL-${newDeductAL}`);
 
+  // 🔥 FIX: Check if sufficient balance before updating
+  const finalAL = AL - newDeductAL;
+  const finalCF = CF - newDeductCF;
+
+  if (finalAL < 0) {
+    console.error(`❌ Insufficient AL balance for leave ${leave.leave_id}. Required: ${newDeductAL}, Available: ${AL}`);
+    throw new Error(`Insufficient Annual Leave balance for ${leave.staff_name}`);
+  }
+
   // Apply new deductions
   await pool.query(
     `UPDATE profiles 
      SET carry_forward_balance = $1, 
          leave_entitlement_annual = $2 
      WHERE staff_id = $3`,
-    [CF - newDeductCF, AL - newDeductAL, staffId]
+    [finalCF, finalAL, staffId]
   );
 
   // Update leave request with new deductions
@@ -210,8 +230,10 @@ async function recalculateAnnualLeaveBalance(leave, oldDays, newDays, difference
     `UPDATE profiles 
      SET remaining_leave = $1 
      WHERE staff_id = $2`,
-    [(AL - newDeductAL) + (CF - newDeductCF), staffId]
+    [finalAL + finalCF, staffId]
   );
+
+  console.log(`✅ Updated ${leave.staff_name}: AL=${finalAL}, CF=${finalCF}, Remaining=${finalAL + finalCF}`);
 }
 
 /**
