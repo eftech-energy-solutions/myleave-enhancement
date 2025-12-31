@@ -42,7 +42,8 @@ const upload = multer({ dest: "uploads/leave_attachments/" });
 async function resetAnnualLeaveForNewYear() {
   try {
     const staffList = await pool.query(`
-      SELECT staff_id, leave_entitlement_annual, leave_entitlement_annual_original
+      SELECT staff_id, leave_entitlement_annual, leave_entitlement_annual_original,
+             leave_entitlement_medical_original
       FROM profiles
     `);
     const currentYear = new Date().getFullYear();
@@ -58,6 +59,7 @@ async function resetAnnualLeaveForNewYear() {
             carry_forward_original = $1::numeric,
             carry_forward_expiry = $2,
             leave_entitlement_annual = leave_entitlement_annual_original,
+            leave_entitlement_medical = leave_entitlement_medical_original, -- ✅ RESET MC
             remaining_leave = leave_entitlement_annual_original + $1::numeric
           WHERE staff_id = $3`,
         [carryForward, expiryDate, s.staff_id]
