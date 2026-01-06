@@ -618,7 +618,7 @@ $: filtered = (() => {
   .fab-container{
   position:fixed;
   right:16px;
-  bottom:16px;
+  top: 115px;
   z-index:999;
 }
 
@@ -627,8 +627,8 @@ $: filtered = (() => {
   height:42px;
   border-radius:50%;
   border:none;
-  background:#49bdb3;
-  color:#fff;
+  background:#fef08a;
+  color:#0c4a6e;;
   font-size:18px;
   cursor:pointer;
   box-shadow:0 6px 16px rgba(73,189,179,.45);
@@ -636,7 +636,7 @@ $: filtered = (() => {
 
 .fab-menu{
   position:absolute;
-  bottom:54px;
+  top:44px;
   right:0;
   background:#ffffff;
   border-radius:12px;

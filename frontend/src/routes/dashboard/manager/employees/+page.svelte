@@ -108,8 +108,9 @@ function showToast(message, type = "success", title = "", duration = 3000) {
       managerDept = userData?.department;
 
       await loadPendingRequests();
-      await loadEmployees();
-      await loadPending();
+      await loadPending();        // <-- penting
+      await loadEmployees();      // <-- guna pendingRequests yang BETUL
+
     } catch (err) {
       console.error(
         "❌ Error loading manager or employees:",
@@ -174,15 +175,23 @@ fullProfileList.forEach((emp) => {
 });
 
 // === PENTING: Cari staff yang MASIH ada request pending ===
+const safePending = Array.isArray(pendingRequests)
+  ? pendingRequests
+  : [];
+
 const pendingIds = new Set(
-  pendingRequests
+  safePending
     .filter(
       (r) =>
-        r.status === "pending" ||
-        r.status === "cancellation_pending" // kalau ada status ni
+        (r.status === "pending" ||
+         r.status === "cancellation_pending") &&
+        r.requester_role === "Staff" // 🔥 INI PENTING
     )
     .map((r) => r.staff_id)
 );
+
+
+
 
 // 1) Filter ONLY employees in manager's department (kalau manager)
 let deptFiltered;
@@ -205,7 +214,11 @@ if (manager?.role === "Manager" && managerDept === "Director") {
 }
 
 // 2) Buang semua staff yang ada dalam pendingIds
-employees = deptFiltered.filter((emp) => !pendingIds.has(emp.empId));
+employees = deptFiltered.filter(
+  (emp) =>
+    emp.role !== "Staff" || !pendingIds.has(emp.empId)
+);
+
 
     } catch (err) {
       console.error("⚠️ Error in loadEmployees():", err);
@@ -248,7 +261,7 @@ employees = deptFiltered.filter((emp) => !pendingIds.has(emp.empId));
             "";
 
           // 🔥 Manager Director
-          if (managerDept === "Director") {
+         if (managerDept === "Director") {
             return (
               dept === "Director" ||
               r.requester_role === "Manager"
