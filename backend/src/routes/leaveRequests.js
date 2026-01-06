@@ -157,6 +157,9 @@ router.post("/", upload.single("attachment"), async (req, res) => {
     if (!user || !user.staff_id)
       return res.status(401).json({ message: "Unauthorised" });
 
+    const userRole = (user.role || "").trim().toLowerCase();
+    const userDept = (user.department || "").trim().toLowerCase();
+
     const staffId = user.staff_id;
 
     let serverDays;
@@ -337,43 +340,141 @@ router.post("/", upload.single("attachment"), async (req, res) => {
     // Send emails...
     sendLeaveSubmitted(user.email, user.full_name, leave);
 
-    let approverEmail = null;
-    if (user.role === "Manager") {
-      const adminRes = await pool.query(
-        `SELECT email FROM profiles WHERE role='Admin' LIMIT 1`
-      );
-      if (adminRes.rows.length) {
-        approverEmail = adminRes.rows[0].email;
+    // 🔔 APPROVER NOTIFICATIONS
+
+    // =========================
+    // 1️⃣ ADMIN → ALWAYS NOTIFY
+    // =========================
+    const adminRes = await pool.query(
+      `SELECT email FROM profiles WHERE LOWER(role) = 'admin'`
+    );
+
+    for (const row of adminRes.rows) {
+      sendPendingApproval(row.email, user.full_name, leave);
+    }
+
+    // =========================
+    // 2️⃣ ROLE: DIRECTOR
+    // =========================
+    if (userRole === "director") {
+      // ❌ Director tak notify sesiapa
+      // ✅ Admin already notified
+    }
+
+    // =========================
+    // 3️⃣ ROLE: MANAGER
+    // =========================
+    else if (userRole === "manager") {
+
+      // 🔥 Manager department Director
+      if (userDept === "director") {
+
+        // Notify manager department Director (exclude diri sendiri)
+        const directorMgrRes = await pool.query(
+          `SELECT email FROM profiles
+          WHERE LOWER(role) = 'manager'
+            AND LOWER(department) = 'director'`
+        );
+
+        for (const row of directorMgrRes.rows) {
+          if (row.email !== user.email) {
+            sendPendingApproval(row.email, user.full_name, leave);
+          }
+        }
+
+      } 
+      // 🔥 Manager department lain
+      else {
+
+        // Notify Manager department Director
+        const directorMgrRes = await pool.query(
+          `SELECT email FROM profiles
+          WHERE LOWER(role) = 'manager'
+            AND LOWER(department) = 'director'`
+        );
+
+        for (const row of directorMgrRes.rows) {
+          sendPendingApproval(row.email, user.full_name, leave);
+        }
+
+        // ❌ Tak notify Director role
+        // ❌ Tak notify manager lain
       }
-    } else {
+    }
+
+    // =========================
+    // 4️⃣ ROLE: STAFF
+    // =========================
+    else {
+
+      // Notify Manager department sendiri
       const mgrRes = await pool.query(
-        `SELECT email FROM profiles 
-         WHERE role='Manager' AND department=$1`,
-        [user.department]
+        `SELECT email FROM profiles
+        WHERE LOWER(role) = 'manager'
+          AND LOWER(department) = $1`,
+        [userDept]
       );
-      if (mgrRes.rows.length) {
-        approverEmail = mgrRes.rows[0].email;
+
+      for (const row of mgrRes.rows) {
+        sendPendingApproval(row.email, user.full_name, leave);
       }
     }
 
-    if (approverEmail) {
-      sendPendingApproval(approverEmail, user.full_name, leave);
-    }
+        return res.status(201).json(leave);
 
-    return res.status(201).json(leave);
-
-  } catch (err) {
-    console.error("POST /api/leave-requests error:", err);
-    return res.status(500).json({ message: "Failed to create leave request" });
-  }
-});
+      } catch (err) {
+        console.error("POST /api/leave-requests error:", err);
+        return res.status(500).json({ message: "Failed to create leave request" });
+      }
+    });
 
 /* ============================================================
     GET ALL LEAVE REQUESTS
 ============================================================ */
 router.get("/", async (req, res) => {
   try {
+    
+    const user = req.user;
     const { status } = req.query;
+
+    if (!user) {
+      return res.status(401).json({ message: "Unauthorised" });
+    }
+
+    let where = [];
+    let params = [];
+
+    // =========================
+    // STATUS FILTER (optional)
+    // =========================
+    if (status) {
+      where.push(`lr.status = $${params.length + 1}`);
+      params.push(status);
+    }
+
+    // =========================
+    // ROLE + DEPARTMENT RULE
+    // =========================
+    if (user.role === 'Manager') {
+
+      // 🔥 Manager department Director
+      if (user.department === 'Director') {
+        where.push(`
+          (
+            lr.department = $${params.length + 1}
+            OR lr.requester_role = 'Manager'
+          )
+        `);
+        params.push('Director');
+
+      } else {
+        // Manager biasa → dept sendiri
+        where.push(`lr.department = $${params.length + 1}`);
+        params.push(user.department);
+      }
+    }
+
+    // Admin → no filter (see all)
 
     const sql = `
       SELECT 
@@ -389,17 +490,19 @@ router.get("/", async (req, res) => {
         p.notes
       FROM leave_requests lr
       LEFT JOIN profiles p ON p.staff_id = lr.staff_id
-      ${status ? "WHERE lr.status = $1" : ""}
+      ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
       ORDER BY lr.created_at DESC
     `;
 
-    const result = await pool.query(sql, status ? [status] : []);
+    const result = await pool.query(sql, params);
     return res.json(result.rows);
+
   } catch (err) {
     console.error("GET /leave-requests error:", err);
     return res.status(500).json({ message: "Failed to load requests" });
   }
 });
+
 
 /* ============================================================
    EDIT LEAVE DETAILS (FIXED OVERLAP CHECK)
@@ -1068,34 +1171,90 @@ router.delete("/:id", async (req, res) => {
 router.get("/history/all", async (req, res) => {
   try {
     const user = req.user;
-    if (!user) return res.status(401).json({ message: "Unauthorised" });
+    if (!user) {
+      return res.status(401).json({ message: "Unauthorised" });
+    }
 
+    // 1️⃣ BASE SQL (WAJIB ADA)
     let sql = `
-      SELECT lr.leave_id, lr.staff_id, lr.staff_name, lr.department,
-             lr.leave_type, lr.status, lr.total_days,
-             lr.date_from, lr.date_until, lr.created_at,
-             p.photourl, p.position
+      SELECT
+        lr.leave_id, lr.staff_id, lr.staff_name, lr.department,
+        lr.requester_role,
+        lr.leave_type, lr.status, lr.total_days,
+        lr.date_from, lr.date_until, lr.created_at,
+        p.photourl, p.position
       FROM leave_requests lr
       LEFT JOIN profiles p ON p.staff_id = lr.staff_id
     `;
 
+    let where = [];
     let params = [];
 
-    if (user.role === "Manager") {
-      sql += ` WHERE lr.department=$1 `;
+    // =========================
+    // ADMIN → SEMUA
+    // =========================
+    if (user.role === "Admin") {
+      // no filter
+    }
+
+    // =========================
+    // DIRECTOR
+    // =========================
+    else if (user.role === "Director") {
+      where.push(`
+        (
+          lr.requester_role = 'Manager'
+          OR lr.department = $${params.length + 1}
+        )
+      `);
       params.push(user.department);
     }
 
+    // =========================
+    // MANAGER
+    // =========================
+    else if (user.role === "Manager") {
+      const viewMode = req.query.viewMode || "restricted";
+
+      const canAllView =
+        user.department === "Director" &&
+        viewMode === "all";
+
+      if (!canAllView) {
+        if (user.department === "Director") {
+          where.push(`
+            (
+              lr.requester_role = 'Manager'
+              OR lr.department = $${params.length + 1}
+            )
+          `);
+          params.push("Director");
+        } else {
+          where.push(`lr.department = $${params.length + 1}`);
+          params.push(user.department);
+        }
+      }
+      // canAllView === true → no filter
+    }
+
+    // 2️⃣ APPLY WHERE (INI YANG KAU TAK BUAT TADI)
+    if (where.length) {
+      sql += ` WHERE ${where.join(" AND ")}`;
+    }
+
+    // 3️⃣ ORDER BY
     sql += ` ORDER BY lr.date_from DESC`;
 
+    // 4️⃣ EXECUTE
     const result = await pool.query(sql, params);
-
     return res.json(result.rows);
+
   } catch (err) {
     console.error("GET history error:", err);
     return res.status(500).json({ message: "Failed load history" });
   }
 });
+
 
 /* ============================================================
     GET MY LEAVES

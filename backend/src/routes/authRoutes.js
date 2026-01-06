@@ -77,9 +77,17 @@ router.post('/login', async (req, res) => {
       }
     );
 
+    const role = String(finalRole || '').toLowerCase();
+
     let redirectTo = '/dashboard/staff';
-    if (finalRole.toLowerCase() === 'admin') redirectTo = '/dashboard/admin';
-    if (finalRole.toLowerCase() === 'manager') redirectTo = '/dashboard/manager';
+
+    if (role === 'admin') {
+      redirectTo = '/dashboard/admin';
+    } else if (role === 'manager') {
+      redirectTo = '/dashboard/manager';
+    } else if (role === 'director') {
+      redirectTo = '/dashboard/director';
+    }
 
     return res.json({ success: true, redirectTo });
   } catch (err) {
@@ -125,28 +133,24 @@ router.post('/change-password', async (req, res) => {
     if (!result.rows.length) return res.status(400).json({ error: 'User not found' });
 
     const user = result.rows[0];
-    const stored = user.password || '';
-    let match = false;
+const stored = String(user.password || '').trim();
 
-    try {
-      if (stored.startsWith('$2')) {
-        // bcrypt hash
-        match = await bcrypt.compare(password, stored);
-      } else {
-        // plaintext (first login / temp password)
-        match = password === stored;
-      }
-    } catch (e) {
-      match = false;
-    }
+let match = false;
 
-    if (!match) {
-      return res.status(400).json({
-        error: "Wrong password"
-      });
-    }
+// 🔐 Support BOTH: plaintext temp password & bcrypt hash
+if (stored.startsWith('$2')) {
+  // hashed password
+  match = await bcrypt.compare(currentPassword.trim(), stored);
+} else {
+  // plaintext (first-time login temp password)
+  match = currentPassword.trim() === stored;
+}
 
-    if (!ok) return res.status(400).json({ error: 'Current password is incorrect' });
+if (!match) {
+  return res.status(400).json({
+    error: 'Current password is incorrect'
+  });
+}
 
     const hashed = await bcrypt.hash(newPassword, 10);
     await pool.query(

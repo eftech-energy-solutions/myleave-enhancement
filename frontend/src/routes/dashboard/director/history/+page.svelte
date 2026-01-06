@@ -40,51 +40,18 @@
   let allDepartments = [];
 
   // ===== Fetch Manager-filtered data =====
-  async function loadHistory() {
-  const res = await fetch(
-  `/api/leave-requests/history/all?viewMode=${viewMode}`,
-  { credentials: "include" }
-);
-
+async function loadHistory() {
+  const res = await fetch("/api/leave-requests/history/all", {
+    credentials: "include"
+  });
 
   const data = await res.json();
-  let filteredData = data;
 
-  // ===============================
-  // ROLE-BASED + VIEW MODE LOGIC
-  // ===============================
-
-  if (me?.role === "Manager") {
-
-    // 🔥 ALL VIEW (Admin-like)
-    if (viewMode === "all") {
-      filteredData = data;
-    }
-
-    // 🔒 MANAGER VIEW (Restricted)
-    else {
-      if (me.department === "Director") {
-        filteredData = data.filter(
-          (r) =>
-            r.requester_role === "Manager" ||   // all managers
-            r.department === "Director"          // director department staff
-        );
-      } else {
-        // normal manager (non-director)
-        filteredData = data.filter(
-          (r) => r.department === me.department
-        );
-      }
-    }
-  }
-
-  // ===============================
-  // GROUP + SET STATE
-  // ===============================
-  rows = groupByMonth(filteredData);
+  // 🔥 TRUST BACKEND
+  rows = groupByMonth(data);
 
   allDepartments = Array.from(
-    new Set(filteredData.map(e => e.department).filter(Boolean))
+    new Set(data.map(e => e.department).filter(Boolean))
   ).sort();
 }
 
@@ -132,28 +99,6 @@ function groupByMonth(list) {
   });
 
   return out;
-}
-let viewMode = "restricted"; 
-// "restricted" = behaviour sekarang
-// "all" = view semua staff (macam admin)
-function resetAllFilters() {
-  statusFilter = "";
-  leaveTypeFilter = "";
-  q = "";
-  monthFilter = "All";
-}
-let showModeMenu = false;
-
-async function reloadAndReselect() {
-  const currentMonth = selected?.month;
-  await loadHistory();
-
-  if (currentMonth && currentMonth !== 'All') {
-    const found = rows.find(r => r.month === currentMonth);
-    selected = found || null;
-  } else {
-    selected = null;
-  }
 }
 
 function makeEmployeeRecord(item) {
@@ -274,63 +219,6 @@ $: filtered = (() => {
 <svelte:window on:keydown={handleKey}/>
 
 <div class="page">
-{#if me?.role === "Manager" && me?.department === "Director"}
-  <div class="fab-container">
-    <button class="fab" on:click={() => showModeMenu = !showModeMenu}>
-      👁
-    </button>
-
-       {#if showModeMenu}
-          <div class="fab-menu">
-
-           <!-- MANAGER VIEW (SOLID SINGLE USER) -->
-           <button
-               class:active={viewMode === 'restricted'}
-                on:click={async () => {
-                  viewMode = 'restricted';
-                  showModeMenu = false;
-
-                  resetAllFilters();
-                  await reloadAndReselect();
-
-                  selected = null;
-                }}
-            >
-              <!-- Single user -->
-              <svg class="mode-icon" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5z"/>
-              </svg>
-              <span>Manager View</span>
-            </button>
-
-            <!-- ALL VIEW -->
-           <button
-                class:active={viewMode === 'all'}
-                on:click={async () => {
-                  viewMode = 'all';
-                  showModeMenu = false;
-
-                  resetAllFilters();
-                  await reloadAndReselect();
-
-                  selected = null;       
-                }}
-            >
-              <svg class="mode-icon" viewBox="0 0 24 24" aria-hidden="true">
-                <!-- left person -->
-                <circle cx="8" cy="9" r="4"/>
-                <path d="M2 21c0-3 3.5-5 6-5s6 2 6 5v1H2v-1z"/>
-
-                <!-- right person -->
-                <circle cx="16" cy="9" r="5"/>
-                <path d="M8 21c0-3.5 4-5.5 8-5.5s8 2 8 5.5v1H8v-1z"/>
-              </svg>
-              <span>All View</span>
-            </button>
-          </div>
-        {/if}
-  </div>
-{/if}
 
     <!-- Grid of month cards -->
     <div class="card-grid">
@@ -371,7 +259,8 @@ $: filtered = (() => {
         <section class="table-wrap">
           <div class="controls">
             <div class="spacer"></div>
-              <label class="control">
+
+            <label class="control">
               <span>Status</span>
               <select bind:value={statusFilter}>
                 <option value="">All</option>
@@ -614,88 +503,6 @@ $: filtered = (() => {
 
   .empty{ padding:22px; color:#567; text-align:center; }
   .dialog-foot{ padding:12px 16px; border-top:1px solid #eee; display:flex; justify-content:flex-end; }
-
-  .fab-container{
-  position:fixed;
-  right:16px;
-  bottom:16px;
-  z-index:999;
-}
-
-.fab{
-  width:42px;
-  height:42px;
-  border-radius:50%;
-  border:none;
-  background:#49bdb3;
-  color:#fff;
-  font-size:18px;
-  cursor:pointer;
-  box-shadow:0 6px 16px rgba(73,189,179,.45);
-}
-
-.fab-menu{
-  position:absolute;
-  bottom:54px;
-  right:0;
-  background:#ffffff;
-  border-radius:12px;
-  padding:6px;
-  min-width:180px;
-  box-shadow:0 12px 30px rgba(0,0,0,.18);
-  display:flex;
-  flex-direction:column;
-  gap:4px;
-}
-
-.fab-menu button{
-  display:flex;
-  align-items:center;
-  gap:10px;
-  padding:10px 12px;
-  border:none;
-  background:transparent;
-  border-radius:8px;
-  cursor:pointer;
-  font-size:14px;
-  font-weight:500;
-  color:#0c4a6e;
-  text-align:left;
-}
-
-
-.fab-menu button:hover{
-  background:#f1f5f9;
-}
-
-.fab-menu button.active{
-  background:#e6f7f5;
-  color:#0f766e;
-  font-weight:500;
-}
-
-.fab-menu button.active::after{
-  content:"";
-  margin-left:auto;
-  width:6px;
-  height:6px;
-  border-radius:50%;
-  background:#49bdb3;
-}
-
-.mode-icon{
-  width:18px;
-  height:18px;
-  fill:#217859;      /* warna solid */
-  flex-shrink:0;
-}
-.fab-menu button{
-  display:flex;
-  align-items:center;
-  gap:10px;
-}
-
-
 
   @media(max-width:900px){
     .dialog-body{ grid-template-columns:1fr; }

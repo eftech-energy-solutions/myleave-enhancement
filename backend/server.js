@@ -78,6 +78,7 @@ function roleRedirect(role) {
   const r = String(role || '').toLowerCase();
   if (r === 'admin') return '/dashboard/admin';
   if (r === 'manager') return '/dashboard/manager';
+  if (r === 'director') return '/dashboard/director';
   return '/dashboard/staff';
 }
 

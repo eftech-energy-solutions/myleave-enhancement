@@ -119,10 +119,32 @@ function showToast(message, type = "success", title = "", duration = 3000) {
   const pwd1 = form.querySelector('input[name="pwd1"]').value || '';
   const pwd2 = form.querySelector('input[name="pwd2"]').value || '';
 
-  if (!pwdCurrent || !pwd1 || !pwd2) return alert('Please fill all password fields.');
-  if (pwd1 !== pwd2) return alert('Passwords do not match.');
-  if (pwd1.length < 8) return alert('Password must be at least 8 characters.');
+   if (!pwdCurrent || !pwd1 || !pwd2) {
+    showToast(
+      "All password fields are required.",
+      "warning",
+      "Missing Information"
+    );
+    return;
+  }
 
+  if (pwd1 !== pwd2) {
+    showToast(
+      "New passwords do not match.",
+      "warning",
+      "Password Mismatch"
+    );
+    return;
+  }
+
+  if (pwd1.length < 8) {
+    showToast(
+      "New password must be at least 8 characters.",
+      "warning",
+      "Password Too Short"
+    );
+    return;
+  }
   try {
     // cuba guna email kalau ada
     const email = (safeUser?.email || '').trim().toLowerCase();
@@ -146,7 +168,11 @@ function showToast(message, type = "success", title = "", duration = 3000) {
         throw new Error(data?.error || 'Failed to change password.');
       }
 
-      alert('Password updated successfully!');
+      showToast(
+        "Your password has been updated successfully.",
+        "success",
+        "Password Updated"
+      );
       closeProfileModal();
       return;
     }
@@ -173,12 +199,19 @@ function showToast(message, type = "success", title = "", duration = 3000) {
     if (!res.ok || !data?.success) {
       throw new Error(data?.error || 'Failed to change password.');
     }
-
-    alert('Password updated successfully!');
+   showToast(
+      "Your password has been updated successfully.",
+      "success",
+      "Password Updated"
+    );
     closeProfileModal();
   } catch (err) {
     console.error(err);
-    alert(err.message || 'Server error.');
+    showToast(
+      err.message || "Server error occurred while updating password.",
+      "error",
+      "Update Failed"
+    );
   }
 
   return;
@@ -235,11 +268,19 @@ else {
       closeProfileModal();
       return;
     } else {
-        alert(data.error || 'Upload failed');
+        showToast(
+      data.error || "Upload failed.",
+      "error",
+      "Upload Failed"
+    );
       }
     } catch (err) {
       console.error(err);
-      alert('Upload failed.');
+      showToast(
+        "Upload failed. Please try again later.",
+        "error",
+        "Upload Failed"
+      );
     }
   } else if (activeProfilePane === 'password') {
     // your existing password update logic here
@@ -254,10 +295,14 @@ function handlePhotoFile(e) {
     console.log('📁 File selected:', file);
     if (!file) return;
     if (!/^image\/(png|jpeg)$/i.test(file.type)) {
-      alert('Please choose a PNG or JPG image.');
-      e.currentTarget.value = '';
-      return;
-    }
+        showToast(
+          "Please choose a PNG or JPG image.",
+          "warning",
+          "Invalid File Type"
+        );
+        e.currentTarget.value = '';
+        return;
+      }
     selectedFile = file;
     profilePhotoUrl = URL.createObjectURL(file);
   }

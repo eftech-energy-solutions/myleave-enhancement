@@ -332,12 +332,20 @@ pending = pendingRequests;
       !newEmp.position ||
       !newEmp.role
     ) {
-      alert("Please fill Employee ID, Full Name, Email, Role and Position");
+      showToast(
+        "Please fill Employee ID, Full Name, Email, Role and Position.",
+        "warning",
+        "Incomplete Form"
+      );
       return;
     }
 
     if (!newEmp.employmentDate) {
-      alert("Please select the Employment Date.");
+      showToast(
+      "Please select the Employment Date.",
+      "warning",
+      "Missing Date"
+    );
       employmentDateEl?.focus();
       return;
     }
@@ -516,7 +524,11 @@ pending = pendingRequests;
     // SAVE MODE
     if (editMode) {
       if (!detailsForm.name || !detailsForm.role || !detailsForm.position) {
-        alert("Name, Role and Position are required.");
+        showToast(
+          "Name, Role and Position are required.",
+          "warning",
+          "Missing Required Fields"
+        );
         return;
       }
 
@@ -534,8 +546,12 @@ pending = pendingRequests;
 
           const uploadData = await uploadRes.json();
           if (!uploadData.success)
-            return alert("❌ Failed to upload photo.");
-
+            showToast(
+              "Failed to upload photo.",
+              "error",
+              "Upload Failed"
+            );
+            return;
           finalRelativePhotoUrl = uploadData.photoUrl;
         }
 
@@ -659,6 +675,8 @@ pending = pendingRequests;
 
     await loadPendingRequests();
     await loadEmployees();
+
+    window.dispatchEvent(new Event("pending-updated"));
   } catch (err) {
     showToast("Failed to approve leave request.", "error");
   }
@@ -676,6 +694,8 @@ pending = pendingRequests;
 
     await loadPendingRequests();
     await loadEmployees();
+
+    window.dispatchEvent(new Event("pending-updated"));
   } catch (err) {
     showToast("Failed to reject leave request.", "error");
   }
@@ -1423,6 +1443,7 @@ async function rejectCancellation(item) {
                   <div class="ctl pill">
                     <select bind:value={newEmp.role}>
                       <option>Admin</option>
+                      <option>Director</option>
                       <option>Manager</option>
                       <option>Staff</option>
                     </select>
@@ -1578,6 +1599,7 @@ async function rejectCancellation(item) {
     <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
       <select bind:value={detailsForm.role} disabled={!editMode}>
         <option>Admin</option>
+        <option>Director</option>
         <option>Manager</option>
         <option>Staff</option>
       </select>

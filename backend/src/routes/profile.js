@@ -174,42 +174,94 @@ router.get("/", async (req, res) => {
     const meData = meQuery.rows[0];
     let result;
 
-    // ADMIN → see all
+    // =====================
+    // ADMIN → SEE ALL
+    // =====================
     if (meData.role?.toLowerCase() === "admin") {
-    result = await pool.query(`
-      SELECT id, staff_id, full_name, role, position, department, email,
-            employment_date, confirmation_date, termination_date,
-            gender,
-            leave_entitlement_annual_original,
-            leave_entitlement_medical_original,
-            carry_forward_original,
-            carry_forward_balance,
-            carry_forward_expiry,
-            photourl,
-            notes
-        FROM profiles
-      ORDER BY id DESC
-    `);
-
-    // MANAGER → only same department
-    } else if (meData.role?.toLowerCase() === "manager") {
       result = await pool.query(`
-      SELECT id, staff_id, full_name, role, position, department, email,
-            employment_date, confirmation_date, termination_date,
-            gender,
-            leave_entitlement_annual_original,
-            leave_entitlement_medical_original,
-            carry_forward_original,
-            carry_forward_balance,
-            carry_forward_expiry,
-            photourl,
-            notes
-      FROM profiles
-      WHERE department = $1
-      ORDER BY id DESC
-      `, [meData.department]);
+        SELECT id, staff_id, full_name, role, position, department, email,
+              employment_date, confirmation_date, termination_date,
+              gender,
+              leave_entitlement_annual_original,
+              leave_entitlement_medical_original,
+              carry_forward_original,
+              carry_forward_balance,
+              carry_forward_expiry,
+              photourl,
+              notes
+        FROM profiles
+        ORDER BY id DESC
+      `);
 
-    // STAFF → cannot see
+    // =====================
+    // DIRECTOR → LIMITED
+    // =====================
+    } else if (meData.role?.toLowerCase() === "director") {
+      result = await pool.query(`
+        SELECT id, staff_id, full_name, role, position, department, email,
+              employment_date, confirmation_date, termination_date,
+              gender,
+              leave_entitlement_annual_original,
+              leave_entitlement_medical_original,
+              carry_forward_original,
+              carry_forward_balance,
+              carry_forward_expiry,
+              photourl,
+              notes
+        FROM profiles
+        WHERE
+          department = 'Director'
+          OR role = 'Manager'
+        ORDER BY
+          CASE WHEN role = 'Manager' THEN 0 ELSE 1 END,
+          department,
+          id DESC
+      `);
+
+    // =====================
+    // MANAGER
+    // =====================
+    } else if (meData.role?.toLowerCase() === "manager") {
+
+      // 🔥 Manager department Director
+      if (meData.department === 'Director') {
+        result = await pool.query(`
+          SELECT id, staff_id, full_name, role, position, department, email,
+                employment_date, confirmation_date, termination_date,
+                gender,
+                leave_entitlement_annual_original,
+                leave_entitlement_medical_original,
+                carry_forward_original,
+                carry_forward_balance,
+                carry_forward_expiry,
+                photourl,
+                notes
+          FROM profiles
+          WHERE
+            department = 'Director'
+            OR role = 'Manager'
+          ORDER BY department, role DESC, id DESC
+        `);
+
+      } else {
+        // Manager biasa
+        result = await pool.query(`
+          SELECT id, staff_id, full_name, role, position, department, email,
+                employment_date, confirmation_date, termination_date,
+                gender,
+                leave_entitlement_annual_original,
+                leave_entitlement_medical_original,
+                carry_forward_original,
+                carry_forward_balance,
+                carry_forward_expiry,
+                photourl,
+                notes
+          FROM profiles
+          WHERE department = $1
+          ORDER BY id DESC
+        `, [meData.department]);
+      }
+
     } else {
       return res.status(403).json({ error: "Unauthorized" });
     }
