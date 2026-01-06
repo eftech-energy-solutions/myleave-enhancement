@@ -1246,16 +1246,16 @@ router.get("/me", async (req, res) => {
 });
 
 // TEMPORARY - Test cron (runs every minute)
-cron.schedule('* * * * *', async () => {
-  console.log('🧪 TEST CRON TRIGGERED');
-  const success = await resetAnnualLeaveForNewYear();
-  if (success) {
-    console.log('✅ Test reset completed!');
-  } else {
-    console.error('❌ Test reset failed!');
-  }
-});
-console.log('⏰ TEST: Cron running every minute');
+// cron.schedule('* * * * *', async () => {
+//   console.log('🧪 TEST CRON TRIGGERED');
+//   const success = await resetAnnualLeaveForNewYear();
+//   if (success) {
+//     console.log('✅ Test reset completed!');
+//   } else {
+//     console.error('❌ Test reset failed!');
+//   }
+// });
+// console.log('⏰ TEST: Cron running every minute');
 
 
 // Calculate time 2 minutes from now
@@ -1278,23 +1278,23 @@ console.log('⏰ TEST: Cron running every minute');
 // });
 
 
-/* ============================================================
-    AUTOMATIC YEARLY RESET - RUNS JANUARY 1 AT 00:00
-============================================================ */
-// cron.schedule('0 0 1 1 *', async () => {
-//   console.log('🎉 AUTO YEARLY RESET TRIGGERED - January 1, 00:00');
-//   const success = await resetAnnualLeaveForNewYear();
-//   if (success) {
-//     console.log('✅ Yearly leave reset completed successfully!');
-//   } else {
-//     console.error('❌ Yearly leave reset failed!');
-//   }
-// });
+// /* ============================================================
+//     AUTOMATIC YEARLY RESET - RUNS JANUARY 1 AT 00:00
+// ============================================================ */
+// // cron.schedule('0 0 1 1 *', async () => {
+// //   console.log('🎉 AUTO YEARLY RESET TRIGGERED - January 1, 00:00');
+// //   const success = await resetAnnualLeaveForNewYear();
+// //   if (success) {
+// //     console.log('✅ Yearly leave reset completed successfully!');
+// //   } else {
+// //     console.error('❌ Yearly leave reset failed!');
+// //   }
+// // });
 
-// console.log('⏰ Cron job scheduled: Yearly reset on January 1 at midnight');
-// ============================================================
-// AUTO MARK APPROVED LEAVES AS INVALID (SAFETY NET)
-// ============================================================
+// // console.log('⏰ Cron job scheduled: Yearly reset on January 1 at midnight');
+// // ============================================================
+// // AUTO MARK APPROVED LEAVES AS INVALID (SAFETY NET)
+// // ============================================================
 cron.schedule('*/1 * * * *', async () => {
   // console.log('🧹 Checking approved leaves with zero days...');
   await markInvalidApprovedLeaves();
