@@ -729,7 +729,11 @@ async function submitLeave(e) {
       });
     }).join(', ');
     
-    alert(`You have already applied for leave on the following date(s):\n${dates}\n\nPlease select different dates.`);
+    showToast(
+      `You have already applied leave on:\n${dates}`,
+      "warning",
+      "Overlapping Leave"
+    );
     return;
   }
   const limit = {
@@ -757,8 +761,13 @@ async function submitLeave(e) {
   }[leaveType];
 
   if (limit !== Infinity && (totalUsed + totalDays) > limit) {
-    alert(`${getLeaveFullName(leaveType)} leave application limit (${limit} days) has been reached.`);
-    return;
+    showToast(
+  `${getLeaveFullName(leaveType)} limit (${limit} days) has been reached.`,
+  "warning",
+  "Limit Exceeded"
+);
+return;
+
   }
 
   const fd = new FormData(formEl);
@@ -780,14 +789,22 @@ async function submitLeave(e) {
       const data = await res.json().catch(() => null);
 
       if (data?.message) {
-        alert(data.message);
-      } else {
-        alert(
+        showToast(
+          data.message,
+          "error",
+          "Submission Failed"
+        );
+      }
+      else {
+        showToast(
           `${getLeaveFullName(leaveType)} limit exceeded.\n` +
-          `Entitlement: ${data?.entitlement || 'N/A'} days\n` +
-          `Used: ${data?.used || 'N/A'} days\n` +
-          `Requested: ${data?.requested || 'N/A'} days\n\n` +
-          `Remaining balance: ${data?.remaining || 'N/A'} days`
+          `Entitlement: ${data?.entitlement ?? 'N/A'} days\n` +
+          `Used: ${data?.used ?? 'N/A'} days\n` +
+          `Requested: ${data?.requested ?? 'N/A'} days\n` +
+          `Remaining balance: ${data?.remaining ?? 'N/A'} days`,
+          "warning",
+          "Leave Limit Exceeded",
+          5000
         );
       }
       return;
@@ -1065,28 +1082,43 @@ async function loadApprovedUsedDays() {
               }
               on:click={() => {
                 if (d.beyondSixMonths) {
-                  alert("You can only apply for leave within the next 6 months.");
-                  return;
+                  showToast(
+                    "You can only apply for leave within the next 6 months.",
+                    "warning",
+                    "Invalid Date"
+                  );
                 }
 
                 if (d.blocked) {
-                  alert("You already applied leave on this date.");
-                  return;
+                  showToast(
+                    "You already applied leave on this date.",
+                    "info",
+                    "Date Unavailable"
+                  );
                 }
 
                 if (d.holiday) {
-                  alert("You cannot apply leave on a public holiday.");
-                  return;
+                  showToast(
+                    "You cannot apply leave on a public holiday.",
+                    "warning",
+                    "Public Holiday"
+                  );
                 }
 
                 if (d.weekend) {
-                  alert("You cannot apply for leave on weekends.");
-                  return;
+                showToast(
+                  "You cannot apply for leave on weekends.",
+                  "warning",
+                  "Weekend"
+                );
                 }
 
                 if (!d.today && atStartOfDay(d.date) < today) {
-                  alert("You cannot apply for past dates.");
-                  return;
+                  showToast(
+                    "You cannot apply for past dates.",
+                    "warning",
+                    "Invalid Date"
+                  );
                 }
 
                 // ✅ Always allow form to open
@@ -1547,7 +1579,7 @@ max-width: 150px;         /* optional — so it wraps instead of going super lon
   }
   .leave-modal::backdrop {
     background: rgba(0,0,0,0.2);
-    backdrop-filter: blur(2px);
+    backdrop-filter: blur(0.8px);
   }
   .leave-form {
     padding: 18px 22px 22px;
@@ -1734,8 +1766,6 @@ max-width: 150px;         /* optional — so it wraps instead of going super lon
   animation: fadeOut 0.25s ease forwards;
 }
 
-
-
 /* =========================
    MOBILE RESPONSIVE
 ========================= */
@@ -1748,6 +1778,5 @@ max-width: 150px;         /* optional — so it wraps instead of going super lon
     max-width: none;
   }
 }
-
 
 </style>

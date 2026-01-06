@@ -297,6 +297,9 @@ router.get("/", async (req, res) => {
     const meData = meQuery.rows[0];
     let result;
 
+    // =====================
+    // ADMIN → SEE ALL
+    // =====================
     if (meData.role?.toLowerCase() === "admin") {
       result = await pool.query(`
         SELECT id, staff_id, full_name, role, position, department, email,
@@ -312,7 +315,11 @@ router.get("/", async (req, res) => {
         FROM profiles
         ORDER BY id DESC
       `);
-    } else if (meData.role?.toLowerCase() === "manager") {
+
+    // =====================
+    // DIRECTOR → LIMITED
+    // =====================
+    } else if (meData.role?.toLowerCase() === "director") {
       result = await pool.query(`
         SELECT id, staff_id, full_name, role, position, department, email,
               employment_date, confirmation_date, termination_date,
@@ -325,10 +332,61 @@ router.get("/", async (req, res) => {
               photourl,
               notes
         FROM profiles
-        WHERE department = $1
-        ORDER BY id DESC
-      `, [meData.department]);
-    } else {
+        WHERE
+          department = 'Director'
+          OR role = 'Manager'
+        ORDER BY
+          CASE WHEN role = 'Manager' THEN 0 ELSE 1 END,
+          department,
+          id DESC
+      `);
+
+    // =====================
+    // MANAGER
+    // =====================
+   } else if (meData.role?.toLowerCase() === "manager") {
+
+  if (meData.department === 'Director') {
+    // ✅ Manager Director: Director staff + ALL Managers
+    result = await pool.query(`
+      SELECT id, staff_id, full_name, role, position, department, email,
+            employment_date, confirmation_date, termination_date,
+            gender,
+            leave_entitlement_annual_original,
+            leave_entitlement_medical_original,
+            carry_forward_original,
+            carry_forward_balance,
+            carry_forward_expiry,
+            photourl,
+            notes
+      FROM profiles
+      WHERE
+        department = 'Director'
+        OR role = 'Manager'
+      ORDER BY
+        CASE WHEN role = 'Manager' THEN 0 ELSE 1 END,
+        department,
+        id DESC
+    `);
+  } else {
+    // ✅ Manager biasa: dept sendiri sahaja
+    result = await pool.query(`
+      SELECT id, staff_id, full_name, role, position, department, email,
+            employment_date, confirmation_date, termination_date,
+            gender,
+            leave_entitlement_annual_original,
+            leave_entitlement_medical_original,
+            carry_forward_original,
+            carry_forward_balance,
+            carry_forward_expiry,
+            photourl,
+            notes
+      FROM profiles
+      WHERE department = $1
+      ORDER BY id DESC
+    `, [meData.department]);
+  }
+} else {
       return res.status(403).json({ error: "Unauthorized" });
     }
 

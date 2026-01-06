@@ -248,7 +248,7 @@ const leaveCodes = {
 
   // ✅ PENDING → DELETE TERUS (NO MODAL, NO REASON)
   if (l.status === "Pending") {
-  fetch(`http://localhost:5000/api/leave-requests/${l.uuid}`, {
+  fetch(`/api/leave-requests/${l.uuid}`, {
     method: "DELETE",
     credentials: "include"
   })
@@ -339,8 +339,12 @@ function handleEdit(l) {
 
 function preventTypeChange() {
   if (isEdit && leaveType !== originalLeaveType) {
-    alert("Leave type changes are restricted. Kindly cancel the pending request and submit a new request.");
-    leaveType = originalLeaveType; // revert back
+    showToast(
+      "Leave type changes are restricted. Please cancel the pending request and submit a new one.",
+      "info",
+      "Action Restricted"
+    );
+    leaveType = originalLeaveType;
   }
 }
 
@@ -370,43 +374,85 @@ async function confirmCancellation() {
   if (!leaveToCancel) return;
 
   const id = leaveToCancel.uuid;
+  const status = leaveToCancel.status;
 
-  // ---------------- PENDING → DELETE ----------------
-  if (leaveToCancel.status === "Approved") {
-  if (!cancelReason.trim()) {
-    alert("Cancellation reason is required.");
+  // 1️⃣ PENDING → DELETE
+  if (status === "Pending") {
+    try {
+      await fetch(`/api/leave-requests/${id}`, {
+        method: "DELETE",
+        credentials: "include"
+      });
+
+      leaves = leaves.filter(l => String(l.uuid) !== String(id));
+
+      showToast(
+        "Leave application deleted successfully.",
+        "success",
+        "Deleted"
+      );
+
+    } catch (err) {
+      showToast(
+        "Failed to delete leave application.",
+        "error",
+        "Action Failed"
+      );
+    }
+
+    closeConfirmationModal();
+    await loadLeaveHistory();
     return;
   }
 
-  await fetch(`/api/leave-requests/${id}`, {
-    method: "PATCH",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      status: "cancellation_pending",
-      cancellation_reason: cancelReason
-    })
-  });
+  // 2️⃣ APPROVED → CANCELLATION PENDING
+  if (status === "Approved") {
 
-  window.location.reload();
-  return;
-}
+    if (!cancelReason.trim()) {
+      showToast(
+        "Please provide a reason for cancellation.",
+        "warning",
+        "Missing Reason"
+      );
+      return;
+    }
 
+    try {
+      await fetch(`/api/leave-requests/${id}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: "cancellation_pending",
+          cancellation_reason: cancelReason
+        })
+      });
 
-  // ---------------- APPROVED → CANCELLATION PENDING ----------------
-  if (leaveToCancel.status === "Approved") {
-    await fetch(`/api/leave-requests/${id}`, {
-      method: "PATCH",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "cancellation_pending" })
-    });
+      showToast(
+        "Cancellation request has been submitted successfully.",
+        "success",
+        "Request Submitted"
+      );
 
-    window.location.reload();
-    return;       // ✅ valid
+    } catch (err) {
+      showToast(
+        "Failed to submit cancellation request.",
+        "error",
+        "Action Failed"
+      );
+    }
+
+    closeConfirmationModal();
+    await loadLeaveHistory();
+    return;
   }
 
-  alert("This leave cannot be cancelled.");
+  // ❌ INVALID STATE
+  showToast(
+    "This leave cannot be cancelled.",
+    "warning",
+    "Action Not Allowed"
+  );
 }
 
 async function submitLeave(event) {
@@ -446,8 +492,13 @@ let used = leaves
 
 // check if new total exceeds limit
 if (used + totalDays > limit) {
-  alert(`Your ${getLeaveFullName(leaveType)} leave limit (${limit} days) has been exceeded.`);
-  return;
+  showToast(
+  `Entitlement: ${entitlement} days\nRequested: ${totalDays} days`,
+  "warning",
+  "Annual Leave Limit Exceeded",
+  5000
+);
+return;
 }
 
 if (isEdit && editingUuid) {
@@ -469,7 +520,11 @@ if (isEdit && editingUuid) {
     credentials: "include",
     body: formData
   });
-
+  showToast(
+  "Your leave application has been updated successfully.",
+  "success",
+  "Edit Successful"
+);
   await loadLeaveHistory();
   closeEditModal();
   return;
@@ -1113,7 +1168,7 @@ function onUntilChange() {
   }
   .leave-modal::backdrop {
     background: rgba(0,0,0,0.2);
-    backdrop-filter: blur(2px);
+    backdrop-filter: blur(0.8px);
   }
   .leave-form {
     padding: 18px 22px 22px;

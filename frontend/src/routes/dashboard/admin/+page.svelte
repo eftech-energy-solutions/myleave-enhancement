@@ -928,7 +928,7 @@ const canGoNextYear = () => {
   }
   .leave-modal::backdrop {
     background: rgba(0,0,0,0.2);
-    backdrop-filter: blur(2px);
+    backdrop-filter: blur(0.8px);
   }
   .edit-btn, .cancel-btn {
   padding: 9px 12px;

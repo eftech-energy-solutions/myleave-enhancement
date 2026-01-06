@@ -20,8 +20,6 @@
   };
 
   let staffId = "";
-  let error = "";
-  let msg = "";
   let toast = {
   show: false,
   type: "success",
@@ -62,42 +60,51 @@ function showToast(message, type = "success", title = "", duration = 3000) {
   : '/images/icontest1.png';
 
   // FETCH USER
-  onMount(async () => {
-    try {
-      const res = await fetch('http://localhost:5000/api/employee/me', {
-        credentials: 'include'
-      });
-      if (res.ok) {
-        const data = await res.json();
-        safeUser = { ...safeUser, ...data };
-        const bust = `?v=${Date.now()}`;
+ onMount(async () => {
+  try {
+    const res = await fetch('http://localhost:5000/api/employee/me', {
+      credentials: 'include'
+    });
+    if (res.ok) {
+      const data = await res.json();
+      safeUser = { ...safeUser, ...data };
 
-        safeUser.photoUrl = data.photoUrl;
-        profilePhotoUrl = data.photoUrl.startsWith('http')
-          ? `${data.photoUrl}${bust}`
-          : `http://localhost:5000${data.photoUrl}${bust}`;
-
-      }
-    } catch (err) {
-      console.error('Error fetching user:', err);
+      const bust = `?v=${Date.now()}`;
+      safeUser.photoUrl = data.photoUrl;
+      profilePhotoUrl = data.photoUrl.startsWith('http')
+        ? `${data.photoUrl}${bust}`
+        : `http://localhost:5000${data.photoUrl}${bust}`;
     }
+  } catch (err) {
+    console.error('Error fetching user:', err);
+  }
 
-    try {
-      const res2 = await fetch("http://localhost:5000/api/employee/me", {
-        credentials: "include"
-      });
-      if (res2.ok) {
-        const user = await res2.json();
-        staffId = user.staffId;
-      }
-    } catch (err) {
-      console.error('Error fetching info:', err);
+  try {
+    const res2 = await fetch("http://localhost:5000/api/employee/me", {
+      credentials: "include"
+    });
+    if (res2.ok) {
+      const user = await res2.json();
+      staffId = user.staffId;
     }
+  } catch (err) {
+    console.error('Error fetching info:', err);
+  }
 
-    loadingUser = false;
-    await loadPendingCount();
+  loadingUser = false;
+  await loadPendingCount();
 
-  });
+  const handler = () => {
+    loadPendingCount();
+  };
+
+  window.addEventListener('pending-updated', handler);
+
+  return () => {
+    window.removeEventListener('pending-updated', handler);
+  };
+});
+
 
   let pendingCount = 0;
 
@@ -116,8 +123,6 @@ async function loadPendingCount() {
   } catch (err) {
     console.error("Failed to load pending count:", err);
   }
-  await loadPendingCount(); 
-
 }
 
 
@@ -177,9 +182,15 @@ async function loadPendingCount() {
   function addStaffEmail() {
     const email = newStaffEmail.trim().toLowerCase();
     if (!email) return;
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return alert("Invalid email");
-    if (newStaffEmailList.includes(email)) return alert("Already added");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    showToast("Please enter a valid email address.", "warning", "Invalid Email");
+    return;
+  }
 
+  if (newStaffEmailList.includes(email)) {
+    showToast("This email has already been added.", "info", "Duplicate Email");
+    return;
+  }
     newStaffEmailList = [...newStaffEmailList, email];
     newStaffEmail = "";
   }
@@ -195,7 +206,14 @@ async function loadPendingCount() {
   // newStaffEmailList = array of emails
 
   if (!newStaffEmailList.length) {
-    alert("No staff emails assigned.");
+    if (!newStaffEmailList.length) {
+      showToast(
+        "Please add at least one staff email before saving.",
+        "warning",
+        "No Staff Assigned"
+      );
+      return;
+    }
     return;
   }
 
@@ -218,13 +236,21 @@ async function loadPendingCount() {
       }
     }
 
-    alert("Role updated successfully!");
+    showToast(
+    "Role access has been updated successfully.",
+    "success",
+    "Update Successful"
+  );
     goBackToList();
     settingsModalOpen = false;
 
   } catch (err) {
     console.error(err);
-    alert("Server error while updating role.");
+    showToast(
+    "Server error occurred while updating role access.",
+    "error",
+    "Update Failed"
+  );
   }
 }
   async function loadRolesFromDB() {
@@ -267,16 +293,12 @@ async function loadPendingCount() {
   activeProfilePane = 'picture';
   profileModalOpen = true;
   profileMenuOpen = false;
-  msg = '';
-  error = '';
 }
 
   function closeProfileModal() { profileModalOpen = false; }
 
 async function saveProfile(e) {
   e.preventDefault();
-  // clear previous UI messages
-  error = '';
 
   console.log('[saveProfile] activeProfilePane=', activeProfilePane, 'safeUser=', {
     email: safeUser?.email,
@@ -353,21 +375,32 @@ async function saveProfile(e) {
     const pwd1 = (form.querySelector('input[name="pwd1"]')?.value || '').trim();
     const pwd2 = (form.querySelector('input[name="pwd2"]')?.value || '').trim();
 
-    error = '';
-
-    if (!pwdCurrent || !pwd1 || !pwd2) {
-      error = 'All password fields are required.';
+   if (!pwdCurrent || !pwd1 || !pwd2) {
+      showToast(
+        "All password fields are required.",
+        "warning",
+        "Missing Information"
+      );
       return;
     }
+
     if (pwd1 !== pwd2) {
-      error = 'New passwords do not match.';
-      return;
-    }
-    if (pwd1.length < 8) {
-      error = 'New password must be at least 8 characters.';
+      showToast(
+        "New passwords do not match.",
+        "warning",
+        "Password Mismatch"
+      );
       return;
     }
 
+    if (pwd1.length < 8) {
+      showToast(
+        "New password must be at least 8 characters.",
+        "warning",
+        "Password Too Short"
+      );
+      return;
+    }
     // Decide route:
     // IMPORTANT: force fallback for admin because your backend validates admin via employee/staffId route
     const isAdmin = (safeUser?.role || '').toLowerCase() === 'admin';
@@ -411,16 +444,15 @@ async function saveProfile(e) {
         }
 
        // success
-       error = '';
-          msg = 'Password updated successfully!';
-          form.reset();
+       showToast(
+          "Your password has been updated successfully.",
+          "success",
+          "Password Updated"
+        );
 
-          setTimeout(() => {
-            closeProfileModal();
-            msg = '';
-          }, 1500);
-
-          return; 
+        form.reset();
+        closeProfileModal();
+        return;
       } catch (err) {
         console.warn('[saveProfile][email-route] failed, will try fallback if allowed:', err);
         if (!err?._tryFallback) {
@@ -434,8 +466,14 @@ async function saveProfile(e) {
     // FALLBACK: staffId route (PUT /api/employee/:staffId/password)
     if (!staffIdVal) {
       error = 'Missing staffId; cannot change password.';
+      showToast(
+      "Missing staff ID. Unable to change password.",
+       "error",
+       "Update Failed"
+     );
       return;
     }
+
 
     try {
       console.log('[saveProfile] using staffId fallback route', { staffId: staffIdVal });
@@ -456,25 +494,39 @@ async function saveProfile(e) {
       }
 
       // success
-      msg = data2?.message || 'Password updated successfully!';
+      showToast(
+        data2?.message || "Your password has been updated successfully.",
+        "success",
+        "Password Updated"
+      );
+
       form.reset();
+      closeProfileModal(); // optional tapi UX lebih cantik
       return;
     } catch (err) {
       console.error('[saveProfile][staff-route] error:', err);
-      // If backend explicitly tells "current password incorrect" show that; else generic
-      error = err?.message || 'An error occurred while updating password.';
-      // also show alert to be obvious
-      error = err?.message || 'An error occurred while updating password.';
+
+      showToast(
+        err?.message || "An error occurred while updating password.",
+        "error",
+        "Password Update Failed"
+      );
+
       return;
     }
   }
 }
-
   function handlePhotoFile(e) {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!/^image\/(png|jpeg)$/i.test(file.type)) return alert("PNG/JPG only");
-
+    if (!/^image\/(png|jpeg)$/i.test(file.type)) {
+      showToast(
+        "Please choose a PNG or JPG image.",
+        "warning",
+        "Invalid File Type"
+      );
+      return;
+    }
     selectedFile = file;
     profilePhotoUrl = URL.createObjectURL(file);
   }
@@ -710,17 +762,6 @@ async function saveProfile(e) {
       required
     />
   </div>
-
-  {#if activeProfilePane === 'password'}
-        {#if msg}
-          <div class="success-msg">{msg}</div>
-        {/if}
-
-        {#if error}
-          <div class="error-msg">{error}</div>
-        {/if}
-      {/if}
-
         {/if}
 
         <div class="form-ft">

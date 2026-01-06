@@ -93,63 +93,71 @@ onMount(async () => {
 });
 
 
-  async function loadPendingCount() {
+async function loadPendingCount() {
   try {
     const res = await fetch('/api/leave-requests', {
       credentials: 'include'
     });
-
     if (!res.ok) return;
 
     const all = await res.json();
 
-    const userDept = (safeUser.department || '').trim().toLowerCase();
+    const role = safeUser?.role;
+    const staffId = safeUser?.staffId;
 
-  const view =
-  safeUser?.role === 'Manager'
-    ? all.filter(r => {
+    let count = 0;
+
+    // ======================
+    // ADMIN → semua pending
+    // ======================
+    if (role === 'Admin') {
+      count = all.filter(r =>
+        r.status === 'pending' ||
+        r.status === 'cancellation_pending'
+      ).length;
+    }
+
+    // ======================
+    // MANAGER → staff bawah dia
+    // ======================
+    else if (role === 'Manager') {
+      const userDept = (safeUser.department || '').trim().toLowerCase();
+
+      count = all.filter(r => {
         const dept =
           r.profile_department ||
           r.staff_department ||
           r.department ||
           '';
 
-        // 🔥 MANAGER DIRECTOR → SEMUA DEPARTMENT
-        if (userDept === 'director') {
-          return (
-            (
-              // ✅ Staff bawah Director sahaja
-              (r.requester_role === 'Staff' &&
-              dept.trim().toLowerCase() === 'director')
-
-              ||
-
-              // ✅ Semua Manager (any department)
-              r.requester_role === 'Manager'
-            )
-            &&
-            // ✅ Status pending sahaja
-            (r.status === 'pending' ||
-            r.status === 'cancellation_pending')
-          );
-        }
-
-
-        // 👤 MANAGER BIASA → DEPT SENDIRI
         return (
-          r.requester_role !== 'Manager' &&
+          r.requester_role === 'Staff' &&
           dept.trim().toLowerCase() === userDept &&
           (r.status === 'pending' ||
            r.status === 'cancellation_pending')
         );
-      })
-    : [];
+      }).length;
+    }
 
-    pendingCount = view.length; // ✅ SATU-SATU TEMPAT SAHAJA
+    // ======================
+    // DIRECTOR → DIRI SENDIRI SAHAJA 🔥
+    // ======================
+    else if (role === 'Director') {
+      count = all.filter(r =>
+        r.staff_id === staffId &&
+        (r.status === 'pending' ||
+         r.status === 'cancellation_pending')
+      ).length;
+    }
+
+    pendingCount = count;
+
   } catch (e) {
     console.error('Failed to load pending count', e);
   }
 }
+
+
 
   // Profile modal
   let profileModalOpen = false;
@@ -426,14 +434,14 @@ async function saveProfile(e) {
         </div>
         <div class="sub-links">
           <a
-            href="/dashboard/manager"
-            class:active={$page.url.pathname.startsWith('/dashboard/manager')}
+            href="/dashboard/director"
+            class:active={$page.url.pathname.startsWith('/dashboard/director')}
           >
             <span class="text">Main</span>
           </a>
           <a
-            href="/dashboard/manager/reports"
-            class:active={$page.url.pathname.startsWith('/dashboard/manager/reports')}
+            href="/dashboard/director/reports"
+            class:active={$page.url.pathname.startsWith('/dashboard/director/reports')}
           >
             <span class="text">Reports</span>
           </a>
@@ -451,22 +459,22 @@ async function saveProfile(e) {
         </div>
         <div class="sub-links">
           <a
-            href="/dashboard/manager/history"
-            class:active={$page.url.pathname.startsWith('/dashboard/manager/history')}
+            href="/dashboard/director/history"
+            class:active={$page.url.pathname.startsWith('/dashboard/director/history')}
           >
-            <span class="text">Staff</span>
+            <span class="text">Managers</span>
           </a>
           <a
-            href="/dashboard/manager/myhistory"
-            class:active={$page.url.pathname.startsWith('/dashboard/manager/myhistory')}
+            href="/dashboard/director/myhistory"
+            class:active={$page.url.pathname.startsWith('/dashboard/director/myhistory')}
           >
             <span class="text">Personal</span>
           </a>
         </div>
 
         <a
-          href="/dashboard/manager/employees"
-          class:active={$page.url.pathname.startsWith('/dashboard/manager/employees')}
+          href="/dashboard/director/employees"
+          class:active={$page.url.pathname.startsWith('/dashboard/director/employees')}
         >
           <span class="ico">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
@@ -507,15 +515,15 @@ async function saveProfile(e) {
       <div class="title-wrap">
         <div class="hello">Welcome back, {safeUser?.name || 'admin'}!</div>
 
-        {#if $page.url.pathname.startsWith('/dashboard/manager/main')}
+        {#if $page.url.pathname.startsWith('/dashboard/director/main')}
           <h1 class="page-title">Dashboard</h1>
-        {:else if $page.url.pathname.startsWith('/dashboard/manager/reports')}
+        {:else if $page.url.pathname.startsWith('/dashboard/director/reports')}
           <h1 class="page-title">My Dashboard</h1>
-        {:else if $page.url.pathname.startsWith('/dashboard/manager/myhistory')}
+        {:else if $page.url.pathname.startsWith('/dashboard/director/myhistory')}
           <h1 class="page-title">My Leave History</h1>
-        {:else if $page.url.pathname.startsWith('/dashboard/manager/history')}
+        {:else if $page.url.pathname.startsWith('/dashboard/director/history')}
           <h1 class="page-title">Approved Leave History</h1>
-        {:else if $page.url.pathname.startsWith('/dashboard/manager/employees')}
+        {:else if $page.url.pathname.startsWith('/dashboard/director/employees')}
           <h1 class="page-title">Employees</h1>
         {:else}
           <h1 class="page-title">Dashboard</h1>

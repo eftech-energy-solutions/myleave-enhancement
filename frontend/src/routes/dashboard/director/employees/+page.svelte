@@ -32,16 +32,17 @@ function getLeaveShortName(code) {
   }
 
   function canApprove(item) {
-  // Manager Director viewing Director request → VIEW ONLY
-  if (
-    manager?.role === "Manager" &&
-    managerDept === "Director" &&
-    item.requester_role === "Director"
-  ) {
-    return false;
+  // Admin & Manager → boleh approve semua (ikut rule sedia ada)
+  if (manager?.role === 'Admin' || manager?.role === 'Manager') {
+    return true;
   }
 
-  return true;
+  // Director → BOLEH approve DIRI SENDIRI SAHAJA
+  if (manager?.role === 'Director') {
+    return item.staff_id === manager.staffId;
+  }
+
+  return false;
 }
 
   /* ================================
@@ -108,9 +109,8 @@ function showToast(message, type = "success", title = "", duration = 3000) {
       managerDept = userData?.department;
 
       await loadPendingRequests();
-      await loadPending();        // <-- penting
-      await loadEmployees();      // <-- guna pendingRequests yang BETUL
-
+      await loadEmployees();
+      await loadPending();
     } catch (err) {
       console.error(
         "❌ Error loading manager or employees:",
@@ -175,50 +175,43 @@ fullProfileList.forEach((emp) => {
 });
 
 // === PENTING: Cari staff yang MASIH ada request pending ===
-const safePending = Array.isArray(pendingRequests)
-  ? pendingRequests
-  : [];
-
 const pendingIds = new Set(
-  safePending
+  pendingRequests
     .filter(
-      (r) =>
+      r =>
         (r.status === "pending" ||
-         r.status === "cancellation_pending") &&
-        r.requester_role === "Staff" // 🔥 INI PENTING
-    )
-    .map((r) => r.staff_id)
+         r.status === "cancellation_pending") 
+)
+    .map(r => r.staff_id)
 );
 
-
-
-
-// 1) Filter ONLY employees in manager's department (kalau manager)
+// 1) Filter ONLY employees in manager's department (kalau manager / director)
 let deptFiltered;
 
 if (manager?.role === "Manager" && managerDept === "Director") {
-  // 🔥 Manager Director:
-  // - Staff Director
-  // - Semua Manager
+  // 🔥 Manager Director (TOP MANAGEMENT)
   deptFiltered = fullProfileList.filter(
     (e) => e.department === "Director" || e.role === "Manager"
   );
+
 } else if (manager?.role === "Manager") {
   // Manager biasa → dept sendiri
   deptFiltered = fullProfileList.filter(
     (e) => e.department === managerDept
   );
-} else {
+
+} else if (manager?.role === "Director") {
+  deptFiltered = fullProfileList; // 🔥 SEMUA EMPLOYEE MASUK GRID
+}
+
+ else {
   // Admin
   deptFiltered = fullProfileList;
 }
 
-// 2) Buang semua staff yang ada dalam pendingIds
 employees = deptFiltered.filter(
-  (emp) =>
-    emp.role !== "Staff" || !pendingIds.has(emp.empId)
+  (emp) => !pendingIds.has(emp.empId)
 );
-
 
     } catch (err) {
       console.error("⚠️ Error in loadEmployees():", err);
@@ -245,39 +238,68 @@ employees = deptFiltered.filter(
     (sidebarOpen = !sidebarOpen);
 
   $: pendingCount = pendingLeave.length + pendingCancel.length;
-
   async function loadPendingRequests() {
-    const res = await fetch("/api/leave-requests",
-      { credentials: "include" }
-    );
+    const res = await fetch("/api/leave-requests", {
+      credentials: "include"
+    });
     const all = await res.json();
-    const view =
-    manager?.role === "Manager"
-      ? all.filter((r) => {
-          const dept =
-            r.profile_department ||
-            r.staff_department ||
-            r.department ||
-            "";
 
-          // 🔥 Manager Director
-         if (managerDept === "Director") {
-            return (
-              dept === "Director" ||
-              r.requester_role === "Manager"
-            );
-          }
+    let view = [];
 
-          // Manager biasa
+    // =========================
+    // ADMIN → semua
+    // =========================
+    if (manager?.role === "Admin") {
+      view = all;
+
+    // =========================
+    // MANAGER
+    // =========================
+    } else if (manager?.role === "Manager") {
+      view = all.filter((r) => {
+        const dept =
+          r.profile_department ||
+          r.staff_department ||
+          r.department ||
+          "";
+
+        // Manager Director
+        if (managerDept === "Director") {
           return (
-            dept === managerDept &&
-            r.requester_role === "Staff"
+            dept === "Director" ||
+            r.requester_role === "Manager"
           );
-        })
-      : all;
+        }
 
-pendingRequests = view;
+        // Manager biasa
+        return (
+          dept === managerDept &&
+          r.requester_role === "Staff"
+        );
+      });
 
+    // =========================
+    // DIRECTOR (🔥 FIX UTAMA)
+    // =========================
+        } else if (manager?.role === "Director") {
+      view = all.filter((r) => {
+
+        // 1️⃣ DIRI SENDIRI (apa-apa status)
+        if (r.staff_id === manager.staffId) {
+          return true;
+        }
+
+        // 2️⃣ SEMUA MANAGER (apa-apa department)
+        if (r.requester_role === "Manager") {
+          return true;
+        }
+
+        // ❌ Staff lain → jangan masuk sidebar
+        return false;
+      });
+    }
+
+    pendingRequests = view;
   }
 
   async function loadPending() {
@@ -722,7 +744,7 @@ async function rejectCancellation(item) {
 <!-- ======================= -->
 <div class="main">
   <div class="employees-grid">
-    {#each filteredEmployees as emp (emp.id)}
+    {#each filteredEmployees as emp (emp.empId)}
       <div class="emp-box">
         <div class="emp-top" aria-label="Employee summary">
           <div class="avatar-wrap">
@@ -802,16 +824,14 @@ async function rejectCancellation(item) {
             <!-- Actions + Toggle -->
             <div class="actions">
               <div class="left">
-                <div class="left">
-                  {#if canApprove(item)}
-                    <button class="btn-approve" on:click={() => approveRequest(item)}>Approve</button>
-                    <button class="btn-reject" on:click={() => rejectRequest(item)}>Reject</button>
-                  {:else}
+                {#if canApprove(item)}
+                  <button class="btn-approve" on:click={() => approveRequest(item)}>Approve</button>
+                  <button class="btn-reject" on:click={() => rejectRequest(item)}>Reject</button>
+                {:else}
                     <span style="font-size:12px; color:#64748b; font-style:italic;">
                       View only
                     </span>
-                  {/if}
-                </div>
+                    {/if}
               </div>
 
               <div style="display:flex; align-items:center; gap:10px;">
@@ -901,16 +921,10 @@ async function rejectCancellation(item) {
             <!-- Actions + Toggle -->
             <div class="actions">
               <div class="left">
-                <div class="left">
                   {#if canApprove(item)}
                     <button class="btn-approve" on:click={() => approveCancellation(item)}>Approve</button>
                     <button class="btn-reject" on:click={() => rejectCancellation(item)}>Reject</button>
-                  {:else}
-                    <span style="font-size:12px; color:#64748b; font-style:italic;">
-                      View only
-                    </span>
                   {/if}
-                </div>
               </div>
 
               <div style="display:flex; align-items:center; gap:10px;">
