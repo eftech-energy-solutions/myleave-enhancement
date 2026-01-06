@@ -248,7 +248,7 @@ export async function checkHolidayImpact(date) {
     `SELECT leave_id, staff_name, leave_type, total_days,
             date_from, date_until
      FROM leave_requests
-     WHERE status = 'approved'
+     WHERE status IN ('approved', 'rejected', 'pending', 'cancelled', 'cancellation_pending')
        AND date_from <= $1
        AND date_until >= $1
      ORDER BY staff_name`,

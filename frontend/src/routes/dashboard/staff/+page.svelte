@@ -214,49 +214,87 @@ $: donuts = user ? [
   }
 async function loadRecent() {
   try {
-    // Reload latest user profile
+    // 🔥 RESET FIRST (THIS IS THE FIX)
+    approvedAL = 0;
+    approvedMC = 0;
+    approvedHOSP = 0;
+    pendingAL = 0;
+    pendingMC = 0;
+    pendingHOSP = 0;
+
     const meRes = await fetch("/api/me", { credentials: "include" });
     const freshUser = await meRes.json();
-    user = { ...freshUser };   // 🚀 SVELTE REACTIVE UPDATE
+    user = { ...freshUser };
 
-    // Reload leave records
-    // Reload leave records
-const res = await fetch("/api/leave-requests", { credentials: "include" });
-const all = await res.json();
+    const res = await fetch("/api/leave-requests", { credentials: "include" });
+    const all = await res.json();
 
-// 🔻 PASTE HERE — APPROVED LEAVE CALCULATION
-approvedAL = all
-  .filter(l =>
-    String(l.staff_id) === String(user.staff_id) &&
-    (
-      l.status?.toLowerCase() === "approved" ||
-      l.status?.toLowerCase() === "cancellation_pending"
-    ) &&
-    (l.leave_type === "AL" || l.leave_type === "EL")
-  )
-  .reduce((sum, l) => sum + Number(l.total_days || 0), 0);
-
-// prevent NaN
-approvedAL = Number(approvedAL || 0);
+    const currentYear = new Date().getFullYear();
 
 
-approvedMC = all
-  .filter(l =>
-    String(l.staff_id) === String(user.staff_id) &&
-    l.status?.toLowerCase() === "approved" &&
-    l.leave_type === "MC"
-  )
-  .reduce((sum, l) => sum + Number(l.total_days), 0);
+    // ✅ APPROVED AL (UPDATE GLOBAL VARIABLE) - ONLY "approved"
+    approvedAL = all
+      .filter(l =>
+        String(l.staff_id) === String(user.staff_id) &&
+        l.status?.toLowerCase() === "approved" &&  // ← ONLY "approved", NO cancellation_pending
+        (l.leave_type === "AL" || l.leave_type === "EL") &&
+        new Date(l.date_from).getFullYear() === currentYear
+      )
+      .reduce((sum, l) => sum + Number(l.total_days || 0), 0);
 
-approvedHOSP = all
-  .filter(l =>
-    String(l.staff_id) === String(user.staff_id) &&
-    l.status?.toLowerCase() === "approved" &&
-    l.leave_type === "HOSP"
-  )
-  .reduce((sum, l) => sum + Number(l.total_days), 0);
-// 🔺 END OF INSERT
+    approvedAL = Number(approvedAL || 0);
 
+    // ✅ PENDING AL
+    pendingAL = all
+      .filter(l =>
+        String(l.staff_id) === String(user.staff_id) &&
+        l.status?.toLowerCase() === "pending" &&
+        (l.leave_type === "AL" || l.leave_type === "EL") &&
+        new Date(l.date_from).getFullYear() === currentYear
+      )
+      .reduce((sum, l) => sum + Number(l.total_days || 0), 0);
+
+    // ✅ PENDING MC
+    pendingMC = all
+      .filter(l =>
+        String(l.staff_id) === String(user.staff_id) &&
+        l.status?.toLowerCase() === "pending" &&
+        l.leave_type === "MC" &&
+        new Date(l.date_from).getFullYear() === currentYear
+      )
+      .reduce((sum, l) => sum + Number(l.total_days || 0), 0);
+
+    // ✅ PENDING HOSP
+    pendingHOSP = all
+      .filter(l =>
+        String(l.staff_id) === String(user.staff_id) &&
+        l.status?.toLowerCase() === "pending" &&
+        l.leave_type === "HOSP" &&
+        new Date(l.date_from).getFullYear() === currentYear
+      )
+      .reduce((sum, l) => sum + Number(l.total_days || 0), 0);
+
+    // ✅ APPROVED MC - ONLY "approved"
+    approvedMC = all
+      .filter(l =>
+        String(l.staff_id) === String(user.staff_id) &&
+        l.status?.toLowerCase() === "approved" &&  // ← ONLY "approved", NO cancellation_pending
+        l.leave_type === "MC" &&
+        new Date(l.date_from).getFullYear() === currentYear
+      )
+      .reduce((sum, l) => sum + Number(l.total_days || 0), 0);
+
+    // ✅ APPROVED HOSP - ONLY "approved"
+    approvedHOSP = all
+      .filter(l =>
+        String(l.staff_id) === String(user.staff_id) &&
+        l.status?.toLowerCase() === "approved" &&  // ← ONLY "approved", NO cancellation_pending
+        l.leave_type === "HOSP" &&
+        new Date(l.date_from).getFullYear() === currentYear
+      )
+      .reduce((sum, l) => sum + Number(l.total_days || 0), 0);
+
+    // Recent list (keep as is)
     recent = all
       .filter(l => String(l.staff_id) === String(user.staff_id))
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
@@ -818,21 +856,25 @@ async function loadAppliedLeave() {
     credentials: "include"
   });
   const list = await res.json();
+  const currentYear = new Date().getFullYear();
   const allMine = list.filter(r => r.staff_id === user.staff_id);
 
   totalALUsed = allMine
-  .filter(r => ["AL", "EL"].includes(r.leave_type))
-  .filter(r => ["approved", "pending", "cancellation_pending"].includes(r.status))
-  .reduce((s, r) => s + Number(r.total_days || 0), 0);
+    .filter(r => ["AL", "EL"].includes(r.leave_type))
+    .filter(r => ["approved", "pending", "cancellation_pending"].includes(r.status))
+    .filter(r => new Date(r.date_from).getFullYear() === currentYear)  // ✅ ADD THIS
+    .reduce((s, r) => s + Number(r.total_days || 0), 0);
 
   totalMCUsed = allMine
     .filter(r => r.leave_type === "MC")
     .filter(r => ["approved", "pending", "cancellation_pending"].includes(r.status))
+    .filter(r => new Date(r.date_from).getFullYear() === currentYear)  // ✅ ADD THIS
     .reduce((s, r) => s + Number(r.total_days || 0), 0);
 
   totalHOSPUsed = allMine
     .filter(r => r.leave_type === "HOSP")
     .filter(r => ["approved", "pending", "cancellation_pending"].includes(r.status))
+    .filter(r => new Date(r.date_from).getFullYear() === currentYear)  // ✅ ADD THIS
     .reduce((s, r) => s + Number(r.total_days || 0), 0);
 
   blockedDates = new Set();
@@ -882,15 +924,15 @@ function checkDateRangeOverlap(fromISO, untilISO) {
 async function loadApprovedUsedDays() {
   const res = await fetch("/api/leave-requests", { credentials: "include" });
   const all = await res.json();
+  const currentYear = new Date().getFullYear();
 
-  // MC + HOSP behave EXACTLY like AL:
-  // Count approved + cancellation_pending
   const active = all.filter(r =>
     String(r.staff_id) === String(user.staff_id) &&
     (
-      r.status?.toLowerCase() === "approved" ||
-      r.status?.toLowerCase() === "cancellation_pending"
-    )
+      r.status === "approved" ||
+      r.status === "cancellation_pending"
+    ) &&
+    new Date(r.date_from).getFullYear() === currentYear   // ✅ ADD THIS
   );
 
   usedMC = active

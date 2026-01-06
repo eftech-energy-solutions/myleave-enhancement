@@ -37,38 +37,130 @@ const router = express.Router();
 const upload = multer({ dest: "uploads/leave_attachments/" });
 
 /* ============================================================
+    HELPER FUNCTIONS FOR LEAVE CALCULATION
+============================================================ */
+
+function calculateYearsOfService(employmentDate) {
+  if (!employmentDate) return 0;
+  
+  const today = new Date();
+  const empDate = new Date(employmentDate);
+  
+  let years = today.getFullYear() - empDate.getFullYear();
+  const monthDiff = today.getMonth() - empDate.getMonth();
+  
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < empDate.getDate())) {
+    years--;
+  }
+  
+  return years;
+}
+
+function getBaseAnnualLeave(yearsOfService) {
+  return yearsOfService >= 5 ? 16 : 14;
+}
+
+function getBaseMedicalLeave(yearsOfService) {
+  if (yearsOfService >= 5) return 22;
+  if (yearsOfService >= 2) return 18;
+  return 14;
+}
+
+/* ============================================================
     YEARLY RESET
 ============================================================ */
 async function resetAnnualLeaveForNewYear() {
   try {
+    console.log('🎉 Starting Annual Leave Reset for New Year...');
+    
     const staffList = await pool.query(`
-      SELECT staff_id, leave_entitlement_annual, leave_entitlement_annual_original,
+      SELECT staff_id, 
+             employment_date,
+             leave_entitlement_annual, 
+             leave_entitlement_annual_original,
              leave_entitlement_medical_original
       FROM profiles
+      WHERE termination_date IS NULL
     `);
+
     const currentYear = new Date().getFullYear();
     const expiryDate = `${currentYear + 1}-03-31`;
 
-    for (const s of staffList.rows) {
-      const carryForward = Math.min(Number(s.leave_entitlement_annual || 0), 7);
+    let successCount = 0;
+    let errorCount = 0;
 
-      await pool.query(
-        `UPDATE profiles
-          SET 
-            carry_forward_balance = $1::numeric,
-            carry_forward_original = $1::numeric,
-            carry_forward_expiry = $2,
-            leave_entitlement_annual = leave_entitlement_annual_original,
-            leave_entitlement_medical = leave_entitlement_medical_original, -- ✅ RESET MC
-            remaining_leave = leave_entitlement_annual_original + $1::numeric
-          WHERE staff_id = $3`,
-        [carryForward, expiryDate, s.staff_id]
-      );
+    for (const s of staffList.rows) {
+      try {
+        // ========================================
+        // RECALCULATE LEAVE BASED ON YEARS OF SERVICE
+        // ========================================
+        const yearsOfService = calculateYearsOfService(s.employment_date);
+        const newAnnualLeave = getBaseAnnualLeave(yearsOfService);
+        const newMedicalLeave = getBaseMedicalLeave(yearsOfService);
+
+        // ========================================
+        // CALCULATE CARRY FORWARD (MAX 7 DAYS)
+        // ========================================
+        const currentAL = Number(s.leave_entitlement_annual || 0);
+        const carryForward = Math.min(currentAL, 7);
+
+        console.log(`📊 Reset for ${s.staff_id}:`, {
+          yearsOfService,
+          oldAL: s.leave_entitlement_annual_original,
+          newAL: newAnnualLeave,
+          oldMC: s.leave_entitlement_medical_original,
+          newMC: newMedicalLeave,
+          carryForward
+        });
+
+        // ========================================
+        // UPDATE PROFILE WITH NEW ENTITLEMENTS
+        // ========================================
+        await pool.query(
+          `UPDATE profiles
+            SET 
+              -- Carry forward from previous year
+              carry_forward_balance = $1::numeric,
+              carry_forward_original = $1::numeric,
+              carry_forward_expiry = $2,
+              
+              -- New entitlements (recalculated based on years of service)
+              leave_entitlement_annual_original = $3::numeric,
+              leave_entitlement_medical_original = $4::numeric,
+              
+              -- Reset current balances to new full entitlements
+              leave_entitlement_annual = $3::numeric,
+              leave_entitlement_medical = $4::numeric,
+              
+              -- Total remaining (new AL + carry forward)
+              remaining_leave = $3::numeric + $1::numeric
+            WHERE staff_id = $5`,
+          [carryForward, expiryDate, newAnnualLeave, newMedicalLeave, s.staff_id]
+        );
+
+        successCount++;
+        console.log(`✅ Reset complete for ${s.staff_id}: AL=${newAnnualLeave}, MC=${newMedicalLeave}, CF=${carryForward}`);
+
+      } catch (empErr) {
+        errorCount++;
+        console.error(`❌ Failed to reset ${s.staff_id}:`, empErr);
+      }
     }
 
-    return true;
+    console.log(`
+    ╔════════════════════════════════════════╗
+    ║     YEARLY LEAVE RESET COMPLETE        ║
+    ╠════════════════════════════════════════╣
+    ║  ✅ Success: ${successCount.toString().padStart(3)} employees         ║
+    ║  ❌ Errors:  ${errorCount.toString().padStart(3)} employees          ║
+    ║  📅 CF Expiry: ${expiryDate}              ║
+    ╚════════════════════════════════════════╝
+    `);
+
+    return errorCount === 0;
+
   } catch (err) {
-    console.error("resetAnnualLeaveForNewYear error:", err);
+    console.error("❌ CRITICAL ERROR in resetAnnualLeaveForNewYear:", err);
     return false;
   }
 }
@@ -102,7 +194,7 @@ async function markInvalidApprovedLeaves() {
     const result = await pool.query(`
       UPDATE leave_requests
       SET status = 'invalid'
-      WHERE status = 'approved'
+      WHERE status IN ('approved', 'rejected', 'pending', 'cancelled', 'cancellation_pending')
         AND total_days <= 0
       RETURNING leave_id
     `);
@@ -161,12 +253,29 @@ router.post("/", upload.single("attachment"), async (req, res) => {
 
     const staffId = user.staff_id;
 
+    // let serverDays;
+    // if (duration === 'Half') {
+    //   serverDays = 0.5;
+    // } else {
+    //   serverDays = await calculateWorkingDays(dateFrom, dateUntil);
+    // }
+
+
     let serverDays;
     if (duration === 'Half') {
       serverDays = 0.5;
     } else {
-      serverDays = await calculateWorkingDays(dateFrom, dateUntil);
+      // ✅ Special leaves include weekends (calendar days)
+      if (['MAT', 'PAT', 'HOSP', 'COMP_A', 'COMP_B'].includes(type)) {
+        const start = new Date(dateFrom);
+        const end = new Date(dateUntil);
+        serverDays = Math.floor((end - start) / (1000 * 60 * 60 * 24)) + 1;
+      } else {
+        // AL, EL, MC, MAR, UNPAID use working days
+        serverDays = await calculateWorkingDays(dateFrom, dateUntil);
+      }
     }
+
     
     if (serverDays <= 0)
       return res.status(400).json({ message: "Invalid date range or no working days" });
@@ -423,19 +532,34 @@ router.patch("/:id/edit", upload.single("attachment"), async (req, res) => {
 
     const staffId = find.rows[0].staff_id;
 
-    let serverDays;
-    if (leave_type === "MAR") { 
-    // sebelum ni type === MAR
-      serverDays = await calculateWorkingDays(dateFrom, dateUntil);
+    // let serverDays;
+    // if (leave_type === "MAR") { 
+    // // sebelum ni type === MAR
+    //   serverDays = await calculateWorkingDays(dateFrom, dateUntil);
       
-      if (serverDays <= 0)
-        return res.status(400).json({ message: "Invalid date range or no working days" });
-    }
-    // For other leave types: respect duration
-    else if (duration === 'Half') {
+    //   if (serverDays <= 0)
+    //     return res.status(400).json({ message: "Invalid date range or no working days" });
+    // }
+    // // For other leave types: respect duration
+    // else if (duration === 'Half') {
+    //   serverDays = 0.5;
+    // } else {
+    //   serverDays = await calculateWorkingDays(dateFrom, dateUntil);
+    // }
+
+    let serverDays;
+    if (duration === 'Half') {
       serverDays = 0.5;
     } else {
-      serverDays = await calculateWorkingDays(dateFrom, dateUntil);
+      // ✅ Special leaves include weekends (calendar days)
+      if (['MAT', 'PAT', 'HOSP', 'COMP_A', 'COMP_B'].includes(leave_type)) {
+        const start = new Date(date_from);
+        const end = new Date(date_until);
+        serverDays = Math.floor((end - start) / (1000 * 60 * 60 * 24)) + 1;
+      } else {
+        // AL, EL, MC, MAR, UNPAID use working days
+        serverDays = await calculateWorkingDays(date_from, date_until);
+      }
     }
     
     if (serverDays <= 0)
@@ -1122,16 +1246,16 @@ router.get("/me", async (req, res) => {
 });
 
 // TEMPORARY - Test cron (runs every minute)
-// cron.schedule('* * * * *', async () => {
-//   console.log('🧪 TEST CRON TRIGGERED');
-//   const success = await resetAnnualLeaveForNewYear();
-//   if (success) {
-//     console.log('✅ Test reset completed!');
-//   } else {
-//     console.error('❌ Test reset failed!');
-//   }
-// });
-// console.log('⏰ TEST: Cron running every minute');
+cron.schedule('* * * * *', async () => {
+  console.log('🧪 TEST CRON TRIGGERED');
+  const success = await resetAnnualLeaveForNewYear();
+  if (success) {
+    console.log('✅ Test reset completed!');
+  } else {
+    console.error('❌ Test reset failed!');
+  }
+});
+console.log('⏰ TEST: Cron running every minute');
 
 
 // Calculate time 2 minutes from now
@@ -1157,22 +1281,22 @@ router.get("/me", async (req, res) => {
 /* ============================================================
     AUTOMATIC YEARLY RESET - RUNS JANUARY 1 AT 00:00
 ============================================================ */
-cron.schedule('0 0 1 1 *', async () => {
-  console.log('🎉 AUTO YEARLY RESET TRIGGERED - January 1, 00:00');
-  const success = await resetAnnualLeaveForNewYear();
-  if (success) {
-    console.log('✅ Yearly leave reset completed successfully!');
-  } else {
-    console.error('❌ Yearly leave reset failed!');
-  }
-});
+// cron.schedule('0 0 1 1 *', async () => {
+//   console.log('🎉 AUTO YEARLY RESET TRIGGERED - January 1, 00:00');
+//   const success = await resetAnnualLeaveForNewYear();
+//   if (success) {
+//     console.log('✅ Yearly leave reset completed successfully!');
+//   } else {
+//     console.error('❌ Yearly leave reset failed!');
+//   }
+// });
 
-console.log('⏰ Cron job scheduled: Yearly reset on January 1 at midnight');
+// console.log('⏰ Cron job scheduled: Yearly reset on January 1 at midnight');
 // ============================================================
 // AUTO MARK APPROVED LEAVES AS INVALID (SAFETY NET)
 // ============================================================
 cron.schedule('*/1 * * * *', async () => {
-  console.log('🧹 Checking approved leaves with zero days...');
+  // console.log('🧹 Checking approved leaves with zero days...');
   await markInvalidApprovedLeaves();
 });
 
