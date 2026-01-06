@@ -184,8 +184,7 @@ const pendingIds = new Set(
     .filter(
       (r) =>
         (r.status === "pending" ||
-         r.status === "cancellation_pending") &&
-        r.requester_role === "Staff" // 🔥 INI PENTING
+         r.status === "cancellation_pending") 
     )
     .map((r) => r.staff_id)
 );
@@ -215,10 +214,8 @@ if (manager?.role === "Manager" && managerDept === "Director") {
 
 // 2) Buang semua staff yang ada dalam pendingIds
 employees = deptFiltered.filter(
-  (emp) =>
-    emp.role !== "Staff" || !pendingIds.has(emp.empId)
+  (emp) => !pendingIds.has(emp.empId)
 );
-
 
     } catch (err) {
       console.error("⚠️ Error in loadEmployees():", err);
