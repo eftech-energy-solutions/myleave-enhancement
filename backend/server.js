@@ -52,7 +52,7 @@ app.use(async (req, res, next) => {
     );
 
     if (rows[0]) {
-      console.log("ATTACH USER:", rows[0]);
+      // console.log("ATTACH USER:", rows[0]);
       req.user = rows[0]; // 🎯 ini yang POST /leave-requests guna
     }
     return next();

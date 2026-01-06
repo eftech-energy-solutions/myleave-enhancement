@@ -4,6 +4,11 @@ import { fetchMalaysiaHolidays } from "../utils/fetchMalaysiaHolidays.js";
 import { recalculateAffectedLeaves, checkHolidayImpact } from "../utils/holidayImpactHandler.js";
 import { logAdminAction } from '../middleware/adminLogger.js';
 
+console.log('✅ holidayImpactHandler imported:', {
+  recalculateAffectedLeaves: typeof recalculateAffectedLeaves,
+  checkHolidayImpact: typeof checkHolidayImpact
+});
+
 const router = express.Router();
 
 // 🟢 GET — combine official (minus hidden) + custom
@@ -43,6 +48,7 @@ router.get("/", async (req, res) => {
 // 🟢 POST — add new custom holiday
 router.post("/", async (req, res) => {
   try {
+    console.log("🔥 POST /api/holidays triggered");
     console.log("POST /api/holidays body:", req.body);
 
     let { date, title, description } = req.body || {};

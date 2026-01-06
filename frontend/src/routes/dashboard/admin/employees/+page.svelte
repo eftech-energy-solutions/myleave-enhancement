@@ -1582,17 +1582,30 @@ async function rejectCancellation(item) {
     </div>
   </div>
   <div>
-    <label>Annual Leave</label>
-    <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
-      <input type="number" step="0.5" min="0" bind:value={detailsForm.annualLeave} disabled={!editMode}/>
-    </div>
+  <label>Annual Leave</label>
+  <div class="ctl pill">
+    <input
+      type="number"
+      step="0.5"
+      min="0"
+      bind:value={detailsForm.annualLeave}
+      readonly
+    />
   </div>
-  <div>
-    <label>Medical Leave</label>
-    <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
-      <input type="number" step="0.5" min="0" bind:value={detailsForm.medicalLeave} disabled={!editMode}/>
-    </div>
+</div>
+
+<div>
+  <label>Medical Leave</label>
+  <div class="ctl pill">
+    <input
+      type="number"
+      step="0.5"
+      min="0"
+      bind:value={detailsForm.medicalLeave}
+      readonly
+    />
   </div>
+</div>
 </div>
 <div>
     <label>Role</label>

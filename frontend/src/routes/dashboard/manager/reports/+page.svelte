@@ -251,7 +251,8 @@ async function loadRecent() {
           l.status?.toLowerCase() === "approved" ||
           l.status?.toLowerCase() === "cancellation_pending"
         ) &&
-        (l.leave_type === "AL" || l.leave_type === "EL")
+        (l.leave_type === "AL" || l.leave_type === "EL") &&
+        new Date(l.date_from).getFullYear() === currentYear  // ← ADD THIS LINE
       )
       .reduce((sum, l) => sum + Number(l.total_days || 0), 0);
 
@@ -261,7 +262,8 @@ async function loadRecent() {
       .filter(l =>
         String(l.staff_id) === String(user.staff_id) &&
         l.status?.toLowerCase() === "pending" &&
-        (l.leave_type === "AL" || l.leave_type === "EL")
+        (l.leave_type === "AL" || l.leave_type === "EL") &&
+        new Date(l.date_from).getFullYear() === currentYear  // ← ADD THIS LINE
       )
       .reduce((sum, l) => sum + Number(l.total_days || 0), 0);
 
@@ -269,7 +271,8 @@ async function loadRecent() {
       .filter(l =>
         String(l.staff_id) === String(user.staff_id) &&
         l.status?.toLowerCase() === "pending" &&
-        l.leave_type === "MC"
+        l.leave_type === "MC" &&
+        new Date(l.date_from).getFullYear() === currentYear  // ← ADD THIS LINE
       )
       .reduce((sum, l) => sum + Number(l.total_days || 0), 0);
 
@@ -277,9 +280,10 @@ async function loadRecent() {
       .filter(l =>
         String(l.staff_id) === String(user.staff_id) &&
         l.status?.toLowerCase() === "pending" &&
-        l.leave_type === "HOSP"
+        l.leave_type === "HOSP" &&
+        new Date(l.date_from).getFullYear() === currentYear  // ← ADD THIS LINE
       )
-  .reduce((sum, l) => sum + Number(l.total_days || 0), 0);
+.reduce((sum, l) => sum + Number(l.total_days || 0), 0);
     approvedMC = all
       .filter(l =>
         String(l.staff_id) === String(user.staff_id) &&
@@ -287,7 +291,8 @@ async function loadRecent() {
           l.status?.toLowerCase() === "approved" ||
           l.status?.toLowerCase() === "cancellation_pending"
         ) &&
-        l.leave_type === "MC"
+        l.leave_type === "MC" &&
+        new Date(l.date_from).getFullYear() === currentYear  // ← ADD THIS LINE
       )
       .reduce((sum, l) => sum + Number(l.total_days || 0), 0);
 
@@ -298,7 +303,8 @@ async function loadRecent() {
           l.status?.toLowerCase() === "approved" ||
           l.status?.toLowerCase() === "cancellation_pending"
         ) &&
-        l.leave_type === "HOSP"
+        l.leave_type === "HOSP" &&
+        new Date(l.date_from).getFullYear() === currentYear  // ← ADD THIS LINE
       )
       .reduce((sum, l) => sum + Number(l.total_days || 0), 0);
 
