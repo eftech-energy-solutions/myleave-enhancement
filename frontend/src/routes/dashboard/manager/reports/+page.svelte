@@ -12,6 +12,7 @@
     HOSP: "Hospitalization",
     UNPAID: "Unpaid Leave"
   };
+  const currentYear = new Date().getFullYear();
 
   function getLeaveFullName(code) {
     return leaveTypeFullName[code] || code;

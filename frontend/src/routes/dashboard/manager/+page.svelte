@@ -217,9 +217,19 @@ const empRes = await fetch("/api/employee");
 const allEmployees = await empRes.json();
 
 // 🔥 FILTER: Only employees in manager's department
-const deptEmployees = allEmployees.filter(emp => 
-  emp.department === user?.department
-);
+const deptEmployees = allEmployees.filter(emp => {
+  if (user?.role === "Manager" && user?.department === "Director") {
+    // ✅ include ALL managers
+    if (emp.role === "Manager") return true;
+
+    // staff Director sahaja
+    return emp.department === "Director";
+  }
+
+  return emp.department === user?.department;
+});
+
+
 
 const staffMap = {};
 const today = new Date();
@@ -255,9 +265,23 @@ const leaveRes = await fetch("/api/leave-requests?status=approved");
 const allLeaveData = await leaveRes.json();
 
 // 🔥 FILTER: Only leaves from manager's department
-const leaveData = allLeaveData.filter(r => 
-  r.department === user?.department
-);
+const leaveData = allLeaveData.filter(r => {
+  const emp = allEmployees.find(e => e.staff_id === r.staff_id);
+  if (!emp) return false;
+
+  // 🔥 SPECIAL CASE: Manager department Director
+  if (user?.role === "Manager" && user?.department === "Director") {
+    // ✅ semua manager
+    if (emp.role === "Manager") return true;
+
+    // ✅ semua orang department Director
+    return emp.department === "Director";
+  }
+
+  // 🔒 Manager biasa (KEKAL behaviour)
+  return emp.department === user?.department;
+});
+
 
 // Merge leave summary into staff list
 leaveData.forEach(r => {

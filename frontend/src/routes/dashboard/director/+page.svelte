@@ -217,9 +217,14 @@ const empRes = await fetch("/api/employee");
 const allEmployees = await empRes.json();
 
 // 🔥 FILTER: Only employees in manager's department
-const deptEmployees = allEmployees.filter(emp => 
-  emp.department === user?.department
-);
+const deptEmployees = allEmployees.filter(emp => {
+  // Semua manager
+  if (emp.role === "Manager") return true;
+
+  // Staff department sendiri
+  return emp.department === user?.department;
+});
+
 
 const staffMap = {};
 const today = new Date();
@@ -255,9 +260,10 @@ const leaveRes = await fetch("/api/leave-requests?status=approved");
 const allLeaveData = await leaveRes.json();
 
 // 🔥 FILTER: Only leaves from manager's department
-const leaveData = allLeaveData.filter(r => 
-  r.department === user?.department
-);
+const leaveData = allLeaveData.filter(r => {
+  return staffMap[r.staff_id]; // 👈 INI KEY FIX
+});
+
 
 // Merge leave summary into staff list
 leaveData.forEach(r => {
