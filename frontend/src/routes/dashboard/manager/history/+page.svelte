@@ -275,10 +275,14 @@ $: filtered = (() => {
 
 <div class="page">
 {#if me?.role === "Manager" && me?.department === "Director"}
-  <div class="fab-container">
-    <button class="fab" on:click={() => showModeMenu = !showModeMenu}>
-      👁
-    </button>
+      <div class="fab-container">
+        <button class="fab" on:click={() => showModeMenu = !showModeMenu} aria-label="Change view mode">
+            <svg class="fab-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3" y="6" width="18" height="2" />
+              <rect x="3" y="11" width="18" height="2" />
+              <rect x="3" y="16" width="18" height="2" />
+            </svg>
+          </button>
 
        {#if showModeMenu}
           <div class="fab-menu">
@@ -623,8 +627,8 @@ $: filtered = (() => {
 }
 
 .fab{
-  width:42px;
-  height:42px;
+  width:32px;
+  height:32px;
   border-radius:50%;
   border:none;
   background:#fef08a;
@@ -632,6 +636,14 @@ $: filtered = (() => {
   font-size:18px;
   cursor:pointer;
   box-shadow:0 6px 16px rgba(73,189,179,.45);
+}
+
+.fab-icon {
+  width: 22px;
+  height: 22px;
+  margin-top: 4px;
+  margin-left:-0.5px;
+  color: #0f766e;
 }
 
 .fab-menu{
