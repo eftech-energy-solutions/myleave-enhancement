@@ -385,8 +385,8 @@ donuts.forEach(d => {
 
   const hasCarry = d.key === "annual";
   const labels = hasCarry
-    ? ['Taken Leave', 'Remaining Leave', 'Carry-forward Leave']
-    : ['Taken Leave', 'Remaining Leave'];
+    ? ['Allocated Leave', 'Balance Leave', 'Carry-forward Leave']
+    : ['Allocated Leave', 'Balance Leave'];
 
   const colors = hasCarry
     ? ['#ef4444', '#3b82f6', '#10b981']
@@ -508,12 +508,12 @@ donuts.forEach(d => {
           <div class="legend-row-top">
             <div class="legend-item">
               <span class="chip" style="background:#ef4444"></span>
-              <span>Taken Leave</span>
+              <span>Allocated Leave</span>
             </div>
 
             <div class="legend-item">
               <span class="chip" style="background:#3b82f6"></span>
-              <span>Remaining Leave</span>
+              <span>Balance Leave</span>
             </div>
           </div>
 
