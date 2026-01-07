@@ -162,8 +162,8 @@ function showToast(message, type = "success", title = "", duration = 3000) {
           confirmationDate: formatDate(e.confirmation_date),
           terminationDate: formatDate(e.termination_date),
           gender: e.gender,
-          annualLeave: e.leave_entitlement_annual,
-          medicalLeave: e.leave_entitlement_medical,
+          annualLeave: e.leave_entitlement_annual_original,
+          medicalLeave: e.leave_entitlement_medical_original,
           notes: e.notes,
         };
       });
@@ -588,6 +588,7 @@ async function rejectCancellation(item) {
 
   .form{ background:#fff; border:1px solid var(--line); border-radius:16px; padding:18px; box-shadow:0 6px 18px rgba(0,0,0,.05); }
   .row{ display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:12px; }
+  .row.three{ grid-template-columns:2.1fr 1fr 1fr; }
   .row.single{ grid-template-columns:1fr; }
   label{ font-size:12px; color:#374151; font-weight:700; margin:0 0 6px; display:block; }
   .ctl{ display:flex; align-items:center; background:#fff; border:1px solid var(--line); border-radius:12px; padding:10px 12px; box-shadow: inset 0 1px 0 rgba(0,0,0,.02); }
@@ -1008,46 +1009,141 @@ async function rejectCancellation(item) {
           <div class="details-grid-form">
             <!-- Left form -->
             <div class="form">
+              <!-- FULL NAME + STAFF ID -->
               <div class="row">
-                <div><label>Full Name</label><div class="ctl pill disabled"><input value={selectedEmp.name} disabled /></div></div>
-                <div><label>Staff ID</label><div class="ctl pill disabled"><input value={selectedEmp.empId} disabled /></div></div>
-              </div>
-              <div class="row">
-                <div><label>Position</label><div class="ctl pill disabled"><input value={selectedEmp.position} disabled /></div></div>
-                <div><label>Department</label><div class="ctl pill disabled"><input value={selectedEmp.department} disabled /></div></div>
-              </div>
-              <div class="row">
-                <div><label>Email</label><div class="ctl pill disabled"><input type="email" value={selectedEmp.email} disabled /></div></div>
-                <div><label>Gender</label><div class="ctl pill disabled"><select value={selectedEmp.gender} disabled><option value="">Select</option><option>Male</option><option>Female</option><option>Other</option></select></div></div>
-              </div>
-              <div class="row">
-                <div><label>Employment Date</label><div class="ctl pill date disabled"><input type="date" value={selectedEmp.employmentDate} disabled /></div></div>
-                <div><label>Confirmation Date</label><div class="ctl pill date disabled"><input type="date" value={selectedEmp.confirmationDate} disabled /></div></div>
-              </div>
-              <div class="row">
-                <div><label>Termination Date</label><div class="ctl pill date disabled"><input type="date" value={selectedEmp.terminationDate} disabled /></div></div>
                 <div>
-                  <label class="muted">Leave Entitlements (per year)</label>
-                  <div class="row" style="gap:10px; margin:0;">
-                    <div class="ctl pill disabled"><input type="number" value={selectedEmp.annualLeave} disabled /></div>
-                    <div class="ctl pill disabled"><input type="number" value={selectedEmp.medicalLeave} disabled /></div>
+                  <label>Full Name</label>
+                  <div class="ctl pill disabled">
+                    <input value={selectedEmp.name} disabled />
+                  </div>
+                </div>
+                <div>
+                  <label>Staff ID</label>
+                  <div class="ctl pill disabled">
+                    <input value={selectedEmp.empId} disabled />
                   </div>
                 </div>
               </div>
+
+              <!-- POSITION + DEPARTMENT -->
               <div class="row">
-                  <div><label>Role</label><div class="ctl pill disabled"><input value={selectedEmp.role} disabled /></div></div>
+                <div>
+                  <label>Position</label>
+                  <div class="ctl pill disabled">
+                    <input value={selectedEmp.position} disabled />
+                  </div>
                 </div>
+                <div>
+                  <label>Department</label>
+                  <div class="ctl pill disabled">
+                    <input value={selectedEmp.department} disabled />
+                  </div>
+                </div>
+              </div>
+
+              <!-- EMAIL + GENDER -->
+              <div class="row">
+                <div>
+                  <label>Email</label>
+                  <div class="ctl pill disabled">
+                    <input type="email" value={selectedEmp.email} disabled />
+                  </div>
+                </div>
+                <div>
+                  <label>Gender</label>
+                  <div class="ctl pill disabled">
+                    <select value={selectedEmp.gender} disabled>
+                      <option value="">Select</option>
+                      <option>Male</option>
+                      <option>Female</option>
+                      <option>Other</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <!-- EMPLOYMENT DATE + CONFIRMATION DATE -->
+              <div class="row">
+                <div>
+                  <label>Employment Date</label>
+                  <div class="ctl pill date disabled">
+                    <input type="date" value={selectedEmp.employmentDate} disabled />
+                  </div>
+                </div>
+                <div>
+                  <label>Confirmation Date</label>
+                  <div class="ctl pill date disabled">
+                    <input type="date" value={selectedEmp.confirmationDate} disabled />
+                  </div>
+                </div>
+              </div>
+
+              <!-- TERMINATION DATE + ROLE -->
+              <div class="row">
+                <div>
+                  <label>Termination Date</label>
+                  <div class="ctl pill date disabled">
+                    <input type="date" value={selectedEmp.terminationDate} disabled />
+                  </div>
+                </div>
+                <div>
+                  <label>Role</label>
+                  <div class="ctl pill disabled">
+                    <input value={selectedEmp.role} disabled />
+                  </div>
+                </div>
+              </div>
+
+              <!-- GENDER + ANNUAL LEAVE + MEDICAL LEAVE -->
+              <div class="row three">
+                <div>
+                  <label>Gender</label>
+                  <div class="ctl pill disabled">
+                    <select value={selectedEmp.gender} disabled>
+                      <option value="">Select</option>
+                      <option>Male</option>
+                      <option>Female</option>
+                      <option>Other</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label>Annual Leave</label>
+                  <div class="ctl pill disabled">
+                    <input type="number" value={selectedEmp.annualLeave} disabled />
+                  </div>
+                </div>
+                <div>
+                  <label>Medical Leave</label>
+                  <div class="ctl pill disabled">
+                    <input type="number" value={selectedEmp.medicalLeave} disabled />
+                  </div>
+                </div>
+              </div>
+
+              <!-- NOTES -->
               <div class="row single">
-                <div><label>Notes</label><div class="ctl disabled"><textarea value={selectedEmp.notes} disabled /></div></div>
+                <div>
+                  <label>Notes</label>
+                  <div class="ctl disabled">
+                    <textarea value={selectedEmp.notes} disabled />
+                  </div>
+                </div>
               </div>
             </div>
+
             <!-- Right: Photo (preview only) -->
             <div class="photo-card" title="Profile Photo">
               {#if selectedEmp.photoUrl}
-                <div class="photo-preview"><img src={selectedEmp.photoUrl} alt="Profile" /></div>
+                <div class="photo-preview">
+                  <img src={selectedEmp.photoUrl} alt="Profile" />
+                </div>
               {:else}
                 <div class="cam" aria-label="Profile photo">
-                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h3l2-2h6l2 2h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M4 7h3l2-2h6l2 2h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <circle cx="12" cy="13" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/>
+                  </svg>
                 </div>
                 <div class="muted" style="position:absolute; bottom:10px;">No Photo</div>
               {/if}
