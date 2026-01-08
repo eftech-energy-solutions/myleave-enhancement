@@ -1710,7 +1710,9 @@ max-width: 150px;         /* optional — so it wraps instead of going super lon
 .toast-item.closing {
   animation: fadeOut 0.25s ease forwards;
 }
-
+.total-line.bold{
+  font-weight: 700;
+}
 
 /* =========================
    MOBILE RESPONSIVE

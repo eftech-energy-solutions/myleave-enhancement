@@ -277,7 +277,7 @@ Leave Entitlement:
 });
 
 /* ============================================================
-   2) GET ALL EMPLOYEES
+   2) GET ALL EMPLOYEES (WITH PRORATED CALCULATION)
 ============================================================ */
 router.get("/", async (req, res) => {
   try {
@@ -307,6 +307,8 @@ router.get("/", async (req, res) => {
               gender,
               leave_entitlement_annual_original,
               leave_entitlement_medical_original,
+              leave_entitlement_annual,
+              leave_entitlement_medical,
               carry_forward_original,
               carry_forward_balance,
               carry_forward_expiry,
@@ -326,6 +328,8 @@ router.get("/", async (req, res) => {
               gender,
               leave_entitlement_annual_original,
               leave_entitlement_medical_original,
+              leave_entitlement_annual,
+              leave_entitlement_medical,
               carry_forward_original,
               carry_forward_balance,
               carry_forward_expiry,
@@ -344,57 +348,72 @@ router.get("/", async (req, res) => {
     // =====================
     // MANAGER
     // =====================
-   } else if (meData.role?.toLowerCase() === "manager") {
+    } else if (meData.role?.toLowerCase() === "manager") {
 
-  if (meData.department === 'Director') {
-    // ✅ Manager Director: Director staff + ALL Managers
-    result = await pool.query(`
-      SELECT id, staff_id, full_name, role, position, department, email,
-            employment_date, confirmation_date, termination_date,
-            gender,
-            leave_entitlement_annual_original,
-            leave_entitlement_medical_original,
-            carry_forward_original,
-            carry_forward_balance,
-            carry_forward_expiry,
-            photourl,
-            notes
-      FROM profiles
-      WHERE
-        department = 'Director'
-        OR role = 'Manager'
-      ORDER BY
-        CASE WHEN role = 'Manager' THEN 0 ELSE 1 END,
-        department,
-        id DESC
-    `);
-  } else {
-    // ✅ Manager biasa: dept sendiri sahaja
-    result = await pool.query(`
-      SELECT id, staff_id, full_name, role, position, department, email,
-            employment_date, confirmation_date, termination_date,
-            gender,
-            leave_entitlement_annual_original,
-            leave_entitlement_medical_original,
-            carry_forward_original,
-            carry_forward_balance,
-            carry_forward_expiry,
-            photourl,
-            notes
-      FROM profiles
-      WHERE department = $1
-      ORDER BY id DESC
-    `, [meData.department]);
-  }
-} else {
+      if (meData.department === 'Director') {
+        result = await pool.query(`
+          SELECT id, staff_id, full_name, role, position, department, email,
+                employment_date, confirmation_date, termination_date,
+                gender,
+                leave_entitlement_annual_original,
+                leave_entitlement_medical_original,
+                leave_entitlement_annual,
+                leave_entitlement_medical,
+                carry_forward_original,
+                carry_forward_balance,
+                carry_forward_expiry,
+                photourl,
+                notes
+          FROM profiles
+          WHERE
+            department = 'Director'
+            OR role = 'Manager'
+          ORDER BY
+            CASE WHEN role = 'Manager' THEN 0 ELSE 1 END,
+            department,
+            id DESC
+        `);
+      } else {
+        result = await pool.query(`
+          SELECT id, staff_id, full_name, role, position, department, email,
+                employment_date, confirmation_date, termination_date,
+                gender,
+                leave_entitlement_annual_original,
+                leave_entitlement_medical_original,
+                leave_entitlement_annual,
+                leave_entitlement_medical,
+                carry_forward_original,
+                carry_forward_balance,
+                carry_forward_expiry,
+                photourl,
+                notes
+          FROM profiles
+          WHERE department = $1
+          ORDER BY id DESC
+        `, [meData.department]);
+      }
+    } else {
       return res.status(403).json({ error: "Unauthorized" });
     }
 
     const defaultAvatar = "/uploads/default-avatar.png";
-    const rows = result.rows.map(r => ({
-      ...r,
-      photourl: r.photourl || defaultAvatar
-    }));
+    
+    // ✅ ADD PRORATED CALCULATION TO EACH EMPLOYEE
+    const rows = result.rows.map(r => {
+      const yearsOfService = calculateYearsOfService(r.employment_date);
+      const baseAnnualLeave = getBaseAnnualLeave(yearsOfService);
+      const baseMedicalLeave = getBaseMedicalLeave(yearsOfService);
+      const proratedAnnualLeave = calculateProratedLeave(r.employment_date, baseAnnualLeave);
+      const proratedMedicalLeave = calculateProratedLeave(r.employment_date, baseMedicalLeave);
+
+      return {
+        ...r,
+        photourl: r.photourl || defaultAvatar,
+        leave_entitlement_annual_prorated: proratedAnnualLeave,
+        leave_entitlement_medical_prorated: proratedMedicalLeave,
+        years_of_service: yearsOfService
+      };
+    });
 
     res.json(rows);
 
@@ -404,16 +423,27 @@ router.get("/", async (req, res) => {
   }
 });
 
+// ✅ ALSO UPDATE THE /employees ROUTE
 router.get("/employees", async (req, res) => {
   try {
     const result = await pool.query("SELECT * FROM profiles ORDER BY id DESC");
-
     const defaultAvatar = "/uploads/icontest1.png";
 
-    const rows = result.rows.map(r => ({
-      ...r,
-      photourl: r.photourl || defaultAvatar
-    }));
+    const rows = result.rows.map(r => {
+      const yearsOfService = calculateYearsOfService(r.employment_date);
+      const baseAnnualLeave = getBaseAnnualLeave(yearsOfService);
+      const baseMedicalLeave = getBaseMedicalLeave(yearsOfService);
+      const proratedAnnualLeave = calculateProratedLeave(r.employment_date, baseAnnualLeave);
+      const proratedMedicalLeave = calculateProratedLeave(r.employment_date, baseMedicalLeave);
+
+      return {
+        ...r,
+        photourl: r.photourl || defaultAvatar,
+        leave_entitlement_annual_prorated: proratedAnnualLeave,
+        leave_entitlement_medical_prorated: proratedMedicalLeave,
+        years_of_service: yearsOfService
+      };
+    });
 
     res.json(rows);
 

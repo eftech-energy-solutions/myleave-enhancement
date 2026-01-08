@@ -1253,9 +1253,7 @@ async function submitLeave(e) {
   .chip.spent{ background: var(--spentRed); }
   .chip.unspent{ background: var(--restBlue); }
   .total-line{ text-align:center; font-size:12px; color:#6b7280; margin-top:4px; }
-  .total-line.bold {
-  font-weight: 700;
-}
+  .total-line.bold {font-weight: 700;}
 
   /* carry-forward line + tooltip (added) */
   .card-header {

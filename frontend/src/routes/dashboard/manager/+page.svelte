@@ -170,6 +170,7 @@ tooltip.style.opacity = 1;
 
  // ===== FETCH DEPT DATA + RENDER CHART =====
 // ===== FETCH DEPT DATA + RENDER CHART =====
+// ===== FETCH DEPT DATA + RENDER CHART =====
 onMount(async () => {
   try {
     const res = await fetch("http://localhost:5000/api/employee/department-summary");

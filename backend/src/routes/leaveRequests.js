@@ -84,7 +84,7 @@ async function resetAnnualLeaveForNewYear() {
     `);
 
     const currentYear = new Date().getFullYear();
-    const expiryDate = `${currentYear + 1}-03-31`;
+    const expiryDate = `${currentYear + 1}-04-30`;
 
     let successCount = 0;
     let errorCount = 0;
