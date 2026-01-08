@@ -1000,14 +1000,14 @@ async function loadApprovedUsedDays() {
           <div class="legend-item"><span class="chip spent"></span><span>Allocated Leave</span></div>
           <div class="legend-item"><span class="chip unspent"></span><span>Balance Leave</span></div>
         </div>
-        <div class="total-line">
-          Provided: {d.total} |
-          Spent: {d.spent} |
-          {#if d.pending > 0}
-            Pending: {d.pending} |
-          {/if}
-          Remaining: {d.remaining}
-      </div>
+        <div class="total-line bold">
+            Allocated: {d.total} |
+            Spent: {d.spent} |
+            {#if d.pending > 0}
+              Pending: {d.pending} |
+            {/if}
+            Balance: {d.remaining}
+          </div>
       </div>
     {/each}
 
@@ -1764,6 +1764,9 @@ max-width: 150px;         /* optional — so it wraps instead of going super lon
 
 .toast-item.closing {
   animation: fadeOut 0.25s ease forwards;
+}
+.total-line.bold {
+  font-weight: 700;
 }
 
 /* =========================

@@ -932,13 +932,13 @@ async function submitLeave(e) {
           <div class="legend-item"><span class="chip unspent"></span><span>Balance Leave</span></div>
         </div>
         <div class="total-line bold">
-          Provided: {d.total} |
-          Allocated: {d.spent} |
-          {#if d.pending > 0}
-            Pending: {d.pending} |
-          {/if}
-          Balance: {d.remaining}
-      </div>
+            Allocated: {d.total} |
+            Spent: {d.spent} |
+            {#if d.pending > 0}
+              Pending: {d.pending} |
+            {/if}
+            Balance: {d.remaining}
+          </div>
       </div>
     {/each}
 
@@ -1448,6 +1448,11 @@ max-width: 150px;         /* optional — so it wraps instead of going super lon
     text-align: left;
     
   }
+
+  .total-line.bold {
+  font-weight: 700;
+}
+
   /* --- Tamat Style Dropdown --- */
 
   .calendar .month .nav{ display:flex; gap:6px; flex-wrap:wrap; }
@@ -1706,7 +1711,9 @@ max-width: 150px;         /* optional — so it wraps instead of going super lon
 .toast-item.closing {
   animation: fadeOut 0.25s ease forwards;
 }
-
+.total-line.bold{
+  font-weight: 700;
+}
 
 /* =========================
    MOBILE RESPONSIVE
