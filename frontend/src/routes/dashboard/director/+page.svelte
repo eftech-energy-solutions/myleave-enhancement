@@ -300,7 +300,7 @@ staffLeaveData = {
       const al = Number(s.annual_entitlement);
       const cf = Number(s.carry_forward);
       const taken = Number(s.annual_taken);
-      const remaining = al + cf - taken;
+      const remaining = al + cf;
       
       return {
         name: s.name,
@@ -660,7 +660,6 @@ donuts.forEach(d => {
   .dot{ width:10px; height:10px; border-radius:999px; display:inline-block; }
   .numbers-link{ display:inline-block; margin-top:270px; font-weight:600; color:#2563eb; text-decoration:none;  margin-left: 463px; white-space: nowrap;  } /* RIGHT side */
   .numbers-link:hover{ text-decoration:underline; }
-
 
 
 </style>

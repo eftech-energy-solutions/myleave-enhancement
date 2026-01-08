@@ -169,6 +169,7 @@ tooltip.style.opacity = 1;
   ];
 
  // ===== FETCH DEPT DATA + RENDER CHART =====
+// ===== FETCH DEPT DATA + RENDER CHART =====
 onMount(async () => {
   try {
     const res = await fetch("http://localhost:5000/api/employee/department-summary");
@@ -211,79 +212,70 @@ onMount(async () => {
           }
         }
       });
+    }
 
-// ================= FETCH ALL STAFF (FILTER BY DEPARTMENT) =================
-const empRes = await fetch("/api/employee");
-const allEmployees = await empRes.json();
+    // ================= FETCH ALL STAFF (FILTER BY DEPARTMENT) =================
+    const empRes = await fetch("/api/employee");
+    const allEmployees = await empRes.json();
 
-// 🔥 FILTER: Only employees in manager's department
-const deptEmployees = allEmployees.filter(emp => {
-  if (user?.role === "Manager" && user?.department === "Director") {
-    // ✅ include ALL managers
-    if (emp.role === "Manager") return true;
+    // 🔥 FILTER: Only employees in manager's department
+    const deptEmployees = allEmployees.filter(emp => {
+      if (user?.role === "Manager" && user?.department === "Director") {
+        if (emp.role === "Manager") return true;
+        return emp.department === "Director";
+      }
+      return emp.department === user?.department;
+    });
 
-    // staff Director sahaja
-    return emp.department === "Director";
-  }
-
-  return emp.department === user?.department;
-});
-
-
-
+// ================= BUILD STAFF MAP =================
 const staffMap = {};
 const today = new Date();
 
 deptEmployees.forEach(emp => {
-  // ✅ Check if CF expired (same logic as employee donut)
+  // Check if carry forward expired
   const cfExpiry = emp.carry_forward_expiry ? new Date(emp.carry_forward_expiry) : null;
-  const validCF = (cfExpiry && today > cfExpiry) ? 0 : (emp.carry_forward_balance ?? 0);
+   const validCF = (cfExpiry && today > cfExpiry) ? 0 : Number(emp.carry_forward_balance ?? 0);
+
+  // Get prorated values from backend
+  const proratedAnnual = Number(emp.leave_entitlement_annual_prorated ?? 14);
+  const proratedMedical = Number(emp.leave_entitlement_medical_prorated ?? 14);
 
   staffMap[emp.staff_id] = {
     name: emp.full_name,
     department: emp.department,
-
+    
     // Annual Leave
     annual_taken: 0,
-    annual_entitlement: Number(emp.leave_entitlement_annual ?? 14),
-    annual_original: Number(emp.leave_entitlement_annual_original ?? 14),
-    carry_forward: validCF,  // ✅ Only valid CF
-    carry_forward_raw: Number(emp.carry_forward_balance ?? 0),  // Raw value for tooltip
-
+    annual_entitlement: proratedAnnual,
+    carry_forward: validCF,
+    
     // Medical Leave
     medical_taken: 0,
-    medical_entitlement: Number(emp.leave_entitlement_medical ?? 14),
-
+    medical_entitlement: proratedMedical,
+    
     // Hospital Leave
     hospital_taken: 0,
     hospital_entitlement: 60
   };
 });
 
-// ================= FETCH LEAVE DATA (FILTER BY DEPARTMENT) =================
+// ================= FETCH LEAVE DATA =================
 const leaveRes = await fetch("/api/leave-requests?status=approved");
 const allLeaveData = await leaveRes.json();
 
-// 🔥 FILTER: Only leaves from manager's department
 const leaveData = allLeaveData.filter(r => {
   const emp = allEmployees.find(e => e.staff_id === r.staff_id);
   if (!emp) return false;
 
-  // 🔥 SPECIAL CASE: Manager department Director
   if (user?.role === "Manager" && user?.department === "Director") {
-    // ✅ semua manager
     if (emp.role === "Manager") return true;
-
-    // ✅ semua orang department Director
     return emp.department === "Director";
   }
 
-  // 🔒 Manager biasa (KEKAL behaviour)
   return emp.department === user?.department;
 });
 
-
-// Merge leave summary into staff list
+// ================= MERGE TAKEN LEAVE INTO STAFF MAP =================
 leaveData.forEach(r => {
   const id = r.staff_id;
   if (!staffMap[id]) return;
@@ -292,18 +284,16 @@ leaveData.forEach(r => {
 
   if (r.leave_type === "AL" || r.leave_type === "EL")
     staffMap[id].annual_taken += days;
-
-  if (r.leave_type === "MC")
+  else if (r.leave_type === "MC")
     staffMap[id].medical_taken += days;
-
-  if (r.leave_type === "HOSP")
+  else if (r.leave_type === "HOSP")
     staffMap[id].hospital_taken += days;
 });
 
 // ================= BUILD DONUT CHART DATA =================
 staffLeaveData = {
   annual: {
-    // ✅ TAKEN: Staff with approved leave
+    // Taken: Staff who used annual leave
     taken: Object.values(staffMap)
       .filter(s => s.annual_taken > 0)
       .map(s => ({
@@ -312,23 +302,21 @@ staffLeaveData = {
         department: s.department
       })),
 
-    // ✅ REMAINING: Current AL + Valid CF - Taken
+    // Remaining: Prorated AL + CF - Taken
     remaining: Object.values(staffMap)
-    .map(s => {
-      const al = Number(s.annual_entitlement);
-      const cf = Number(s.carry_forward);
-      const taken = Number(s.annual_taken);
-      const remaining = al + cf - taken;
-      
-      return {
-        name: s.name,
-        days: Math.max(0, remaining),
-        department: s.department
-      };
-    })
-    .filter(s => s.days > 0),  // Only show if remaining > 0
+      .map(s => {
+        // ✅ SAME CALCULATION AS INDIVIDUAL EMPLOYEE PAGE
+        const remaining = s.annual_entitlement + s.carry_forward;
+        
+        return {
+          name: s.name,
+          days: Math.max(0, remaining),
+          department: s.department
+        };
+      })
+      .filter(s => s.days > 0),
 
-    // ✅ CARRY FORWARD: Only valid (non-expired) CF
+    // Carry Forward: Only non-expired CF
     carry: Object.values(staffMap)
       .filter(s => s.carry_forward > 0)
       .map(s => ({
@@ -378,101 +366,126 @@ staffLeaveData = {
     carry: []
   }
 };
-    }
-// ✅ DONUT CHARTS
-donuts.forEach(d => {
-  const data = staffLeaveData[d.key];
 
-  const hasCarry = d.key === "annual";
-  const labels = hasCarry
-    ? ['Allocated Leave', 'Balance Leave', 'Carry-forward Leave']
-    : ['Allocated Leave', 'Balance Leave'];
+// ✅ DEBUG: Check the data
+console.log('📊 Staff Leave Data:', staffLeaveData);
+console.log('📊 Sample staff from map:', Object.values(staffMap)[0]);
 
-  const colors = hasCarry
-    ? ['#ef4444', '#3b82f6', '#10b981']
-    : ['#ef4444', '#3b82f6'];
+// Add this right after building staffLeaveData (before the donut chart rendering)
 
-  const values = hasCarry ? [1,1,1] : [1,1];
+// 🔍 DEBUG: Print all staff calculations
+console.log('=== MANAGER DASHBOARD CALCULATIONS ===');
+Object.values(staffMap).forEach(s => {
+  console.log(`${s.name}:`, {
+    annual_entitlement: s.annual_entitlement,
+    carry_forward: s.carry_forward,
+    annual_taken: s.annual_taken,
+    calculated_remaining: s.annual_entitlement + s.carry_forward - s.annual_taken
+  });
+});
 
-  // ==========================
-  // CHART
-  // ==========================
-  new Chart(d.canvas, {
-    type: 'doughnut',
-    data: {
-      labels,
-      datasets: [{
-        data: values,
-        backgroundColor: colors,
-        hoverOffset: 3,
-        borderWidth: 2
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      cutout: '62%',
-      interaction: {
-        intersect: false,
-        mode: 'nearest'
-      },
-      layout: {
-        padding: { right: 24 }
-      },
-      plugins: {
-        tooltip: {
-          enabled: false,
-          external: customTooltip,
-          displayColors: false,
-          padding: 12,
-          callbacks: {
-          title: (items) => items[0].label,
-          label: (ctx) => {
-            let slice;
-            if (ctx.label.includes('Taken')) slice = 'taken';
-            else if (ctx.label.includes('Remaining')) slice = 'remaining';
-            else slice = 'carry';
+// 🔍 DEBUG: Print final remaining array
+console.log('=== REMAINING LEAVE ARRAY ===');
+staffLeaveData.annual.remaining.forEach(s => {
+  console.log(`${s.name}: ${s.days} days remaining`);
+});
 
-            const list = staffLeaveData[d.key][slice];
-            
-            // ✅ Format numbers to remove unnecessary decimals
-            return list.map(s => {
-              const days = Number(s.days);
-              const formatted = days % 1 === 0 ? days.toFixed(0) : days.toFixed(1);
-              return `${s.name}: ${formatted}`;
-            });
+// 🔍 SPECIFIC: Check Professor
+const professor = Object.values(staffMap).find(s => s.name.includes('PROFESSOR'));
+if (professor) {
+  console.log('=== PROFESSOR SPECIFIC CHECK ===');
+  console.log('Professor data:', professor);
+  console.log('Calculation:', {
+    formula: `${professor.annual_entitlement} + ${professor.carry_forward} - ${professor.annual_taken}`,
+    result: professor.annual_entitlement + professor.carry_forward - professor.annual_taken
+  });
+}
+
+
+    // ✅ DONUT CHARTS
+    donuts.forEach(d => {
+      const data = staffLeaveData[d.key];
+
+      const hasCarry = d.key === "annual";
+      const labels = hasCarry
+        ? ['Allocated Leave', 'Balance Leave', 'Carry-forward Leave']
+        : ['Allocated Leave', 'Balance Leave'];
+
+      const colors = hasCarry
+        ? ['#ef4444', '#3b82f6', '#10b981']
+        : ['#ef4444', '#3b82f6'];
+
+      const values = hasCarry ? [1,1,1] : [1,1];
+
+      new Chart(d.canvas, {
+        type: 'doughnut',
+        data: {
+          labels,
+          datasets: [{
+            data: values,
+            backgroundColor: colors,
+            hoverOffset: 3,
+            borderWidth: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '62%',
+          interaction: {
+            intersect: false,
+            mode: 'nearest'
+          },
+          layout: {
+            padding: { right: 24 }
+          },
+          plugins: {
+            tooltip: {
+              enabled: false,
+              external: customTooltip,
+              displayColors: false,
+              padding: 12,
+              callbacks: {
+                title: (items) => items[0].label,
+                label: (ctx) => {
+                  let slice;
+                  if (ctx.label.includes('Taken')) slice = 'taken';
+                  else if (ctx.label.includes('Remaining')) slice = 'remaining';
+                  else slice = 'carry';
+
+                  const list = staffLeaveData[d.key][slice];
+                  
+                  return list.map(s => {
+                    const days = Number(s.days);
+                    const formatted = days % 1 === 0 ? days.toFixed(0) : days.toFixed(1);
+                    return `${s.name}: ${formatted}`;
+                  });
+                }
+              }
+            },
+            legend: {
+              display: false
+            }
           }
         }
-        },
-        legend: {
-          display: false
-        }
-      }
-    }
-  });
+      });
 
-  // ======================
-  // CLICK UNTUK FREEZE TOOLTIP
-  // ======================
-  d.canvas.addEventListener("click", () => {
-    frozenTooltip = !frozenTooltip;
-  });
+      d.canvas.addEventListener("click", () => {
+        frozenTooltip = !frozenTooltip;
+      });
 
-  // ======================
-  // CLICK LUAR UNTUK UNFREEZE
-  // ======================
-  document.addEventListener("click", (e) => {
-    const tooltip = document.getElementById("chart-tooltip");
-    if (!tooltip) return;
+      document.addEventListener("click", (e) => {
+        const tooltip = document.getElementById("chart-tooltip");
+        if (!tooltip) return;
 
-    if (tooltip.contains(e.target)) return;
-    if (e.target.tagName === "CANVAS") return;
+        if (tooltip.contains(e.target)) return;
+        if (e.target.tagName === "CANVAS") return;
 
-    frozenTooltip = false;
-    tooltip.style.opacity = 0;
-  });
+        frozenTooltip = false;
+        tooltip.style.opacity = 0;
+      });
 
-}); // END donuts.forEach
+    }); // ✅ END donuts.forEach
 
     loading = false;
 
@@ -481,7 +494,7 @@ donuts.forEach(d => {
     error = "Failed to load employee overview";
     loading = false;
   }
-})
+}); // ✅ END onMount
 </script>
 <svelte:head>
   <style>
