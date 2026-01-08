@@ -1082,20 +1082,32 @@ async function submitLeave(e) {
     <div class="card recent-card small-card" style="grid-column: span 8;">
       <h3>Recent Application</h3>
       <div class="recent-wrap">
-        {#each recent as r}
-          <div class="recent-item">
-            <div class="when">{fmt(r.from)} – {fmt(r.to)}</div>
-            <div class="cols">
-              <div><div class="muted">Total Days:</div><div>{r.totalDays}</div></div>
-              <div>
-              <div class="muted">Leave Type:</div>
-              <div>{getLeaveFullName(r.type)}</div>
+          {#if recent.length === 0}
+            <div class="recent-empty">
+              No leave requests application
             </div>
-              <div><div class="muted">Status:</div><div>{r.status}</div></div>
-            </div>
-          </div>
-        {/each}
-      </div>
+          {:else}
+            {#each recent as r}
+              <div class="recent-item">
+                <div class="when">{fmt(r.from)} – {fmt(r.to)}</div>
+                <div class="cols">
+                  <div>
+                    <div class="muted">Total Days:</div>
+                    <div>{r.totalDays}</div>
+                  </div>
+                  <div>
+                    <div class="muted">Leave Type:</div>
+                    <div>{getLeaveFullName(r.type)}</div>
+                  </div>
+                  <div>
+                    <div class="muted">Status:</div>
+                    <div>{r.status}</div>
+                  </div>
+                </div>
+              </div>
+            {/each}
+          {/if}
+        </div>
       <div class="recent-footer">
   <a class="view-more" href="/dashboard/manager/myhistory">View more →</a>
 </div>
@@ -1354,6 +1366,14 @@ max-width: 150px;         /* optional — so it wraps instead of going super lon
   justify-content: flex-end;
   margin-top: 8px;
 }
+.recent-empty {
+  text-align: center;
+  padding: 20px;
+  color: #9ca3af;
+  font-size: 13px;
+  font-style: italic;
+}
+
 
 .view-more {
   font-size: 13px;
