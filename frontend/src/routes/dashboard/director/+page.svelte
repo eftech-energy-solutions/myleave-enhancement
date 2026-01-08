@@ -300,7 +300,7 @@ staffLeaveData = {
       const al = Number(s.annual_entitlement);
       const cf = Number(s.carry_forward);
       const taken = Number(s.annual_taken);
-      const remaining = al + cf - taken;
+      const remaining = al + cf;
       
       return {
         name: s.name,
