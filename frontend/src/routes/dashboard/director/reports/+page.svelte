@@ -925,13 +925,13 @@ async function submitLeave(e) {
           <div class="legend-item"><span class="chip unspent"></span><span>Balance Leave</span></div>
         </div>
         <div class="total-line bold">
-          Provided: {d.total} |
-          Allocated: {d.spent} |
-          {#if d.pending > 0}
-            Pending: {d.pending} |
-          {/if}
-          Balance: {d.remaining}
-      </div>
+            Allocated: {d.total} |
+            Spent: {d.spent} |
+            {#if d.pending > 0}
+              Pending: {d.pending} |
+            {/if}
+            Balance: {d.remaining}
+          </div>
       </div>
     {/each}
 

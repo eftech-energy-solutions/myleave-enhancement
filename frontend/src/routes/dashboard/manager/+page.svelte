@@ -370,6 +370,10 @@ staffLeaveData = {
 // ✅ DEBUG: Check the data
 console.log('📊 Staff Leave Data:', staffLeaveData);
 console.log('📊 Sample staff from map:', Object.values(staffMap)[0]);
+  const hasCarry = d.key === "annual";
+  const labels = hasCarry
+    ? ['Allocated Leave', 'Balance Leave', 'Carry-forward Leave']
+    : ['Allocated Leave', 'Balance Leave'];
 
 // Add this right after building staffLeaveData (before the donut chart rendering)
 
