@@ -921,17 +921,17 @@ async function submitLeave(e) {
           style="--size:110px; --spent:{pct(d.spent,d.total)}; --spent-color: var(--spentRed); --rest-color: var(--restBlue);"
         ></div>
         <div class="legend-row">
-          <div class="legend-item"><span class="chip spent"></span><span>Taken Leave</span></div>
-          <div class="legend-item"><span class="chip unspent"></span><span>Remaining Leave</span></div>
+          <div class="legend-item"><span class="chip spent"></span><span>Allocated Leave</span></div>
+          <div class="legend-item"><span class="chip unspent"></span><span>Balance Leave</span></div>
         </div>
-        <div class="total-line">
-          Provided: {d.total} |
-          Spent: {d.spent} |
-          {#if d.pending > 0}
-            Pending: {d.pending} |
-          {/if}
-          Remaining: {d.remaining}
-      </div>
+        <div class="total-line bold">
+            Allocated: {d.total} |
+            Spent: {d.spent} |
+            {#if d.pending > 0}
+              Pending: {d.pending} |
+            {/if}
+            Balance: {d.remaining}
+          </div>
       </div>
     {/each}
 
@@ -1253,6 +1253,9 @@ async function submitLeave(e) {
   .chip.spent{ background: var(--spentRed); }
   .chip.unspent{ background: var(--restBlue); }
   .total-line{ text-align:center; font-size:12px; color:#6b7280; margin-top:4px; }
+  .total-line.bold {
+  font-weight: 700;
+}
 
   /* carry-forward line + tooltip (added) */
   .card-header {
