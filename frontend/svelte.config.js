@@ -1,13 +1,18 @@
-import adapter from '@sveltejs/adapter-auto';
+import adapter from '@sveltejs/adapter-static';
 
-/** @type {import('@sveltejs/kit').Config} */
 const config = {
-	kit: {
-		adapter: adapter(),
-		csrf: {
-			checkOrigin: false
-		}
-	}
+  kit: {
+    adapter: adapter({
+      fallback: 'index.html'
+    }),
+
+    appDir: 'app',   // ✅ BETUL (elak clash dgn /app folder server)
+
+    paths: {
+      base: '',
+      assets: ''
+    }
+  }
 };
 
 export default config;
