@@ -1,5 +1,6 @@
 <script>
   import { onMount, tick } from 'svelte';
+  import { PUBLIC_VITE_API_BASE } from '$env/static/public';
   // export let data; // DIBUANG: Komponen ini akan memuatkan data sendiri.
   const leaveTypeFullName = {
     AL: "Annual / Emergency",
@@ -63,7 +64,10 @@ function calculateWorkingDays(fromDate, toDate) {
       loading = true;
 
       // 1) USER
-      const meRes = await fetch("/api/me", { credentials: "include" });
+      const meRes = await fetch(
+        `${PUBLIC_VITE_API_BASE}/api/me`,
+        { credentials: "include" }
+      );
       user = { ...(await meRes.json()) };
       console.log("HOSP DATA — entitlement:", user?.hosp_entitlement, "balance:", user?.hosp_balance);
       console.log("USER:", user);
@@ -222,11 +226,17 @@ async function loadRecent() {
     pendingMC = 0;
     pendingHOSP = 0;
 
-    const meRes = await fetch("/api/me", { credentials: "include" });
+    const meRes = await fetch(
+      `${PUBLIC_VITE_API_BASE}/api/me`,
+      { credentials: "include" }
+    );
     const freshUser = await meRes.json();
     user = { ...freshUser };
 
-    const res = await fetch("/api/leave-requests", { credentials: "include" });
+    const res = await fetch(
+      `${PUBLIC_VITE_API_BASE}/api/leave-requests`,
+      { credentials: "include" }
+    );
     const all = await res.json();
 
     const currentYear = new Date().getFullYear();
@@ -462,7 +472,10 @@ async function loadRecent() {
     loading = true;
     error = "";
     try {
-      const res = await fetch("/api/holidays", { credentials: "include" });
+      const res = await fetch(
+        `${PUBLIC_VITE_API_BASE}/api/holidays`,
+        { credentials: "include" }
+      );
       if (!res.ok) throw new Error("Failed to load holidays");
       const flatHolidays = await res.json(); // e.g., [{ id, date, title, description }]
 
@@ -779,12 +792,14 @@ return;
   fd.set("totalDays", String(totalDays));
 
   try {
-    const res = await fetch("/api/leave-requests", {
-      method: "POST",
-      body: fd,
-      credentials: "include"
-    });
-
+   const res = await fetch(
+  `${PUBLIC_VITE_API_BASE}/api/leave-requests`,
+  {
+    method: "POST",
+    credentials: "include",
+    body: fd
+  }
+);
     if (!res.ok) {
       const data = await res.json().catch(() => null);
 
@@ -869,9 +884,12 @@ function showToast(message, type = "success", title = "", duration = 3000) {
 
 
 async function loadAppliedLeave() {
-  const res = await fetch("/api/leave-requests", {
+  const res = await fetch(
+  `${PUBLIC_VITE_API_BASE}/api/leave-requests`,
+  {
     credentials: "include"
-  });
+  }
+);
   const list = await res.json();
   const currentYear = new Date().getFullYear();
   const allMine = list.filter(r => r.staff_id === user.staff_id);
@@ -939,26 +957,39 @@ function checkDateRangeOverlap(fromISO, untilISO) {
 }
 
 async function loadApprovedUsedDays() {
-  const res = await fetch("/api/leave-requests", { credentials: "include" });
-  const all = await res.json();
-  const currentYear = new Date().getFullYear();
+  try {
+    const res = await fetch(
+      `${PUBLIC_VITE_API_BASE}/api/leave-requests`,
+      {
+        credentials: "include"   // ✅ GET sahaja
+      }
+    );
 
-  const active = all.filter(r =>
-    String(r.staff_id) === String(user.staff_id) &&
-    (
-      r.status === "approved" ||
-      r.status === "cancellation_pending"
-    ) &&
-    new Date(r.date_from).getFullYear() === currentYear   // ✅ ADD THIS
-  );
+    if (!res.ok) throw new Error("Failed to load leave requests");
 
-  usedMC = active
-    .filter(r => r.leave_type === "MC")
-    .reduce((sum, r) => sum + Number(r.total_days || 0), 0);
+    const all = await res.json();
+    const currentYear = new Date().getFullYear();
 
-  usedHOSP = active
-    .filter(r => r.leave_type === "HOSP")
-    .reduce((sum, r) => sum + Number(r.total_days || 0), 0);
+    const active = all.filter(r =>
+      String(r.staff_id) === String(user.staff_id) &&
+      (
+        r.status === "approved" ||
+        r.status === "cancellation_pending"
+      ) &&
+      new Date(r.date_from).getFullYear() === currentYear
+    );
+
+    usedMC = active
+      .filter(r => r.leave_type === "MC")
+      .reduce((sum, r) => sum + Number(r.total_days || 0), 0);
+
+    usedHOSP = active
+      .filter(r => r.leave_type === "HOSP")
+      .reduce((sum, r) => sum + Number(r.total_days || 0), 0);
+
+  } catch (err) {
+    console.error("❌ loadApprovedUsedDays error:", err);
+  }
 }
 
 </script>
@@ -1095,6 +1126,7 @@ async function loadApprovedUsedDays() {
                     "info",
                     "Date Unavailable"
                   );
+                  return;
                 }
 
                 if (d.holiday) {

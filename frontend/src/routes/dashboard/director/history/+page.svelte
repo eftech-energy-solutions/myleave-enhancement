@@ -4,6 +4,7 @@
 
 <script>
   import { onMount } from "svelte";
+  import { PUBLIC_VITE_API_BASE } from '$env/static/public';
   const leaveTypeFullName = {
     AL: "Annual / Emergency",
     MC: "Medical",
@@ -41,9 +42,12 @@
 
   // ===== Fetch Manager-filtered data =====
 async function loadHistory() {
-  const res = await fetch("/api/leave-requests/history/all", {
-    credentials: "include"
-  });
+    const res = await fetch(
+    `${PUBLIC_VITE_API_BASE}/api/leave-requests/history/all`,
+    {
+      credentials: "include"
+    }
+  );
 
   const data = await res.json();
 
@@ -56,9 +60,12 @@ async function loadHistory() {
 }
 
 onMount(async () => {
-  const meRes = await fetch("/api/me", {
+  const meRes = await fetch(
+  `${PUBLIC_VITE_API_BASE}/api/me`,
+  {
     credentials: "include"
-  });
+  }
+);
   me = await meRes.json();
 
   await loadHistory();
@@ -246,13 +253,15 @@ $: filtered = (() => {
       <div class="dialog-body">
         <aside class="rail" aria-label="Month bookmarks">
           {#each railTabs as t}
-            <button
-              class="tab {selected?.month === t.value ? 'active' : ''}"
-              style="--tab-bg: var(--primary);"
-              title={t.value}
-              on:click={() => jumpToMonth(t.value)}>
-              <span class="tab-chip">{t.label}</span>
-            </button>
+             <button
+                class="tab"
+                class:active={selected?.month === t.value}
+                style="--tab-bg: var(--primary);"
+                title={t.value}
+                on:click={() => jumpToMonth(t.value)}
+              >
+                <span class="tab-chip">{t.label}</span>
+              </button>
           {/each}
         </aside>
 
@@ -340,7 +349,10 @@ $: filtered = (() => {
                     <td>{dateRange(emp.dateFrom, emp.dateTo)}</td>
                     <td class="center">{emp.totalDays}</td>
                     <td>{getLeaveFullName(emp.leaveType)}</td>
-                    <td><span class="status {emp.status.toLowerCase().replace(' ', '-')}">{emp.status}</span></td>
+                    <td><span class={`status ${emp.status.toLowerCase().replace(' ', '-')}`}>
+                      {emp.status}
+                    </span>
+                    </td>
                   </tr>
                 {/each}
               </tbody>

@@ -10,6 +10,8 @@
 
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
+  import { PUBLIC_VITE_API_BASE } from '$env/static/public';
+  
   let selectedFile = null;
 
   // Fallback user info (before fetching from server)
@@ -59,13 +61,13 @@ function showToast(message, type = "success", title = "", duration = 3000) {
   }, duration);
 }
 $: headerAvatarUrl = safeUser.photoUrl
-  ? `http://localhost:5000${safeUser.photoUrl}?v=${Date.now()}`
+  ? `${PUBLIC_VITE_API_BASE}${safeUser.photoUrl}?v=${Date.now()}`
   : '/images/icontest1.png';
 
   // --- Fetch current user on mount ---
 onMount(async () => {
   try {
-    const res = await fetch('http://localhost:5000/api/me/photo', {
+    const res = await fetch(`${PUBLIC_VITE_API_BASE}/api/me/photo`, {
       credentials: 'include'
     });
 
@@ -74,7 +76,7 @@ onMount(async () => {
       safeUser = { ...safeUser, ...data };
 
       profilePhotoUrl = safeUser.photoUrl
-        ? `http://localhost:5000${safeUser.photoUrl}`
+        ? `${PUBLIC_VITE_API_BASE}${safeUser.photoUrl}`
         : '';
 
       // ✅ PANGGIL LEPAS safeUser DAH ADA
@@ -95,9 +97,10 @@ onMount(async () => {
 
 async function loadPendingCount() {
   try {
-    const res = await fetch('/api/leave-requests', {
-      credentials: 'include'
-    });
+    const res = await fetch(
+      `${PUBLIC_VITE_API_BASE}/api/leave-requests`,
+      { credentials: "include" }
+    );
     if (!res.ok) return;
 
     const all = await res.json();
@@ -223,7 +226,7 @@ async function saveProfile(e) {
       const formData = new FormData();
       formData.append('photo', selectedFile);
 
-      const res = await fetch('http://localhost:5000/api/upload/profile', {
+      const res = await fetch(`${PUBLIC_VITE_API_BASE}/api/upload/profile`, {
         method: 'POST',
         body: formData,
         credentials: 'include'
@@ -245,7 +248,7 @@ async function saveProfile(e) {
       // modal preview
       profilePhotoUrl = data.photoUrl.startsWith('http')
         ? `${data.photoUrl}${bust}`
-        : `http://localhost:5000${data.photoUrl}${bust}`;
+        : `${PUBLIC_VITE_API_BASE}${data.photoUrl}${bust}`;
 
       // ❗ penting: reset file
       selectedFile = null;
@@ -312,7 +315,7 @@ async function saveProfile(e) {
     try {
       // PRIMARY ROUTE (email)
       if (email) {
-        const res = await fetch('http://localhost:5000/api/auth/change-password', {
+        const res = await fetch(`${PUBLIC_VITE_API_BASE}/api/auth/change-password`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
@@ -347,7 +350,7 @@ async function saveProfile(e) {
       if (err?._tryFallback) {
         try {
           const res = await fetch(
-            `http://localhost:5000/api/employee/${encodeURIComponent(safeUser.staffId)}/password`,
+            `${PUBLIC_VITE_API_BASE}${encodeURIComponent(safeUser.staffId)}/password`,
             {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
@@ -534,7 +537,7 @@ async function saveProfile(e) {
         <div class="profile-info">
           {#if safeUser?.photoUrl}
             <img
-              src={`http://localhost:5000${safeUser.photoUrl}`}
+              src={`${PUBLIC_VITE_API_BASE}${safeUser.photoUrl}`}
               alt="profile"
               class="avatar-img"
               on:error={(e) => (e.currentTarget.style.display = 'none')}

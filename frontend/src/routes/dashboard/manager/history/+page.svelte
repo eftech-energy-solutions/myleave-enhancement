@@ -4,6 +4,7 @@
 
 <script>
   import { onMount } from "svelte";
+  import { PUBLIC_VITE_API_BASE } from '$env/static/public';
   const leaveTypeFullName = {
     AL: "Annual / Emergency",
     MC: "Medical",
@@ -42,7 +43,7 @@
   // ===== Fetch Manager-filtered data =====
   async function loadHistory() {
   const res = await fetch(
-  `/api/leave-requests/history/all?viewMode=${viewMode}`,
+  `${PUBLIC_VITE_API_BASE}/api/leave-requests/history/all?viewMode=${encodeURIComponent(viewMode)}`,
   { credentials: "include" }
 );
 
@@ -89,9 +90,10 @@
 }
 
 onMount(async () => {
-  const meRes = await fetch("/api/me", {
-    credentials: "include"
-  });
+  const meRes = await fetch(
+  `${PUBLIC_VITE_API_BASE}/api/me`,
+  { credentials: "include" }
+);
   me = await meRes.json();
 
   await loadHistory();

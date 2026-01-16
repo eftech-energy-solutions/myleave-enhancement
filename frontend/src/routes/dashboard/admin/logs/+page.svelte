@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte';
+  import { PUBLIC_VITE_API_BASE } from '$env/static/public';
   
   // State variables
   let logs = [];
@@ -19,7 +20,7 @@
   let uniqueAdmins = [];
   let loading = true;
   
-  const API_URL = 'http://localhost:5000';
+  const API_URL = `${PUBLIC_VITE_API_BASE}`;
   
   // Fetch logs on mount
   onMount(async () => {
@@ -523,7 +524,7 @@ async function fetchLogs() {
 
 .filters-grid {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr 2fr;
+  grid-template-columns: 2fr 1.5fr 2fr 2fr;
   gap: 16px;
 }
 
@@ -568,6 +569,14 @@ async function fetchLogs() {
   border-color: #49bdb3;
   box-shadow: 0 0 0 3px rgba(73,189,179,0.1);
 }
+.filter-select {
+  width: 100%;
+  max-width: 360px;   /* kawal panjang */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 
 .date-inputs {
   display: flex;

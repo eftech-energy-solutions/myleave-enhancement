@@ -3,6 +3,8 @@
   // 1) APP STATE & HELPERS
   // =======================
   import { onMount } from "svelte";
+  import { apiFetch } from '$lib/api';
+  import { PUBLIC_VITE_API_BASE } from '$env/static/public';
 
   const leaveTypeFullName = {
     AL: "Annual / Emergency",
@@ -123,14 +125,17 @@ function showToast(message, type = "success", title = "", duration = 3000) {
 
   async function loadPendingRequests() {
   try {
-    // 👉 buang ?status=pending, ambil SEMUA
-    const res = await fetch("/api/leave-requests", {
+  const res = await fetch(
+    `${PUBLIC_VITE_API_BASE}/api/leave-requests`,
+    {
       credentials: "include"
-    });
-    if (!res.ok) {
-      console.error("❌ Failed to fetch pending:", res.status);
-      return;
     }
+  );
+
+  if (!res.ok) {
+    console.error("❌ Failed to fetch pending:", res.status);
+    return;
+  }
 
     const all = await res.json();
 
@@ -155,9 +160,11 @@ pending = pendingRequests;
 
   async function loadEmployees() {
     try {
-      const res = await fetch("http://localhost:5000/api/employee", {
-        credentials: "include"
-      });
+      const res = await fetch(
+      `${PUBLIC_VITE_API_BASE}/api/employee`,
+      { credentials: "include" }
+    );
+
 
       const data = await res.json();
 
@@ -187,7 +194,7 @@ pending = pendingRequests;
         const url = emp.photourl
           ? emp.photourl.startsWith("http")
             ? emp.photourl
-            : `http://localhost:5000${emp.photourl}`
+            : `${PUBLIC_VITE_API_BASE}${emp.photourl}`
           : "";
 
         const profile = {
@@ -358,7 +365,7 @@ pending = pendingRequests;
         formData.append("photo", newEmp.photoFile);
 
         const uploadRes = await fetch(
-          "http://localhost:5000/api/upload",
+          `${PUBLIC_VITE_API_BASE}/api/upload`,
           {
             method: "POST",
             body: formData
@@ -371,37 +378,44 @@ pending = pendingRequests;
         }
       }
 
-      const res = await fetch("http://localhost:5000/api/employee", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          photoUrl: uploadedPhotoUrl,
-          empId: newEmp.empId,
-          name: newEmp.name,
-          email: newEmp.email,
-          position: newEmp.position,
-          role: newEmp.role,
-          department: newEmp.department,
-          employmentDate: newEmp.employmentDate,
-          confirmationDate: newEmp.confirmationDate,
-          terminationDate: newEmp.terminationDate,
-          gender: newEmp.gender,
-          annualLeave: newEmp.annualLeave
-            ? Number(newEmp.annualLeave)
-            : null,
-          medicalLeave: newEmp.medicalLeave
-            ? Number(newEmp.medicalLeave)
-            : null,
-          notes: newEmp.notes
-        })
-      });
+      const res = await fetch(
+  `${PUBLIC_VITE_API_BASE}/api/employee`,
+  {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      photoUrl: uploadedPhotoUrl,
+      empId: newEmp.empId,
+      name: newEmp.name,
+      email: newEmp.email,
+      position: newEmp.position,
+      role: newEmp.role,
+      department: newEmp.department,
+      employmentDate: newEmp.employmentDate,
+      confirmationDate: newEmp.confirmationDate,
+      terminationDate: newEmp.terminationDate,
+      gender: newEmp.gender,
+      annualLeave: newEmp.annualLeave
+        ? Number(newEmp.annualLeave)
+        : null,
+      medicalLeave: newEmp.medicalLeave
+        ? Number(newEmp.medicalLeave)
+        : null,
+      notes: newEmp.notes
+    })
+  }
+);
+
 
       const data = await res.json();
 
       if (res.ok) {
         const fullPhotoUrl = uploadedPhotoUrl.startsWith("http")
-          ? uploadedPhotoUrl
-          : `http://localhost:5000${uploadedPhotoUrl}`;
+        ? uploadedPhotoUrl
+        : `${PUBLIC_VITE_API_BASE}${uploadedPhotoUrl}`;
 
         const card = {
           id: newEmp.empId,
@@ -540,10 +554,9 @@ pending = pendingRequests;
           formData.append("photo", detailsForm.photoFile);
 
           const uploadRes = await fetch(
-            "http://localhost:5000/api/upload/profile",
+            `${PUBLIC_VITE_API_BASE}/api/upload/profile`,
             { method: "POST", body: formData }
           );
-
           const uploadData = await uploadRes.json();
           if (!uploadData.success)
             showToast(
@@ -556,16 +569,19 @@ pending = pendingRequests;
         }
 
         // Normalise
-        const prefix = "http://localhost:5000";
+        const prefix = `${PUBLIC_VITE_API_BASE}`;
         if (finalRelativePhotoUrl.startsWith(prefix)) {
           finalRelativePhotoUrl = finalRelativePhotoUrl.replace(prefix, "");
         }
 
         const res = await fetch(
-          `http://localhost:5000/api/employee/${selectedEmp.empId}`,
+          `${PUBLIC_VITE_API_BASE}/api/employee/${selectedEmp.empId}`,
           {
             method: "PUT",
-            headers: { "Content-Type": "application/json" },
+            credentials: "include", // 🔴 WAJIB
+            headers: {
+              "Content-Type": "application/json"
+            },
             body: JSON.stringify({
               staff_id: detailsForm.empId,
               photo_url: finalRelativePhotoUrl,
@@ -613,7 +629,7 @@ pending = pendingRequests;
         }
 
         const fullPhoto = finalRelativePhotoUrl
-          ? `http://localhost:5000${finalRelativePhotoUrl}`
+          ? `${PUBLIC_VITE_API_BASE}${finalRelativePhotoUrl}`
           : "";
 
         detailsForm.photoUrl = fullPhoto;
@@ -665,11 +681,15 @@ pending = pendingRequests;
   // =======================
  async function approve(id) {
   try {
-    await fetch(`/api/leave-requests/${id}`, {
+    await fetch(
+    `${PUBLIC_VITE_API_BASE}/api/leave-requests/${id}`,
+    {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify({ status: "approved" })
-    });
+    }
+  );
 
     showToast("Leave request approved successfully.", "success");
 
@@ -684,11 +704,15 @@ pending = pendingRequests;
 
   async function reject(id) {
   try {
-    await fetch(`/api/leave-requests/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "rejected" })
-    });
+    await fetch(
+  `${PUBLIC_VITE_API_BASE}/api/leave-requests/${id}`,
+  {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ status: "rejected" })
+  }
+);
 
     showToast("Leave request rejected.", "success");
 
@@ -728,15 +752,22 @@ async function deleteEmployee() {
 
   try {
     // DELETE from backend
-    await fetch(`http://localhost:5000/api/leave-requests/by-staff/${empId}`, {
+    await fetch(
+    `${PUBLIC_VITE_API_BASE}/api/leave-requests/by-staff/${empId}`,
+    {
       method: "DELETE",
       credentials: "include"
-    });
+    }
+  );
 
-    const res = await fetch(`http://localhost:5000/api/employee/${empId}`, {
+  // 2️⃣ Delete employee
+  const res = await fetch(
+    `${PUBLIC_VITE_API_BASE}/api/employee/${empId}`,
+    {
       method: "DELETE",
       credentials: "include"
-    });
+    }
+  );
 
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Failed to delete employee");
@@ -774,11 +805,15 @@ async function deleteEmployee() {
 
 async function approveCancellation(item) {
   try {
-    await fetch(`/api/leave-requests/${item.leave_id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "cancelled" })
-    });
+    await fetch(
+  `${PUBLIC_VITE_API_BASE}/api/leave-requests/${item.leave_id}`,
+  {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ status: "cancelled" })
+  }
+);
 
     showToast("Leave cancellation approved.", "success");
 
@@ -790,11 +825,15 @@ async function approveCancellation(item) {
 
 async function rejectCancellation(item) {
   try {
-    await fetch(`/api/leave-requests/${item.leave_id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "cancellation_rejected" })
-    });
+    await fetch(
+  `${PUBLIC_VITE_API_BASE}/api/leave-requests/${item.leave_id}`,
+  {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ status: "cancellation_rejected" })
+  }
+);
 
     showToast("Cancellation request rejected.", "success");
 
@@ -1115,7 +1154,6 @@ async function rejectCancellation(item) {
               </svg>
             </div>
             {#if detailsById[emp.id]?.photoUrl}
-            {console.log('Rendering image URL:', detailsById[emp.id]?.photoUrl)}
             <img
               src={detailsById[emp.id]?.photoUrl || ""}
               alt="profile"
@@ -1235,10 +1273,9 @@ async function rejectCancellation(item) {
                   {#if item.attachment_path}
                     <div style="margin-top:4px;">
                       <a
-                        href={"http://localhost:5000/" + item.attachment_path}
-                        target="_blank"
-                        style="color:#2563eb; text-decoration: underline; font-size:12px;"
-                      >
+                          href={`${PUBLIC_VITE_API_BASE}${item.attachment_path}`}
+                          target="_blank"
+                        >
                         View Attachment
                       </a>
                     </div>
@@ -1326,11 +1363,10 @@ async function rejectCancellation(item) {
 
                   {#if item.attachment_path}
                     <div style="margin-top:4px;">
-                      <a
-                        href={"http://localhost:5000/" + item.attachment_path}
-                        target="_blank"
-                        style="color:#2563eb; text-decoration: underline; font-size:12px;"
-                      >
+                        <a
+                          href={`${PUBLIC_VITE_API_BASE}${item.attachment_path}`}
+                          target="_blank"
+                        >
                         View Attachment
                       </a>
                     </div>
@@ -1455,7 +1491,7 @@ async function rejectCancellation(item) {
               <div class="row single">
                 <div>
                   <label>Notes</label>
-                  <div class="ctl"><textarea placeholder="Optional notes…" bind:value={newEmp.notes} /></div>
+                  <div class="ctl"><textarea placeholder="Optional notes…" bind:value={newEmp.notes}></textarea></div>
                 </div>
               </div>
 

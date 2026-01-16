@@ -1,5 +1,6 @@
 <script>
 	import { onMount } from 'svelte';
+	import { PUBLIC_VITE_API_BASE } from '$env/static/public';
 
 	// -------------------------------
 	// VIEW STATE (same page toggles)
@@ -18,7 +19,7 @@
 	onMount(async () => {
 		try {
 			// Optional prefill email (if already known)
-			const r = await fetch('http://localhost:5000/api/employee/me', { credentials: 'include' });
+			const r = await fetch(`${PUBLIC_VITE_API_BASE}/api/employee/me`, { credentials: 'include' });
 			if (r.ok) {
 				const me = await r.json();
 				email = me?.email || '';
@@ -31,7 +32,7 @@
 		loginError = '';
 		loginLoading = true;
 		try {
-			const res = await fetch('http://localhost:5000/api/auth/login', {
+			const res = await fetch(`${PUBLIC_VITE_API_BASE}/api/auth/login`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				credentials: 'include',
@@ -81,7 +82,7 @@
 				return;
 			}
 
-			const r = await fetch('http://localhost:5000/api/auth/forgot', {
+			const r = await fetch(`${PUBLIC_VITE_API_BASE}/api/auth/forgot`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ email })
@@ -133,7 +134,7 @@
 		if (!resetEmail || resendCooldown > 0) return;
 		sending = true;
 		try {
-			const r = await fetch('http://localhost:5000/api/auth/forgot', {
+			const r = await fetch(`${PUBLIC_VITE_API_BASE}/api/auth/forgot`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ email: resetEmail })
@@ -241,7 +242,7 @@
 			// Jika OK, hantar { "success": true }
 			// Jika Gagal, hantar { "error": "Wrong OTP number." }
 			
-			const r = await fetch('http://localhost:5000/api/auth/verify-otp', {
+			const r = await fetch(`${PUBLIC_VITE_API_BASE}/api/auth/verify-otp`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ email: resetEmail, otp })
@@ -292,7 +293,7 @@
 			const emailToReset = (resetEmail || '').trim().toLowerCase();
 			
 			// Panggil endpoint ASAL
-			const r = await fetch('http://localhost:5000/api/auth/reset', {
+			const r = await fetch(`${PUBLIC_VITE_API_BASE}/api/auth/reset`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ email: emailToReset, otp, newPassword: newPwd1 })

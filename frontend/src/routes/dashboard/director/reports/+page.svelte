@@ -1,5 +1,6 @@
 <script>
   import { onMount, tick } from 'svelte';
+  import { PUBLIC_VITE_API_BASE } from '$env/static/public';
   // export let data; // DIBUANG: Komponen ini akan memuatkan data sendiri.
   const leaveTypeFullName = {
     AL: "Annual / Emergency",
@@ -87,7 +88,10 @@
       loading = true;
 
       // 1) USER
-      const meRes = await fetch("/api/me", { credentials: "include" });
+      const meRes = await fetch(
+        `${PUBLIC_VITE_API_BASE}/api/me`,
+        { credentials: "include" }
+      );
       user = { ...(await meRes.json()) };
       console.log("HOSP DATA — entitlement:", user?.hosp_entitlement, "balance:", user?.hosp_balance);
       console.log("USER:", user);
@@ -237,11 +241,17 @@ $: donuts = user ? [
   }
 async function loadRecent() {
   try {
-    const meRes = await fetch("/api/me", { credentials: "include" });
+    const meRes = await fetch(
+      `${PUBLIC_VITE_API_BASE}/api/me`,
+      { credentials: "include" }
+    );
     const freshUser = await meRes.json();
     user = { ...freshUser };
 
-    const res = await fetch("/api/leave-requests", { credentials: "include" });
+    const res = await fetch(
+      `${PUBLIC_VITE_API_BASE}/api/leave-requests`,
+      { credentials: "include" }
+    );
     const all = await res.json();
 
     approvedAL = all
@@ -465,7 +475,10 @@ async function loadRecent() {
     loading = true;
     error = "";
     try {
-      const res = await fetch("/api/holidays", { credentials: "include" });
+      const res = await fetch(
+        `${PUBLIC_VITE_API_BASE}/api/holidays`,
+        { credentials: "include" }
+      );
       if (!res.ok) throw new Error("Failed to load holidays");
       const flatHolidays = await res.json(); // e.g., [{ id, date, title, description }]
 
@@ -676,9 +689,12 @@ $: {
   let blockedDates = new Set();
 
 async function loadAppliedLeave() {
-  const res = await fetch("/api/leave-requests", {
+  const res = await fetch(
+  `${PUBLIC_VITE_API_BASE}/api/leave-requests`,
+  {
     credentials: "include"
-  });
+  }
+);
   const list = await res.json();
   const allMine = list.filter(r => r.staff_id === user.staff_id);
 
@@ -822,11 +838,14 @@ async function submitLeave(e) {
   fd.set("totalDays", String(totalDays));
 
   try {
-    const res = await fetch("/api/leave-requests", {
-      method: "POST",
-      body: fd,
-      credentials: "include"
-    });
+    const res = await fetch(
+      `${PUBLIC_VITE_API_BASE}/api/leave-requests`,
+      {
+        method: "POST",
+        body: fd,
+        credentials: "include"
+      }
+    );
 
     if (!res.ok) {
       const data = await res.json().catch(() => null);
@@ -1188,7 +1207,10 @@ async function submitLeave(e) {
 
 {#if toast.show}
   <div class="toast-stack">
-    <div class="toast-item {toast.type} {toast.closing ? 'closing' : ''}">
+    <div class={
+    `toast-item ${toast.type} ${toast.closing ? 'closing' : ''}`
+  }
+>
       <div class="toast-icon">
         {#if toast.type === 'success'}
           <svg viewBox="0 0 24 24" class="toast-svg">

@@ -1,6 +1,7 @@
 
 <script>
   import { onMount } from "svelte";
+  import { PUBLIC_VITE_API_BASE } from '$env/static/public';
     const leaveTypeFullName = {
     AL: "Annual / Emergency",
     MC: "Medical",
@@ -37,9 +38,12 @@
 
   // ===== Fetch real DB data =====
   async function loadHistory() {
-  const res = await fetch("/api/leave-requests/history/all", {
+  const res = await fetch(
+  `${PUBLIC_VITE_API_BASE}/api/leave-requests/history/all`,
+  {
     credentials: "include"
-  });
+  }
+);
   const data = await res.json();
 
   rows = groupByMonth(data);

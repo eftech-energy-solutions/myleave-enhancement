@@ -1,5 +1,6 @@
 <script>
   import { onMount } from "svelte";
+  import { PUBLIC_VITE_API_BASE } from '$env/static/public';
     const leaveTypeFullName = {
     AL: "Annual / Emergency",
     MC: "Medical",
@@ -100,9 +101,12 @@ function showToast(message, type = "success", title = "", duration = 3000) {
 
   onMount(async () => {
     try {
-      const userRes = await fetch("/api/me/photo", {
-        credentials: "include",
-      });
+      const userRes = await fetch(
+        `${PUBLIC_VITE_API_BASE}/api/me/photo`,
+        {
+          credentials: "include",
+        }
+      );
       const userData = await userRes.json();
       manager = userData;
       managerDept = userData?.department;
@@ -126,7 +130,7 @@ function showToast(message, type = "success", title = "", duration = 3000) {
   async function loadEmployees() {
     try {
       const res = await fetch(
-        "http://localhost:5000/api/employee",
+        `${PUBLIC_VITE_API_BASE}/api/employee`,  // ✅ Correct - matching backticks
         {
           credentials: "include",
         }
@@ -143,11 +147,11 @@ function showToast(message, type = "success", title = "", duration = 3000) {
 
       // Build full list
       const fullProfileList = data.map((e) => {
-        const fixedPhotoUrl = e.photourl
-          ? e.photourl.startsWith("http")
-            ? e.photourl
-            : `http://localhost:5000${e.photourl}`
-          : "";
+  const fixedPhotoUrl = e.photourl
+    ? e.photourl.startsWith("http")
+      ? e.photourl
+      : `${PUBLIC_VITE_API_BASE}${e.photourl}`
+    : "";
 
         return {
           id: e.staff_id,
@@ -167,6 +171,7 @@ function showToast(message, type = "success", title = "", duration = 3000) {
           notes: e.notes,
         };
       });
+
 
   // Build detailsById for ALL staff, muncul di employee grid
 detailsById = {};
@@ -244,9 +249,12 @@ employees = deptFiltered.filter(
   $: pendingCount = pendingLeave.length + pendingCancel.length;
 
   async function loadPendingRequests() {
-    const res = await fetch("/api/leave-requests",
-      { credentials: "include" }
-    );
+  const res = await fetch(
+  `${PUBLIC_VITE_API_BASE}/api/leave-requests`,  // ✅ Correct - matching backticks
+  {
+    credentials: "include",
+  }
+);
     const all = await res.json();
     const view =
     manager?.role === "Manager"
@@ -383,11 +391,15 @@ pendingRequests = view;
 
   async function approve(id) {
   try {
-    await fetch(`/api/leave-requests/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "approved" }),
-    });
+    await fetch(
+  `${PUBLIC_VITE_API_BASE}/api/leave-requests/${id}`,
+  {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ status: "approved" }),
+  }
+);
 
     showToast("Leave request approved successfully.", "success");
 
@@ -403,11 +415,15 @@ pendingRequests = view;
 
   async function reject(id) {
   try {
-    await fetch(`/api/leave-requests/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "rejected" }),
-    });
+    await fetch(
+  `${PUBLIC_VITE_API_BASE}/api/leave-requests/${id}`,
+  {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ status: "rejected" }),
+  }
+);
 
     showToast("Leave request rejected.", "success");
 
@@ -423,12 +439,15 @@ pendingRequests = view;
 
   async function approveCancellation(item) {
   try {
-    await fetch(`/api/leave-requests/${item.leave_id}`, {
-      method: "PATCH",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "cancelled" })
-    });
+    await fetch(
+  `${PUBLIC_VITE_API_BASE}/api/leave-requests/${item.leave_id}`,
+  {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ status: "cancelled" })
+  }
+);
 
     showToast("Leave cancellation approved.", "success");
 
@@ -443,12 +462,15 @@ pendingRequests = view;
 
 async function rejectCancellation(item) {
   try {
-    await fetch(`/api/leave-requests/${item.leave_id}`, {
-      method: "PATCH",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "approved" })
-    });
+    await fetch(
+  `${PUBLIC_VITE_API_BASE}/api/leave-requests/${item.leave_id}`,
+  {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ status: "approved" })
+  }
+);
 
     showToast("Cancellation request rejected.", "success");
 
@@ -846,7 +868,7 @@ async function rejectCancellation(item) {
                   {#if item.attachment_path}
                     <div style="margin-top:4px;">
                       <a
-                        href={"http://localhost:5000/" + item.attachment_path}
+                        href={`${PUBLIC_VITE_API_BASE}${item.attachment_path}`}
                         target="_blank"
                         style="color:#2563eb; text-decoration: underline; font-size:12px;"
                       >
@@ -945,7 +967,7 @@ async function rejectCancellation(item) {
                   {#if item.attachment_path}
                     <div style="margin-top:4px;">
                       <a
-                        href={"http://localhost:5000/" + item.attachment_path}
+                        href={`${PUBLIC_VITE_API_BASE}${item.attachment_path}`}
                         target="_blank"
                         style="color:#2563eb; text-decoration: underline; font-size:12px;"
                       >
@@ -1140,39 +1162,52 @@ async function rejectCancellation(item) {
 
 {#if toast.show}
   <div class="toast-stack">
-    <div class="toast-item {toast.type} {toast.closing ? 'closing' : ''}">
+    <div
+      class="toast-item"
+      class:success={toast.type === 'success'}
+      class:error={toast.type === 'error'}
+      class:info={toast.type === 'info'}
+      class:warning={toast.type === 'warning'}
+      class:closing={toast.closing}
+    >
       <div class="toast-icon">
-      {#if toast.type === 'success'}
-        <svg viewBox="0 0 24 24" class="toast-svg">
-          <path d="M9.5 16.2L4.8 11.5l1.4-1.4 3.3 3.3 8.1-8.1 1.4 1.4z"/>
-        </svg>
-      {/if}
+        {#if toast.type === 'success'}
+          <svg viewBox="0 0 24 24" class="toast-svg">
+            <path d="M9.5 16.2L4.8 11.5l1.4-1.4 3.3 3.3 8.1-8.1 1.4 1.4z"/>
+          </svg>
+        {/if}
 
-      {#if toast.type === 'error'}
-        <svg viewBox="0 0 24 24" class="toast-svg">
-          <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm3.5 13.1-1.4 1.4L12 13.4l-2.1 2.1-1.4-1.4L10.6 12 8.5 9.9l1.4-1.4 2.1 2.1 2.1-2.1 1.4 1.4L13.4 12z"/>
-        </svg>
-      {/if}
+        {#if toast.type === 'error'}
+          <svg viewBox="0 0 24 24" class="toast-svg">
+            <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm3.5 13.1-1.4 1.4L12 13.4l-2.1 2.1-1.4-1.4L10.6 12 8.5 9.9l1.4-1.4 2.1 2.1 2.1-2.1 1.4 1.4L13.4 12z"/>
+          </svg>
+        {/if}
 
-      {#if toast.type === 'info'}
-        <svg viewBox="0 0 24 24" class="toast-svg">
-          <path d="M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2z"/>
-        </svg>
-      {/if}
+        {#if toast.type === 'info'}
+          <svg viewBox="0 0 24 24" class="toast-svg">
+            <path d="M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2z"/>
+          </svg>
+        {/if}
 
-      {#if toast.type === 'warning'}
-        <svg viewBox="0 0 24 24" class="toast-svg">
-          <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
-        </svg>
-      {/if}
-    </div>
+        {#if toast.type === 'warning'}
+          <svg viewBox="0 0 24 24" class="toast-svg">
+            <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
+          </svg>
+        {/if}
+      </div>
 
       <div class="toast-body">
         <strong>{toast.title}</strong>
         <p>{toast.message}</p>
       </div>
 
-      <button class="toast-close" on:click={() => (toast.show = false)}>×</button>
+      <button
+        class="toast-close"
+        on:click={() => (toast.show = false)}
+      >
+        ×
+      </button>
     </div>
   </div>
 {/if}
+

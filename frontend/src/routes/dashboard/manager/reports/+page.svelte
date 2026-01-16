@@ -1,5 +1,6 @@
 <script>
   import { onMount, tick } from 'svelte';
+  import { PUBLIC_VITE_API_BASE } from '$env/static/public';
   // export let data; // DIBUANG: Komponen ini akan memuatkan data sendiri.
   const leaveTypeFullName = {
     AL: "Annual / Emergency",
@@ -88,7 +89,10 @@
       loading = true;
 
       // 1) USER
-      const meRes = await fetch("/api/me", { credentials: "include" });
+      const meRes = await fetch(
+          `${PUBLIC_VITE_API_BASE}/api/me`,
+          { credentials: "include" }
+        );
       user = { ...(await meRes.json()) };
       console.log("HOSP DATA — entitlement:", user?.hosp_entitlement, "balance:", user?.hosp_balance);
       console.log("USER:", user);
@@ -238,11 +242,17 @@ $: donuts = user ? [
   }
 async function loadRecent() {
   try {
-    const meRes = await fetch("/api/me", { credentials: "include" });
+    const meRes = await fetch(
+        `${PUBLIC_VITE_API_BASE}/api/me`,
+        { credentials: "include" }
+      );
     const freshUser = await meRes.json();
     user = { ...freshUser };
 
-    const res = await fetch("/api/leave-requests", { credentials: "include" });
+    const res = await fetch(
+      `${PUBLIC_VITE_API_BASE}/api/leave-requests`,
+      { credentials: "include" }
+    );
     const all = await res.json();
 
     approvedAL = all
@@ -472,7 +482,10 @@ async function loadRecent() {
     loading = true;
     error = "";
     try {
-      const res = await fetch("/api/holidays", { credentials: "include" });
+      const res = await fetch(
+        `${PUBLIC_VITE_API_BASE}/api/holidays`,
+        { credentials: "include" }
+      );
       if (!res.ok) throw new Error("Failed to load holidays");
       const flatHolidays = await res.json(); // e.g., [{ id, date, title, description }]
 
@@ -683,9 +696,10 @@ $: {
   let blockedDates = new Set();
 
 async function loadAppliedLeave() {
-  const res = await fetch("/api/leave-requests", {
-    credentials: "include"
-  });
+  const res = await fetch(
+  `${PUBLIC_VITE_API_BASE}/api/leave-requests`,
+  { credentials: "include" }
+);
   const list = await res.json();
   const allMine = list.filter(r => r.staff_id === user.staff_id);
 
@@ -829,11 +843,14 @@ async function submitLeave(e) {
   fd.set("totalDays", String(totalDays));
 
   try {
-    const res = await fetch("/api/leave-requests", {
-      method: "POST",
-      body: fd,
-      credentials: "include"
-    });
+    const res = await fetch(
+      `${PUBLIC_VITE_API_BASE}/api/leave-requests`,
+      {
+        method: "POST",
+        body: fd,
+        credentials: "include"
+      }
+    );
 
     if (!res.ok) {
       const data = await res.json().catch(() => null);
@@ -1196,30 +1213,30 @@ async function submitLeave(e) {
   <div class="toast-stack">
     <div class="toast-item {toast.type} {toast.closing ? 'closing' : ''}">
       <div class="toast-icon">
-        {#if toast.type === 'success'}
-          <svg viewBox="0 0 24 24" class="toast-svg">
-            <path d="M9.5 16.2L4.8 11.5l1.4-1.4 3.3 3.3 8.1-8.1 1.4 1.4z"/>
-          </svg>
-        {/if}
+      {#if toast.type === 'success'}
+        <svg viewBox="0 0 24 24" class="toast-svg">
+          <path d="M9.5 16.2L4.8 11.5l1.4-1.4 3.3 3.3 8.1-8.1 1.4 1.4z"/>
+        </svg>
+      {/if}
 
-        {#if toast.type === 'error'}
-          <svg viewBox="0 0 24 24" class="toast-svg">
-            <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm3.5 13.1-1.4 1.4L12 13.4l-2.1 2.1-1.4-1.4L10.6 12 8.5 9.9l1.4-1.4 2.1 2.1 2.1-2.1 1.4 1.4L13.4 12z"/>
-          </svg>
-        {/if}
+      {#if toast.type === 'error'}
+        <svg viewBox="0 0 24 24" class="toast-svg">
+          <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm3.5 13.1-1.4 1.4L12 13.4l-2.1 2.1-1.4-1.4L10.6 12 8.5 9.9l1.4-1.4 2.1 2.1 2.1-2.1 1.4 1.4L13.4 12z"/>
+        </svg>
+      {/if}
 
-        {#if toast.type === 'info'}
-          <svg viewBox="0 0 24 24" class="toast-svg">
-            <path d="M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2z"/>
-          </svg>
-        {/if}
+      {#if toast.type === 'info'}
+        <svg viewBox="0 0 24 24" class="toast-svg">
+          <path d="M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2z"/>
+        </svg>
+      {/if}
 
-        {#if toast.type === 'warning'}
-          <svg viewBox="0 0 24 24" class="toast-svg">
-            <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
-          </svg>
-        {/if}
-      </div>
+      {#if toast.type === 'warning'}
+        <svg viewBox="0 0 24 24" class="toast-svg">
+          <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
+        </svg>
+      {/if}
+    </div>
 
       <div class="toast-body">
         <strong>{toast.title}</strong>

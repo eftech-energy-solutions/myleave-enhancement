@@ -1,5 +1,7 @@
 <script>
  import { onMount, tick } from 'svelte';
+ import { apiFetch } from '$lib/api';
+ import { PUBLIC_VITE_API_BASE } from '$env/static/public';
   // export let data; // REMOVED: Will fetch its own holidays
 
   // ===================================
@@ -59,9 +61,11 @@ function showToast(message, type = "success", title = "", duration = 3000) {
 
   onMount(async () => {
   try {
-    const res = await fetch("http://localhost:5000/api/employee/department-summary");
-      console.log("📌 HIT DEPARTMENT SUMMARY ROUTE");
 
+const res = await fetch(
+      `${PUBLIC_VITE_API_BASE}/api/employee/department-summary`,
+      { credentials: "include" }
+    );
     if (!res.ok) throw new Error("Failed to load");
 
     const json = await res.json();
@@ -170,7 +174,7 @@ const canGoNextYear = () => {
   }
 
   try {
-    const res = await fetch(`/api/holidays/${editingId}`, {
+    const res = await fetch(`${PUBLIC_VITE_API_BASE}/api/holidays/${editingId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -304,43 +308,49 @@ const canGoNextYear = () => {
    * Fetches all holidays, processes them, and rebuilds the calendar.
    */
   async function loadHolidays() {
-    loading = true;
-    error = "";
-    try {
-      // Guna { credentials: "include" } dari kod sedia ada
-      const res = await fetch("/api/holidays", { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to load holidays");
-      const flatHolidays = await res.json(); 
-      
-      // Transform flat array into the by-year object structure
-      const byYear = {};
-      for (const hol of flatHolidays) {
-        const year = hol.date.slice(0, 4);
-        if (!byYear[year]) byYear[year] = [];
-        byYear[year].push({
-            id: hol.id,
-            date: hol.date,
-            name: hol.title,
-            description: hol.description || '',
-            source: hol.source, // BARU
-            uid: hol.uid       // BARU
-        });
-      }
-      holidaysByYear = byYear;
-      
-      processHolidayData();
-      
-      if (!viewBase) {
-        viewBase = clampToWindowMonth(atStartOfDay(new Date()));
-      }
-      buildMonth(viewBase);
+  loading = true;
+  error = "";
 
-    } catch (e) {
-      error = e.message || "Error";
-    } finally {
-      loading = false;
+  try {
+    const res = await fetch(
+      `${PUBLIC_VITE_API_BASE}/api/holidays`,
+      {
+        credentials: "include"   // ✅ GET sahaja
+      }
+    );
+
+    if (!res.ok) throw new Error("Failed to load holidays");
+
+    const flatHolidays = await res.json();
+
+    const byYear = {};
+    for (const hol of flatHolidays) {
+      const year = hol.date.slice(0, 4);
+      if (!byYear[year]) byYear[year] = [];
+      byYear[year].push({
+        id: hol.id,
+        date: hol.date,
+        name: hol.title,
+        description: hol.description || '',
+        source: hol.source,
+        uid: hol.uid
+      });
     }
+
+    holidaysByYear = byYear;
+    processHolidayData();
+
+    if (!viewBase) {
+      viewBase = clampToWindowMonth(atStartOfDay(new Date()));
+    }
+    buildMonth(viewBase);
+
+  } catch (e) {
+    error = e.message || "Error loading holidays";
+  } finally {
+    loading = false;
   }
+}
 
   /**
    * Processes the `holidaysByYear` object to build fast-lookup maps.
@@ -398,16 +408,19 @@ const canGoNextYear = () => {
    */
   async function addHolidayAPI() {
   try {
-    const res = await fetch("/api/holidays", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({
-        date: addDateISO,
-        title: addName,
-        description: addDesc
-      })
-    });
+    const res = await fetch(
+      `${PUBLIC_VITE_API_BASE}/api/holidays`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          date: addDateISO,
+          title: addName,
+          description: addDesc
+        })
+      }
+    );
 
     if (!res.ok) {
       const j = await res.json().catch(() => ({}));
@@ -415,10 +428,13 @@ const canGoNextYear = () => {
     }
 
     // 🔁 Recalculate leave
-    await fetch("/api/leave-requests/recalc-invalid", {
-      method: "POST",
-      credentials: "include"
-    });
+    await fetch(
+        `${PUBLIC_VITE_API_BASE}/api/leave-requests/recalc-invalid`,
+        {
+          method: "POST",
+          credentials: "include"
+        }
+      );
 
     // ✅ TOAST SUCCESS — LETAK SINI
     showToast(
@@ -488,16 +504,19 @@ const canGoNextYear = () => {
 
   try {
     if (source === "official") {
-      const res = await fetch("/api/holidays/official/hide", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          uid,
-          date,
-          reason: "Hidden by admin"
-        })
-      });
+      const res = await fetch(
+        `${PUBLIC_VITE_API_BASE}/api/holidays/official/hide`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            uid,
+            date,
+            reason: "Hidden by admin"
+          })
+        }
+      );
 
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
@@ -512,10 +531,13 @@ const canGoNextYear = () => {
       );
 
     } else {
-      const res = await fetch(`/api/holidays/${id}`, {
-        method: "DELETE",
-        credentials: "include"
-      });
+      const res = await fetch(
+        `${PUBLIC_VITE_API_BASE}/api/holidays/${id}`,
+        {
+          method: "DELETE",
+          credentials: "include"
+        }
+      );
 
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));

@@ -1,6 +1,7 @@
 <script>
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
+  import { PUBLIC_VITE_API_BASE } from '$env/static/public';
   let selectedFile = null;
   // ---- NAV (staff role) ----
   const roleBase = '/dashboard/staff';
@@ -50,13 +51,13 @@ function showToast(message, type = "success", title = "", duration = 3000) {
 }
 
   $: headerAvatarUrl = safeUser.photoUrl
-  ? `http://localhost:5000${safeUser.photoUrl}?v=${Date.now()}`
+  ? `${PUBLIC_VITE_API_BASE}${safeUser.photoUrl}?v=${Date.now()}`
   : '/images/icontest1.png';
 
   // --- Fetch current user on mount ---
   onMount(async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/me/photo', {
+      const res = await fetch(`${PUBLIC_VITE_API_BASE}/api/me/photo`, {
         credentials: 'include'
       });
       if (res.ok) {
@@ -64,7 +65,7 @@ function showToast(message, type = "success", title = "", duration = 3000) {
         // merge backend data (photoUrl, staffId, etc.) into safeUser
         safeUser = { ...safeUser, ...data };
         profilePhotoUrl = safeUser.photoUrl 
-          ? `http://localhost:5000${safeUser.photoUrl}` 
+          ? `${PUBLIC_VITE_API_BASE}${safeUser.photoUrl}` 
           : '';
         console.log('safeUser updated on mount:', safeUser);
       }
@@ -152,7 +153,7 @@ function showToast(message, type = "success", title = "", duration = 3000) {
     let res, data;
 
     if (email) {
-      res = await fetch('http://localhost:5000/api/auth/change-password', {
+      res = await fetch(`${PUBLIC_VITE_API_BASE}/api/auth/change-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -183,8 +184,8 @@ function showToast(message, type = "success", title = "", duration = 3000) {
     }
 
     res = await fetch(
-      `http://localhost:5000/api/employee/${encodeURIComponent(safeUser.staffId)}/password`,
-      {
+  `${PUBLIC_VITE_API_BASE}/api/employee/${encodeURIComponent(safeUser.staffId)}/password`,
+  {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -235,7 +236,7 @@ else {
       const formData = new FormData();
       formData.append('photo', selectedFile);
 
-      const res = await fetch('http://localhost:5000/api/upload/profile', {
+      const res = await fetch(`${PUBLIC_VITE_API_BASE}/api/upload/profile`, {
         method: 'POST',
         body: formData,
         credentials: 'include', // important for cookie auth
@@ -251,7 +252,7 @@ else {
       safeUser.photoUrl = data.photoUrl;
 
       // 🖼️ Modal preview
-      profilePhotoUrl = `http://localhost:5000${data.photoUrl}${bust}`;
+      profilePhotoUrl = `${PUBLIC_VITE_API_BASE}${data.photoUrl}${bust}`;
 
       // 🖼️ Sidebar avatar auto update (reactive)
       // headerAvatarUrl already reactive, no need manual set
@@ -366,7 +367,7 @@ function handlePhotoFile(e) {
           {#if safeUser?.photoUrl}
             {console.log('Rendering sidebar image URL:', safeUser.photoUrl)}
             <img
-              src={`http://localhost:5000${safeUser.photoUrl}`}
+              src={`${PUBLIC_VITE_API_BASE}${safeUser.photoUrl}`}
               alt="profile"
               class="avatar-img"
               on:error={(e) => (e.currentTarget.style.display = 'none')}

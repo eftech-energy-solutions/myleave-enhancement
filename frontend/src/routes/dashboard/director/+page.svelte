@@ -4,6 +4,8 @@
   import { onMount } from 'svelte';
   import { tick } from "svelte";
   import Chart from "chart.js/auto";
+  import { apiFetch } from '$lib/api';
+  import { PUBLIC_VITE_API_BASE } from '$env/static/public';
   const BASE_ANNUAL = 14;
 
   let profileMenuOpen = false;
@@ -171,7 +173,12 @@ tooltip.style.opacity = 1;
  // ===== FETCH DEPT DATA + RENDER CHART =====
 onMount(async () => {
   try {
-    const res = await fetch("http://localhost:5000/api/employee/department-summary");
+    const res = await fetch(
+      `${PUBLIC_VITE_API_BASE}/api/employee/department-summary`,
+      {
+        credentials: "include",
+      }
+    );
     if (!res.ok) throw new Error("Failed to load");
 
     const json = await res.json();
@@ -213,7 +220,12 @@ onMount(async () => {
       });
 
 // ================= FETCH ALL STAFF (FILTER BY DEPARTMENT) =================
-const empRes = await fetch("/api/employee");
+const empRes = await fetch(
+  `${PUBLIC_VITE_API_BASE}/api/employee`,
+  {
+    credentials: "include"
+  }
+);
 const allEmployees = await empRes.json();
 
 // 🔥 FILTER: Only employees in manager's department
@@ -256,7 +268,12 @@ deptEmployees.forEach(emp => {
 });
 
 // ================= FETCH LEAVE DATA (FILTER BY DEPARTMENT) =================
-const leaveRes = await fetch("/api/leave-requests?status=approved");
+const leaveRes = await fetch(
+  `${PUBLIC_VITE_API_BASE}/api/leave-requests?status=approved`,
+  {
+    credentials: "include"
+  }
+);
 const allLeaveData = await leaveRes.json();
 
 // 🔥 FILTER: Only leaves from manager's department

@@ -1,5 +1,7 @@
 <script>
   import { onMount } from "svelte";
+  import { apiFetch } from '$lib/api';
+  import { PUBLIC_VITE_API_BASE } from '$env/static/public';
     const leaveTypeFullName = {
     AL: "Annual / Emergency",
     MC: "Medical",
@@ -202,7 +204,12 @@ $: {
   onMount(async () => {
     try {
       // SAME AS STAFF
-      const meRes = await fetch("http://localhost:5000/api/me", { credentials: "include" });
+      const meRes = await fetch(
+        `${PUBLIC_VITE_API_BASE}/api/me`,
+        {
+          credentials: "include",
+        }
+      );
       user = { ...(await meRes.json()) };
       console.log("HOSP DATA — entitlement:", user?.hosp_entitlement, "balance:", user?.hosp_balance);
       console.log("USER:", user);
@@ -215,9 +222,12 @@ $: {
 
   async function loadLeaveHistory() {
     try {
-      const res = await fetch("http://localhost:5000/api/leave-requests", {
-        credentials: "include"
-      });
+      const res = await fetch(
+        `${PUBLIC_VITE_API_BASE}/api/leave-requests`,
+        {
+          credentials: "include",
+        }
+      );
       const all = await res.json();
 
       // ⭐ Manager ONLY sees his own leave
@@ -285,13 +295,20 @@ $: filteredLeaves = leaves
   function requestCancellation(l) {
 
   // ✅ PENDING → DELETE TERUS (NO MODAL, NO REASON)
-  if (l.status === "Pending") {
-  fetch(`http://localhost:5000/api/leave-requests/${l.uuid}`, {
-    method: "DELETE",
-    credentials: "include"
-  })
-    .then(() => {
-      leaves = leaves.filter(x => String(x.uuid) !== String(l.uuid));
+if (l.status === "Pending") {
+  fetch(
+    `${PUBLIC_VITE_API_BASE}/api/leave-requests/${l.uuid}`,
+    {
+      method: "DELETE",
+      credentials: "include",
+    }
+  )
+    .then((res) => {
+      if (!res.ok) throw new Error("Delete failed");
+
+      leaves = leaves.filter(
+        x => String(x.uuid) !== String(l.uuid)
+      );
 
       // ✅ TOAST SUCCESS
       showToast("Leave application deleted successfully.", "success");
@@ -303,7 +320,6 @@ $: filteredLeaves = leaves
 
   return; // stop sini, tak buka modal
 }
-
   // ✅ APPROVED → REQUEST CANCELLATION
   leaveToCancel = l;
   cancelReason = "";
@@ -364,10 +380,13 @@ async function confirmCancellation() {
   // 1️⃣ PENDING → DELETE TERUS
   if (leaveToCancel.status === "Pending") {
     try {
-      await fetch(`http://localhost:5000/api/leave-requests/${leaveToCancel.uuid}`, {
-        method: "DELETE",
-        credentials: "include"
-      });
+      await fetch(
+        `${PUBLIC_VITE_API_BASE}/api/leave-requests/${leaveToCancel.uuid}`,
+        {
+          method: "DELETE",
+          credentials: "include",
+        }
+      );
 
       leaves = leaves.filter(l => String(l.uuid) !== String(leaveToCancel.uuid));
 
@@ -404,15 +423,18 @@ async function confirmCancellation() {
     }
 
     try {
-      await fetch(`http://localhost:5000/api/leave-requests/${leaveToCancel.uuid}`, {
-        method: "PATCH",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          status: "cancellation_pending",
-          cancellation_reason: cancelReason
-        })
-      });
+      await fetch(
+  `${PUBLIC_VITE_API_BASE}/api/leave-requests/${leaveToCancel.uuid}`,
+  {
+    method: "PATCH",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      status: "cancellation_pending",
+      cancellation_reason: cancelReason,
+    }),
+  }
+);
 
       leaves = leaves.map(l =>
         l.uuid === leaveToCancel.uuid
@@ -548,11 +570,14 @@ try {
     }
 
     // PATCH request using FormData (NO headers!)
-await fetch(`http://localhost:5000/api/leave-requests/${editingUuid}/edit`, {
-  method: "PATCH",
-  credentials: "include",
-  body: formData
-});
+await fetch(
+  `${PUBLIC_VITE_API_BASE}/api/leave-requests/${editingUuid}/edit`,
+  {
+    method: "PATCH",
+    credentials: "include",
+    body: formData, // ❗ jangan set Content-Type untuk FormData
+  }
+);
 
 showToast(
   "Your leave application has been updated successfully.",
@@ -565,8 +590,10 @@ closeEditModal();
 
 // ---- Fetch UPDATED DATA from backend ----
 const updated = await fetch(
-  `http://localhost:5000/api/leave-requests/${editingUuid}`,
-  { credentials: "include" }
+  `${PUBLIC_VITE_API_BASE}/api/leave-requests/${editingUuid}`,
+  {
+    credentials: "include",
+  }
 );
 const updatedLeave = await updated.json();
 
@@ -801,7 +828,7 @@ function onUntilChange() {
 
   {#if currentAttachment}
     <a 
-      href={"http://localhost:5000/" + currentAttachment}
+      href={`${PUBLIC_VITE_API_BASE}${currentAttachment}`}
       target="_blank"
       class="view-attachment-btn"
     >
@@ -852,10 +879,10 @@ function onUntilChange() {
         <td>{getLeaveFullName(l.type)}</td>
 
         <td>
-          <span 
-            class="badge 
-              {l.status.toLowerCase().replace(' ', '-')} 
-              {l.status === 'Approved' && l.type === 'UNPAID' ? 'unpaid-approved' : ''}"
+          <span
+            class={`badge ${l.status.toLowerCase().replace(' ', '-')} ${
+              l.status === 'Approved' && l.type === 'UNPAID' ? 'unpaid-approved' : ''
+            }`}
           >
             {l.status}
           </span>
@@ -868,11 +895,12 @@ function onUntilChange() {
 <div class="slot">
   {#if l.attachment_path && l.status !== 'Pending'}
     <button 
-      class="icon-btn file-btn {l.status === 'Cancelled' ? 'disabled-file' : ''}"
+      class="icon-btn file-btn"
+      class:disabled-file={l.status === 'Cancelled'}
       title={l.status === 'Cancelled' ? "Attachment disabled" : "View Attachment"}
       on:click={() => {
         if (l.status !== "Cancelled") {
-          window.open("http://localhost:5000/" + l.attachment_path, "_blank");
+          window.open(`${PUBLIC_VITE_API_BASE}${l.attachment_path}`, "_blank");
         }
       }}
     >
@@ -918,7 +946,14 @@ function onUntilChange() {
 
 {#if toast.show}
   <div class="toast-stack">
-    <div class="toast-item {toast.type} {toast.closing ? 'closing' : ''}">
+    <div
+        class="toast-item"
+        class:success={toast.type === 'success'}
+        class:error={toast.type === 'error'}
+        class:info={toast.type === 'info'}
+        class:warning={toast.type === 'warning'}
+        class:closing={toast.closing}
+      >
       <div class="toast-icon">
       {#if toast.type === 'success'}
         <svg viewBox="0 0 24 24" class="toast-svg">

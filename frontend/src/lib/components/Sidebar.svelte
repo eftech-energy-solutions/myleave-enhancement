@@ -1,6 +1,8 @@
 <script>
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
+  import { apiFetch } from '$lib/api';
+  import { PUBLIC_VITE_API_BASE } from '$env/static/public';
 
   // --- STATE ---
   let profileMenuOpen = false;
@@ -55,14 +57,14 @@ function showToast(message, type = "success", title = "", duration = 3000) {
     return current.startsWith(href);
   };
 
-  $: headerAvatarUrl = safeUser.photoUrl 
-  ? `http://localhost:5000${safeUser.photoUrl}?v=${Date.now()}`
+$: headerAvatarUrl = safeUser.photoUrl
+  ? `${PUBLIC_VITE_API_BASE}${safeUser.photoUrl}?v=${Date.now()}`
   : '/images/icontest1.png';
 
   // FETCH USER
  onMount(async () => {
   try {
-    const res = await fetch('http://localhost:5000/api/employee/me', {
+    const res = await fetch(`${PUBLIC_VITE_API_BASE}/api/me/photo`, {
       credentials: 'include'
     });
     if (res.ok) {
@@ -71,18 +73,20 @@ function showToast(message, type = "success", title = "", duration = 3000) {
 
       const bust = `?v=${Date.now()}`;
       safeUser.photoUrl = data.photoUrl;
+
       profilePhotoUrl = data.photoUrl.startsWith('http')
         ? `${data.photoUrl}${bust}`
-        : `http://localhost:5000${data.photoUrl}${bust}`;
+        : `${PUBLIC_VITE_API_BASE}${data.photoUrl}${bust}`;
     }
   } catch (err) {
     console.error('Error fetching user:', err);
   }
 
   try {
-    const res2 = await fetch("http://localhost:5000/api/employee/me", {
-      credentials: "include"
-    });
+    const res2 = await fetch(
+  `${PUBLIC_VITE_API_BASE}/api/employee/me`,
+  { credentials: "include" }
+);
     if (res2.ok) {
       const user = await res2.json();
       staffId = user.staffId;
@@ -110,9 +114,10 @@ function showToast(message, type = "success", title = "", duration = 3000) {
 
 async function loadPendingCount() {
   try {
-    const res = await fetch("http://localhost:5000/api/leave-requests", {
-      credentials: "include"
-    });
+    const res = await fetch(
+  `${PUBLIC_VITE_API_BASE}/api/leave-requests`,
+  { credentials: "include" }
+);
     if (!res.ok) return;
 
     const data = await res.json();
@@ -219,16 +224,20 @@ async function loadPendingCount() {
 
   try {
     for (const email of newStaffEmailList) {
-      const res = await fetch("http://localhost:5000/api/role-setting", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          email,
-          role: roleToEdit.id
-        })
-      });
+      const res = await fetch(
+  `${PUBLIC_VITE_API_BASE}/api/role-setting`,
+  {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      email,
+      role: roleToEdit.id
+    })
+  }
+);
 
       const data = await res.json();
       if (!res.ok) {
@@ -255,7 +264,10 @@ async function loadPendingCount() {
 }
   async function loadRolesFromDB() {
   try {
-    const res = await fetch("http://localhost:5000/api/role-setting");
+    const res = await fetch(
+  `${PUBLIC_VITE_API_BASE}/api/role-setting`,
+  { credentials: "include" }
+);
     const data = await res.json();
 
     if (!res.ok) {
@@ -320,11 +332,14 @@ async function saveProfile(e) {
       const formData = new FormData();
       formData.append('photo', selectedFile);
 
-      const res = await fetch('http://localhost:5000/api/upload/profile', {
+      const res = await fetch(
+      `${PUBLIC_VITE_API_BASE}/api/upload/profile`,
+      {
         method: 'POST',
-        body: formData,
-        credentials: 'include'
-      });
+        credentials: 'include',
+        body: formData
+      }
+    );
 
       const ct = res.headers.get('content-type') || '';
       const data = ct.includes('application/json') ? await res.json() : { _nonJson: true, text: await res.text() };
@@ -341,7 +356,7 @@ async function saveProfile(e) {
       safeUser.photoUrl = data.photoUrl;
       profilePhotoUrl = data.photoUrl.startsWith('http')
         ? data.photoUrl
-        : `http://localhost:5000${data.photoUrl}`;
+        : `${PUBLIC_VITE_API_BASE}${data.photoUrl}`;
 
       selectedFile = null;
 
@@ -422,12 +437,19 @@ async function saveProfile(e) {
     if (!isAdmin && email) {
       try {
         console.log('[saveProfile] using email route /api/auth/change-password', { email });
-        const res = await fetch('http://localhost:5000/api/auth/change-password', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ email, currentPassword: pwdCurrent, newPassword: pwd1 })
-        });
+        const res = await fetch(
+          `${PUBLIC_VITE_API_BASE}/api/auth/change-password`,
+          {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email,
+              currentPassword: pwdCurrent,
+              newPassword: pwd1
+            })
+          }
+        );
 
         const data = await parseSmartRes(res);
         console.log('[saveProfile][email-route] status=', res.status, 'data=', data);
@@ -477,12 +499,19 @@ async function saveProfile(e) {
 
     try {
       console.log('[saveProfile] using staffId fallback route', { staffId: staffIdVal });
-      const res2 = await fetch(`http://localhost:5000/api/employee/${encodeURIComponent(staffIdVal)}/password`, {
+      const res2 = await fetch(
+      `${PUBLIC_VITE_API_BASE}/api/employee/${encodeURIComponent(staffIdVal)}/password`,
+      {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ currentPassword: pwdCurrent, newPassword: pwd1 })
-      });
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentPassword: pwdCurrent,
+          newPassword: pwd1
+        })
+      }
+    );
+
 
       const data2 = await parseSmartRes(res2);
       console.log('[saveProfile][staff-route] status=', res2.status, 'data=', data2);
@@ -611,14 +640,18 @@ async function saveProfile(e) {
   <div class="right">
     <header class="topbar">
       <div class="title-wrap">
-        <div class="hello">Welcome back, {safeUser.name}!</div>
+        <div class="hello">Welcome back, {safeUser?.name}!</div>
         <h1 class="page-title">{pageTitle}</h1>
       </div>
 
       <div class="profile" use:clickOutside>
         <div class="profile-info">
           {#if safeUser.photoUrl}
-            <img src={`http://localhost:5000${safeUser.photoUrl}`} class="avatar-img" alt="profile" />
+            <img
+              src={`${PUBLIC_VITE_API_BASE}${safeUser.photoUrl}`}
+              class="avatar-img"
+              alt="profile"
+            />
           {:else}
             <div class="avatar-fallback">
               <svg width="26" height="26" viewBox="0 0 24 24" fill="#9ca3af">

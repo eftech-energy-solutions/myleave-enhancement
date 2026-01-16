@@ -1,5 +1,6 @@
 <script>
   import { onMount } from "svelte";
+  import { PUBLIC_VITE_API_BASE } from '$env/static/public';
 
   const leaveTypeFullName = {
     AL: "Annual / Emergency",
@@ -175,9 +176,10 @@ const leaveCodes = {
   onMount(async () => {
     try {
       // ✅ FIX 1 — Correct URL + credentials included
-      const meRes = await fetch("/api/employee/me", {
-        credentials: "include"
-      });
+      const meRes = await fetch(
+  `${PUBLIC_VITE_API_BASE}/api/employee/me`,
+  { credentials: "include" }
+);
       me = await meRes.json();
 
       // If failed to get user, do not continue
@@ -187,9 +189,10 @@ const leaveCodes = {
       }
 
       // ✅ FIX 2 — credentials required here too
-      const res = await fetch("/api/leave-requests", {
-        credentials: "include"
-      });
+      const res = await fetch(
+  `${PUBLIC_VITE_API_BASE}/api/leave-requests`,
+  { credentials: "include" }
+);
       const data = await res.json();
 
       // Filter leaves for this logged-in staff only
@@ -295,16 +298,38 @@ $: if (leaveType && dateFrom) {
 function autoCalc(type, from, until, duration) {
   if (!from) return 0;
 
+  // Half day
   if (duration === "Half") return 0.5;
 
+  // Fixed-duration leave (MAT, PAT, etc.)
   if (fixedDurations[type]) return fixedDurations[type];
 
-  const d1 = new Date(from);
-  const d2 = new Date(until || from);
-  const diff = (d2 - d1) / (1000 * 60 * 60 * 24) + 1;
+  const start = new Date(from);
+  const end = new Date(until || from);
 
-  return diff > 0 ? diff : 1;
+  let days = 0;
+  
+  function isHoliday(_) {
+    return false; // backend already validates
+  }
+
+  function isWeekend(date) {
+    const d = date.getDay();
+    return d === 0 || d === 6; // Sun or Sat
+  }
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    // ❌ Skip weekend
+    if (isWeekend(d)) continue;
+
+    // ❌ Skip public holiday
+    if (isHoliday(d)) continue;
+
+    days++;
+  }
+
+  return days;
 }
+
 function handleEdit(l) {
   if (l.status !== "Pending") return;
 
@@ -354,15 +379,19 @@ async function refreshDashboard() {
   sessionStorage.setItem("forceDashboardRefresh", "true");
 
   // 1) Reload leaves
-  const res = await fetch("/api/leave-requests", {
-    credentials: "include"
-  });
+  const res = await fetch(
+  `${PUBLIC_VITE_API_BASE}/api/leave-requests`,
+  { credentials: "include" }
+);
   const data = await res.json();
 
   leaves = data.filter(l => l.staff_id === me.staffId);
 
   // 2) 🔥 RELOAD USER PROFILE (IMPORTANT)
-  const meRes2 = await fetch("/api/employee/me", { credentials: "include" });
+  const meRes2 = await fetch(
+  `${PUBLIC_VITE_API_BASE}/api/employee/me`,
+  { credentials: "include" }
+);
   user = await meRes2.json();
 
 
@@ -379,10 +408,13 @@ async function confirmCancellation() {
   // 1️⃣ PENDING → DELETE
   if (status === "Pending") {
     try {
-      await fetch(`/api/leave-requests/${id}`, {
-        method: "DELETE",
-        credentials: "include"
-      });
+      await fetch(
+  `${PUBLIC_VITE_API_BASE}/api/leave-requests/${encodeURIComponent(id)}`,
+  {
+    method: "DELETE",
+    credentials: "include"
+  }
+);
 
       leaves = leaves.filter(l => String(l.uuid) !== String(id));
 
@@ -418,15 +450,18 @@ async function confirmCancellation() {
     }
 
     try {
-      await fetch(`/api/leave-requests/${id}`, {
-        method: "PATCH",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          status: "cancellation_pending",
-          cancellation_reason: cancelReason
-        })
-      });
+      await fetch(
+  `${PUBLIC_VITE_API_BASE}/api/leave-requests/${encodeURIComponent(id)}`,
+  {
+    method: "PATCH",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      status: "cancellation_pending",
+      cancellation_reason: cancelReason
+    })
+  }
+);
 
       showToast(
         "Cancellation request has been submitted successfully.",
@@ -469,80 +504,109 @@ async function submitLeave(event) {
   };
 
   try {
+    // ===============================
+    // 1️⃣ LEAVE LIMIT VALIDATION
+    // ===============================
+    const limitMap = {
+      AL: 14,
+      MC: 14,
+      HOSP: 60,
+      MAT: 98,
+      PAT: 7,
+      COMP_A: 3,
+      COMP_B: 1,
+      MAR: 3
+    };
 
-const limitMap = {
-  AL: 14,
-  MC: 14,
-  HOSP: 60,
-  MAT: 98,
-  PAT: 7,
-  COMP_A: 3,
-  COMP_B: 1,
-  MAR: 3
-};
+    const limit = limitMap[leaveType];
 
-const limit = limitMap[leaveType];
+    const used = leaves
+      .filter(l => l.type === leaveType)
+      .filter(
+        l =>
+          l.status === "Approved" ||
+          l.status === "Pending" ||
+          l.status === "Cancellation Pending"
+      )
+      .filter(l => l.uuid !== editingUuid)
+      .reduce((s, l) => s + Number(l.totalDays), 0);
 
-// count ALL used days (except the leave being edited)
-let used = leaves
-  .filter(l => l.type === leaveType)
-  .filter(l => l.status === "Approved" || l.status === "Pending" || l.status === "Cancellation Pending")
-  .filter(l => l.uuid !== editingUuid)   // exclude the one we are editing
-  .reduce((s, l) => s + Number(l.totalDays), 0);
+    if (used + totalDays > limit) {
+      showToast(
+        `Entitlement: ${limit} days\nRequested: ${totalDays} days`,
+        "warning",
+        "Leave Limit Exceeded",
+        5000
+      );
+      return;
+    }
 
-// check if new total exceeds limit
-if (used + totalDays > limit) {
-  showToast(
-  `Entitlement: ${entitlement} days\nRequested: ${totalDays} days`,
-  "warning",
-  "Annual Leave Limit Exceeded",
-  5000
-);
-return;
-}
+    // ===============================
+    // 2️⃣ EDIT EXISTING LEAVE
+    // ===============================
+    if (isEdit && editingUuid) {
+      const formData = new FormData();
+      formData.append("leave_type", leaveType);
+      formData.append("duration", duration);
+      formData.append("date_from", dateFrom);
+      formData.append("date_until", payload.date_until);
+      formData.append("total_days", totalDays);
+      formData.append("reason", reason);
+      formData.append("request_type", "update");
 
-if (isEdit && editingUuid) {
-  const formData = new FormData();
-  formData.append("leave_type", leaveType);
-  formData.append("duration", duration);
-  formData.append("date_from", dateFrom);
-  formData.append("date_until", payload.date_until);
-  formData.append("total_days", totalDays);
-  formData.append("reason", reason);
-  formData.append("request_type", "update");
+      if (attachmentFiles?.length > 0) {
+        formData.append("attachment", attachmentFiles[0]);
+      }
 
-  if (attachmentFiles && attachmentFiles.length > 0) {
-    formData.append("attachment", attachmentFiles[0]);
-  }
+      await fetch(
+        `${PUBLIC_VITE_API_BASE}/api/leave-requests/${encodeURIComponent(editingUuid)}/edit`,
+        {
+          method: "PATCH",
+          credentials: "include",
+          body: formData, 
+        }
+      );
 
-  await fetch(`http://localhost:5000/api/leave-requests/${editingUuid}/edit`, {
-    method: "PATCH",
-    credentials: "include",
-    body: formData
-  });
-  showToast(
-  "Your leave application has been updated successfully.",
-  "success",
-  "Edit Successful"
-);
-  await loadLeaveHistory();
-  closeEditModal();
-  return;
-}
-    // ---- NEW APPLICATION (OPTIONAL) ----
-    else {
-      await fetch(`/api/leave-requests`, {
+      showToast(
+        "Your leave application has been updated successfully.",
+        "success",
+        "Edit Successful"
+      );
+
+      await loadLeaveHistory();
+      closeEditModal();
+      return;
+    }
+
+    // ===============================
+    // 3️⃣ NEW LEAVE APPLICATION
+    // ===============================
+    await fetch(
+      `${PUBLIC_VITE_API_BASE}/api/leave-requests`,
+      {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
-      });
-    }
+      }
+    );
 
+    showToast(
+      "Your leave application has been submitted successfully.",
+      "success",
+      "Submitted"
+    );
+
+    await loadLeaveHistory();
     closeEditModal();
 
   } catch (err) {
-    console.error("Error updating:", err);
+    console.error("❌ Error submitting leave:", err);
+    showToast(
+      "Failed to submit leave application.",
+      "error",
+      "Submission Error"
+    );
   }
 }
 
@@ -550,7 +614,10 @@ async function loadLeaveHistory() {
   try {
     if (!me || !me.staffId) return;
 
-    const res = await fetch("/api/leave-requests", { credentials: "include" });
+    const res = await fetch(
+  `${PUBLIC_VITE_API_BASE}/api/leave-requests`,
+  { credentials: "include" }
+);
     const all = await res.json();  // ONLY ONE json() HERE
 
     leaves = all
@@ -803,7 +870,7 @@ function onUntilChange() {
 
   {#if currentAttachment}
     <a 
-      href={"http://localhost:5000/" + currentAttachment}
+      href={`${PUBLIC_VITE_API_BASE}${currentAttachment}`}
       target="_blank"
       class="view-attachment-btn"
     >
@@ -854,12 +921,12 @@ function onUntilChange() {
         <td>{getLeaveFullName(l.type)}</td>
         <td>
           <span 
-            class="badge 
-              {l.status.toLowerCase().replace(' ', '-')} 
-              {l.status === 'Approved' && l.type === 'UNPAID' ? 'unpaid-approved' : ''}"
-          >
-            {l.status}
-          </span>
+          class="badge 
+            {l.status.toLowerCase().replace(' ', '-')} 
+            {l.status === 'Approved' && l.type === 'UNPAID' ? 'unpaid-approved' : ''}"
+        >
+          {l.status}
+        </span>
         </td>
 
         <td class="center">
@@ -873,7 +940,7 @@ function onUntilChange() {
       title={l.status === 'Cancelled' ? "Attachment disabled" : "View Attachment"}
       on:click={() => {
         if (l.status !== "Cancelled") {
-          window.open("http://localhost:5000/" + l.attachment_path, "_blank");
+          window.open(`${PUBLIC_VITE_API_BASE}${l.attachment_path}`, "_blank");
         }
       }}
     >
