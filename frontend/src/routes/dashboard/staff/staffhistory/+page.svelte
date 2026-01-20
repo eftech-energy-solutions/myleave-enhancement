@@ -251,7 +251,7 @@ const leaveCodes = {
 
   // ✅ PENDING → DELETE TERUS (NO MODAL, NO REASON)
   if (l.status === "Pending") {
-  fetch(`/api/leave-requests/${l.uuid}`, {
+  fetch(`${PUBLIC_VITE_API_BASE}/api/leave-requests/${l.uuid}`, {
     method: "DELETE",
     credentials: "include"
   })

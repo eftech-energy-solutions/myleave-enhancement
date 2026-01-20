@@ -888,6 +888,7 @@ async function submitLeave(e) {
   );
     window.dispatchEvent(new Event("pending-updated"));
 
+    await loadRecent();  
     await loadAppliedLeave();
     buildMonth(viewBase);
     modal?.close(); 
@@ -945,7 +946,7 @@ async function submitLeave(e) {
           style="--size:110px; --spent:{pct(d.spent,d.total)}; --spent-color: var(--spentRed); --rest-color: var(--restBlue);"
         ></div>
         <div class="legend-row">
-          <div class="legend-item"><span class="chip spent"></span><span>Allocated Leave</span></div>
+          <div class="legend-item"><span class="chip spent"></span><span>Spent Leave</span></div>
           <div class="legend-item"><span class="chip unspent"></span><span>Balance Leave</span></div>
         </div>
         <div class="total-line bold">

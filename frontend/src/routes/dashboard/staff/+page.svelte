@@ -832,7 +832,7 @@ return;
     "Your leave application has been successfully submitted!",
     "success"
   );
-
+    await loadRecent();  
     await loadAppliedLeave();
     buildMonth(viewBase);
 
@@ -1028,7 +1028,7 @@ async function loadApprovedUsedDays() {
           style="--size:110px; --spent:{pct(d.spent,d.total)}; --spent-color: var(--spentRed); --rest-color: var(--restBlue);"
         ></div>
         <div class="legend-row">
-          <div class="legend-item"><span class="chip spent"></span><span>Allocated Leave</span></div>
+          <div class="legend-item"><span class="chip spent"></span><span>Spent Leave</span></div>
           <div class="legend-item"><span class="chip unspent"></span><span>Balance Leave</span></div>
         </div>
         <div class="total-line bold">
@@ -1207,7 +1207,7 @@ async function loadApprovedUsedDays() {
         {/if}
       </div>
       <div class="recent-footer">
-  <a class="view-more" href="/dashboard/manager/myhistory">View more →</a>
+  <a class="view-more" href="/dashboard/staff/staffhistory">View more →</a>
 </div>
     </div>
   </div>
