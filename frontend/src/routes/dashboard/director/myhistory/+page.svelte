@@ -49,10 +49,10 @@
   let showEditModal = false;
   let editingLeave = null;
   let originalLeaveType = null;
+  let currentAttachment = null;
 
   let showConfirmationModal = false;
   let leaveToCancel = null;
-  let currentAttachment = null;
   let newAttachmentName = "";
 
   // ===== Edit Modal State (same as staff) =====
@@ -341,8 +341,7 @@ if (l.status === "Pending") {
   duration = l.totalDays === 0.5 ? "Half" : l.duration || "Full";
   dateFrom = l.dateFrom.slice(0,10);
   dateUntil = l.dateTo.slice(0,10);
-  currentAttachment = l.attachment_path || null;
-
+  totalDays = l.totalDays;
   // Auto-set fixed leave types
   if (fixedDurations[leaveType]) {
     const days = fixedDurations[leaveType];
@@ -356,9 +355,7 @@ if (l.status === "Pending") {
   currentAttachment = l.attachment_path || null;
   newAttachmentName = "";
 
-
   if (modal) modal.showModal();
-
 }
 
 function preventTypeChange() {
@@ -827,14 +824,15 @@ function onUntilChange() {
   />
 
   {#if currentAttachment}
-    <a 
-      href={`${PUBLIC_VITE_API_BASE}${currentAttachment}`}
-      target="_blank"
-      class="view-attachment-btn"
-    >
-      View existing attachment
-    </a>
-  {/if}
+  <a 
+    href={`${PUBLIC_VITE_API_BASE}${currentAttachment?.startsWith('/') ? '' : '/'}${currentAttachment}`}
+    target="_blank"
+    rel="noopener noreferrer"
+    class="view-attachment-btn"
+  >
+    View existing attachment
+  </a>
+{/if}
 
   {#if newAttachmentName}
     <div class="new-file-label">
@@ -894,24 +892,22 @@ function onUntilChange() {
    <!-- SLOT: FILE ICON -->
 <div class="slot">
   {#if l.attachment_path && l.status !== 'Pending'}
-    <button 
-      class="icon-btn file-btn"
-      class:disabled-file={l.status === 'Cancelled'}
-      title={l.status === 'Cancelled' ? "Attachment disabled" : "View Attachment"}
-      on:click={() => {
-        if (l.status !== "Cancelled") {
-          window.open(`${PUBLIC_VITE_API_BASE}${l.attachment_path}`, "_blank");
-        }
-      }}
-    >
-      <svg viewBox="0 0 24 24">
-        <path 
-          fill="currentColor"
-          d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zM14 8V3.5L19.5 9H15a1 1 0 0 1-1-1z"
-        />
-      </svg>
-    </button>
-  {/if}
+  <a
+  href={`${PUBLIC_VITE_API_BASE}${l.attachment_path?.startsWith('/') ? '' : '/'}${l.attachment_path}`}
+  target="_blank"
+  rel="noopener noreferrer"
+  class="icon-btn file-btn {l.status === 'Cancelled' ? 'disabled-file' : ''}"
+  title={l.status === 'Cancelled' ? 'Attachment disabled' : 'View Attachment'}
+>
+    <svg viewBox="0 0 26 26">
+      <path 
+        fill="currentColor"
+        d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zM14 8V3.5L19.5 9H15a1 1 0 0 1-1-1z"
+      />
+    </svg>
+  </a>
+{/if}
+
 </div>
 
 

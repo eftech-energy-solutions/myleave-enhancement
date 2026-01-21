@@ -890,8 +890,9 @@ async function rejectCancellation(item) {
                   {#if item.attachment_path}
                     <div style="margin-top:4px;">
                       <a
-                        href={`${PUBLIC_VITE_API_BASE}${item.attachment_path}`}
+                        href={`${PUBLIC_VITE_API_BASE}${item.attachment_path?.startsWith('/') ? '' : '/'}${item.attachment_path}`}
                         target="_blank"
+                        style="color:#2563eb; text-decoration: underline; font-size:12px;"
                       >
                         View Attachment
                       </a>
@@ -982,7 +983,7 @@ async function rejectCancellation(item) {
                   {#if item.attachment_path}
                     <div style="margin-top:4px;">
                       <a
-                        href={`${PUBLIC_VITE_API_BASE}${item.attachment_path}`}
+                        href={`${PUBLIC_VITE_API_BASE}${item.attachment_path?.startsWith('/') ? '' : '/'}${item.attachment_path}`}
                         target="_blank"
                         style="color:#2563eb; text-decoration: underline; font-size:12px;"
                       >

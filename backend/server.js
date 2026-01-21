@@ -21,6 +21,28 @@ dotenv.config();
 
 const app = express();
 
+app.use('/uploads', express.static('uploads', {
+  setHeaders: (res, filePath) => {
+    const ext = path.extname(filePath).toLowerCase();
+    
+    if (ext === '.pdf') {
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'inline');
+    } else if (ext === '.jpg' || ext === '.jpeg') {
+      res.setHeader('Content-Type', 'image/jpeg');
+      res.setHeader('Content-Disposition', 'inline');
+    } else if (ext === '.png') {
+      res.setHeader('Content-Type', 'image/png');
+      res.setHeader('Content-Disposition', 'inline');
+    } else if (ext === '.gif') {
+      res.setHeader('Content-Type', 'image/gif');
+      res.setHeader('Content-Disposition', 'inline');
+    } else if (ext === '.txt') {
+      res.setHeader('Content-Type', 'text/plain');
+      res.setHeader('Content-Disposition', 'inline');
+    }
+  }
+}));
 // ============================
 // Middleware
 // ============================
@@ -30,7 +52,6 @@ const allowedOrigins = [
   "https://localhost:5173",
   // "https://ees.edsdata.com.my"
 ];
-
 app.use(cors({
   origin: function (origin, callback) {
     if (!origin) return callback(null, true); // Postman / server-side
@@ -49,43 +70,44 @@ app.use(cookieParser());
 app.use(autoLogMiddleware);
 app.use(adminLogsRoutes);
 
-// static uploads folder
-app.use('/uploads', express.static('uploads'));
+// ============================
+// USER MIDDLEWARE
+// ============================
 app.use(async (req, res, next) => {
   try {
     const token = req.cookies["auth_token"];
     if (!token) return next();
 
-    const basic = JSON.parse(token); // { staffId, name, role, ... maybe }
+    const basic = JSON.parse(token);
     if (!basic?.staffId) return next();
 
     const { rows } = await pool.query(
       `SELECT staff_id, full_name, email, role, department, position
-         FROM profiles
-        WHERE staff_id = $1
-        LIMIT 1`,
+       FROM profiles
+       WHERE staff_id = $1
+       LIMIT 1`,
       [basic.staffId]
     );
 
     if (rows[0]) {
-      // console.log("ATTACH USER:", rows[0]);
-      req.user = rows[0]; // 🎯 ini yang POST /leave-requests guna
+      req.user = rows[0];
     }
     return next();
   } catch (err) {
     console.error("attachUser error:", err);
-    return next(); // jangan block request, cuma tak ada req.user
+    return next();
   }
 });
+
+// ============================
+// ROUTES
+// ============================
 app.use('/api/employee', profileRoutes);
 app.use('/api/upload', uploadRoute);
 app.use('/api/holidays', holidayRoutes);
 app.use('/api/auth', authRoutes);
-app.use('/uploads', express.static('uploads'));
 app.use("/api", roleSettingRoute);
 app.use("/api/leave-requests", leaveRequestsRoutes);
-app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
-app.use('/uploads', express.static('uploads'));
 
 
 // ============================

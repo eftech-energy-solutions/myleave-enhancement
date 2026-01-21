@@ -53,6 +53,7 @@
   let showConfirmationModal = false;
   let leaveToCancel = null;
   let currentAttachment = null;
+  let item = null;
   let newAttachmentName = "";
 
   // ===== Edit Modal State (same as staff) =====
@@ -129,12 +130,48 @@ const localISO = (d) => {
   return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}-${String(x.getDate()).padStart(2,"0")}`;
 };
 
-const diffDays = (from, until) => {
+// const diffDays = (from, until) => {
+//   if (!from) return 0;
+//   const a = atStartOfDay(from);
+//   const b = atStartOfDay(until || from);
+//   return Math.max(1, Math.floor((b - a) / 86400000) + 1);
+// };
+
+function autoCalc(type, from, until, duration) {
   if (!from) return 0;
-  const a = atStartOfDay(from);
-  const b = atStartOfDay(until || from);
-  return Math.max(1, Math.floor((b - a) / 86400000) + 1);
-};
+
+  // Half day
+  if (duration === "Half") return 0.5;
+
+  // Fixed-duration leave (MAT, PAT, etc.)
+  if (fixedDurations[type]) return fixedDurations[type];
+
+  const start = new Date(from);
+  const end = new Date(until || from);
+
+  let days = 0;
+  
+  function isHoliday(_) {
+    return false; // backend already validates
+  }
+
+  function isWeekend(date) {
+    const d = date.getDay();
+    return d === 0 || d === 6; // Sun or Sat
+  }
+  
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    // ❌ Skip weekend
+    if (isWeekend(d)) continue;
+
+    // ❌ Skip public holiday
+    if (isHoliday(d)) continue;
+
+    days++;
+  }
+
+  return days;
+}
 
 const addDaysISO = (iso, days) => {
   const d = parseLocalISO(iso);
@@ -143,22 +180,16 @@ const addDaysISO = (iso, days) => {
 };
 
 // ===== Auto-calc totalDays (same as dashboard) =====
-$: {
-  
-  if (!dateFrom) {
-    totalDays = 0;
+$: if (leaveType && dateFrom) {
+  if (fixedDurations[leaveType]) {
+    const days = fixedDurations[leaveType];
+    const start = new Date(dateFrom);
+    const end = new Date(start);
+    end.setDate(start.getDate() + (days - 1));
+    dateUntil = end.toISOString().slice(0, 10);
   }
-  else if (duration === "Half") {
-    totalDays = 0.5;
-    dateUntil = dateFrom;
-  }
-  else if (fixedDurations[leaveType]) {
-    totalDays = fixedDurations[leaveType];
-    dateUntil = addDaysISO(dateFrom, totalDays);
-  }
-  else {
-    totalDays = diffDays(parseLocalISO(dateFrom), parseLocalISO(dateUntil || dateFrom));
-  }
+
+  totalDays = autoCalc(leaveType, dateFrom, dateUntil, duration);
 }
 
   const statuses = ["All", "Approved", "Pending", "Rejected", "Cancellation Pending"];
@@ -323,12 +354,12 @@ $: filteredLeaves = leaves
   showConfirmationModal = true;
 }
 
-  function closeConfirmationModal() {
+function closeConfirmationModal() {
     leaveToCancel = null;
     showConfirmationModal = false;
   }
-  
-  function handleEdit(l) {
+
+function handleEdit(l) {
   if (l.status !== "Pending") return;
 
   isEdit = true;
@@ -338,8 +369,7 @@ $: filteredLeaves = leaves
   duration = l.totalDays === 0.5 ? "Half" : l.duration || "Full";
   dateFrom = l.dateFrom.slice(0,10);
   dateUntil = l.dateTo.slice(0,10);
-  currentAttachment = l.attachment_path || null;
-
+  totalDays = l.totalDays;
   // Auto-set fixed leave types
   if (fixedDurations[leaveType]) {
     const days = fixedDurations[leaveType];
@@ -353,9 +383,7 @@ $: filteredLeaves = leaves
   currentAttachment = l.attachment_path || null;
   newAttachmentName = "";
 
-
   if (modal) modal.showModal();
-
 }
 
 function preventTypeChange() {
@@ -632,16 +660,23 @@ function onFromChange() {
 
   if (duration === "Half") {
     dateUntil = dateFrom;
-    return;
+  } 
+  // Fixed duration → auto compute end date
+  else if (fixedDurations[leaveType]) {
+    const days = fixedDurations[leaveType];
+    const start = new Date(dateFrom);
+    const end = new Date(start);
+    end.setDate(start.getDate() + (days - 1));
+    dateUntil = end.toISOString().slice(0, 10);
   }
 
-  if (fixedDurations[leaveType]) {
-    dateUntil = addDaysISO(dateFrom, fixedDurations[leaveType]);
-  }
+  // Auto-calc total
+  totalDays = autoCalc(leaveType, dateFrom, dateUntil, duration);
 }
 
 function onUntilChange() {
   if (duration === "Half") return;
+  totalDays = autoCalc(leaveType, dateFrom, dateUntil, duration);
 }
 </script>
 
@@ -824,14 +859,15 @@ function onUntilChange() {
   />
 
   {#if currentAttachment}
-    <a 
-      href={`${PUBLIC_VITE_API_BASE}${currentAttachment}`}
-      target="_blank"
-      class="view-attachment-btn"
-    >
-      View existing attachment
-    </a>
-  {/if}
+  <a 
+    href={`${PUBLIC_VITE_API_BASE}${currentAttachment?.startsWith('/') ? '' : '/'}${currentAttachment}`}
+    target="_blank"
+    rel="noopener noreferrer"
+    class="view-attachment-btn"
+  >
+    View existing attachment
+  </a>
+{/if}
 
   {#if newAttachmentName}
     <div class="new-file-label">
@@ -891,23 +927,22 @@ function onUntilChange() {
    <!-- SLOT: FILE ICON -->
 <div class="slot">
   {#if l.attachment_path && l.status !== 'Pending'}
-    <button 
-      class="icon-btn file-btn {l.status === 'Cancelled' ? 'disabled-file' : ''}"
-      title={l.status === 'Cancelled' ? "Attachment disabled" : "View Attachment"}
-      on:click={() => {
-        if (l.status !== "Cancelled") {
-          window.open(`${PUBLIC_VITE_API_BASE}${l.attachment_path}`, "_blank");
-        }
-      }}
-    >
-      <svg viewBox="0 0 24 24">
-        <path 
-          fill="currentColor"
-          d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zM14 8V3.5L19.5 9H15a1 1 0 0 1-1-1z"
-        />
-      </svg>
-    </button>
-  {/if}
+  <a
+  href={`${PUBLIC_VITE_API_BASE}${l.attachment_path?.startsWith('/') ? '' : '/'}${l.attachment_path}`}
+  target="_blank"
+  rel="noopener noreferrer"
+  class="icon-btn file-btn {l.status === 'Cancelled' ? 'disabled-file' : ''}"
+  title={l.status === 'Cancelled' ? 'Attachment disabled' : 'View Attachment'}
+>
+    <svg viewBox="0 0 26 26">
+      <path 
+        fill="currentColor"
+        d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zM14 8V3.5L19.5 9H15a1 1 0 0 1-1-1z"
+      />
+    </svg>
+  </a>
+{/if}
+
 </div>
 
 

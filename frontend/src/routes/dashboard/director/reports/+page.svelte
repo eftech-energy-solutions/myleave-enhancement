@@ -1273,12 +1273,36 @@ async function submitLeave(e) {
   .card{ border:1px solid var(--ring); border-radius:12px; padding:8px; background:#fff; box-shadow:var(--shadow); overflow: visible; }
   .text-red-600 { color: #dc2626; }
 
-  .donut.fancy{
-    height: var(--size, 110px); width: var(--size, 110px);
-    border-radius:9999px; margin:6px auto 8px;
-    background: conic-gradient(var(--spent-color, #ef4444) calc(var(--spent) * 1%), var(--rest-color, #3b82f6) 0);
-    display:grid; place-items:center; box-shadow:var(--shadow);
-  }
+  @property --animated-spent {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
+  @property --animated-spent {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
+
+  .donut.fancy {
+  --animated-spent: 0;
+  animation: donutFill 0.9s ease-out forwards;
+
+  height: var(--size, 110px);
+  width: var(--size, 110px);
+  border-radius: 9999px;
+  margin: 6px auto 8px;
+  display: grid;
+  place-items: center;
+  box-shadow: var(--shadow);
+
+  /* ✅ GUNA animated-spent */
+  background: conic-gradient(
+    var(--spent-color, #ef4444) calc(var(--animated-spent) * 1%),
+    var(--rest-color, #3b82f6) 0
+  );
+}
+
   .donut.fancy::after{
     content:""; height:66%; width:66%; background:#fff; border-radius:9999px; box-shadow:inset 0 0 0 1px var(--ring);
   }
@@ -1615,6 +1639,17 @@ max-width: 150px;         /* optional — so it wraps instead of going super lon
     cursor:pointer; 
     padding: 4px;
   }
+
+/* keyframes */
+@keyframes donutFill {
+  from {
+    --animated-spent: 0;
+  }
+  to {
+    --animated-spent: var(--spent);
+  }
+}
+
  /* =========================
    TOAST NOTIFICATION
 ========================= */
