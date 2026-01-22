@@ -48,6 +48,11 @@ function getLeaveShortName(code) {
       destroy: () => document.removeEventListener("click", onClick)
     };
   }
+function getAttachmentUrl(path) {
+  if (!path) return "";
+  if (path.startsWith("http")) return path;
+  return `${PUBLIC_VITE_API_BASE}${path}`;
+}
 
   function handleKey(e) {
     if (e.key === "Escape") {
@@ -1272,12 +1277,15 @@ async function rejectCancellation(item) {
 
                   {#if item.attachment_path}
                     <div style="margin-top:4px;">
-                      <a
-                          href={`${PUBLIC_VITE_API_BASE}${item.attachment_path}`}
-                          target="_blank"
-                        >
-                        View Attachment
-                      </a>
+                     <a
+                  href={`${PUBLIC_VITE_API_BASE}${item.attachment_path?.startsWith('/') ? '' : '/'}${item.attachment_path}`}
+                  target="_blank"
+                  rel="noopener"
+                  style="color:#2563eb; text-decoration: underline; font-size:12px;"
+                >
+                  View Attachment
+                </a>
+
                     </div>
                   {:else}
                     <div style="margin-top:4px; color:#64748b; font-size:12px;">No attachment</div>
@@ -1364,7 +1372,7 @@ async function rejectCancellation(item) {
                   {#if item.attachment_path}
                     <div style="margin-top:4px;">
                         <a
-                          href={`${PUBLIC_VITE_API_BASE}${item.attachment_path}`}
+                          href={`${PUBLIC_VITE_API_BASE}${item.attachment_path?.startsWith('/') ? '' : '/'}${item.attachment_path}`}
                           target="_blank"
                         >
                         View Attachment

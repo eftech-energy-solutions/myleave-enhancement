@@ -872,7 +872,7 @@ const canGoNextYear = () => {
   .calendar-wide .days button{ padding: 14px;      /* ✅ kecilkan kotak tarikh */
   height: 45px; /* ✅ kawal tinggi */
   width: 52px;   
-  font-size: 10px;  }
+  font-size: 13px;  }
 
   .calendar .month{ display:flex; align-items:center; justify-content:space-between; font-weight:700; margin-bottom:6px; gap:6px; }
   

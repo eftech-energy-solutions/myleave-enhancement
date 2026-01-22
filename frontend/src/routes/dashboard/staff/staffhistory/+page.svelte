@@ -50,6 +50,7 @@
   let leaveToCancel = null;
   let me = null;
   let currentAttachment = null;
+  let item = null;
   let newAttachmentName = "";
 
   // ---------- Form State (Unified Same As Leave Application Form) ----------
@@ -251,7 +252,7 @@ const leaveCodes = {
 
   // ✅ PENDING → DELETE TERUS (NO MODAL, NO REASON)
   if (l.status === "Pending") {
-  fetch(`/api/leave-requests/${l.uuid}`, {
+  fetch(`${PUBLIC_VITE_API_BASE}/api/leave-requests/${l.uuid}`, {
     method: "DELETE",
     credentials: "include"
   })
@@ -869,14 +870,15 @@ function onUntilChange() {
   />
 
   {#if currentAttachment}
-    <a 
-      href={`${PUBLIC_VITE_API_BASE}${currentAttachment}`}
-      target="_blank"
-      class="view-attachment-btn"
-    >
-      View existing attachment
-    </a>
-  {/if}
+  <a 
+    href={`${PUBLIC_VITE_API_BASE}${currentAttachment?.startsWith('/') ? '' : '/'}${currentAttachment}`}
+    target="_blank"
+    rel="noopener noreferrer"
+    class="view-attachment-btn" 
+  >
+    View existing attachment
+  </a>
+{/if}
 
   {#if newAttachmentName}
     <div class="new-file-label">
@@ -935,23 +937,22 @@ function onUntilChange() {
     <!-- SLOT: FILE ICON -->
 <div class="slot">
   {#if l.attachment_path && l.status !== 'Pending'}
-    <button 
-      class="icon-btn file-btn {l.status === 'Cancelled' ? 'disabled-file' : ''}"
-      title={l.status === 'Cancelled' ? "Attachment disabled" : "View Attachment"}
-      on:click={() => {
-        if (l.status !== "Cancelled") {
-          window.open(`${PUBLIC_VITE_API_BASE}${l.attachment_path}`, "_blank");
-        }
-      }}
-    >
-      <svg viewBox="0 0 26 26">
-        <path 
-          fill="currentColor"
-          d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zM14 8V3.5L19.5 9H15a1 1 0 0 1-1-1z"
-        />
-      </svg>
-    </button>
-  {/if}
+  <a
+  href={`${PUBLIC_VITE_API_BASE}${l.attachment_path?.startsWith('/') ? '' : '/'}${l.attachment_path}`}
+  target="_blank"
+  rel="noopener noreferrer"
+  class="icon-btn file-btn {l.status === 'Cancelled' ? 'disabled-file' : ''}"
+  title={l.status === 'Cancelled' ? 'Attachment disabled' : 'View Attachment'}
+>
+    <svg viewBox="0 0 26 26">
+      <path 
+        fill="currentColor"
+        d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zM14 8V3.5L19.5 9H15a1 1 0 0 1-1-1z"
+      />
+    </svg>
+  </a>
+{/if}
+
 </div>
 
     

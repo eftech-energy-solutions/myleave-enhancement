@@ -883,6 +883,7 @@ async function submitLeave(e) {
   );
     window.dispatchEvent(new Event("pending-updated"));
 
+    await loadRecent();  
     await loadAppliedLeave();
     buildMonth(viewBase);
     modal?.close(); 
@@ -940,7 +941,7 @@ async function submitLeave(e) {
           style="--size:110px; --spent:{pct(d.spent,d.total)}; --spent-color: var(--spentRed); --rest-color: var(--restBlue);"
         ></div>
         <div class="legend-row">
-          <div class="legend-item"><span class="chip spent"></span><span>Allocated Leave</span></div>
+          <div class="legend-item"><span class="chip spent"></span><span>Spent Leave</span></div>
           <div class="legend-item"><span class="chip unspent"></span><span>Balance Leave</span></div>
         </div>
         <div class="total-line bold">
@@ -1122,7 +1123,7 @@ async function submitLeave(e) {
 </div>
 
       <div class="recent-footer">
-  <a class="view-more" href="/dashboard/manager/myhistory">View more →</a>
+  <a class="view-more" href="/dashboard/director/myhistory">View more →</a>
 </div>
     </div>
   </div>
@@ -1272,12 +1273,36 @@ async function submitLeave(e) {
   .card{ border:1px solid var(--ring); border-radius:12px; padding:8px; background:#fff; box-shadow:var(--shadow); overflow: visible; }
   .text-red-600 { color: #dc2626; }
 
-  .donut.fancy{
-    height: var(--size, 110px); width: var(--size, 110px);
-    border-radius:9999px; margin:6px auto 8px;
-    background: conic-gradient(var(--spent-color, #ef4444) calc(var(--spent) * 1%), var(--rest-color, #3b82f6) 0);
-    display:grid; place-items:center; box-shadow:var(--shadow);
-  }
+  @property --animated-spent {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
+  @property --animated-spent {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
+
+  .donut.fancy {
+  --animated-spent: 0;
+  animation: donutFill 0.9s ease-out forwards;
+
+  height: var(--size, 110px);
+  width: var(--size, 110px);
+  border-radius: 9999px;
+  margin: 6px auto 8px;
+  display: grid;
+  place-items: center;
+  box-shadow: var(--shadow);
+
+  /* ✅ GUNA animated-spent */
+  background: conic-gradient(
+    var(--spent-color, #ef4444) calc(var(--animated-spent) * 1%),
+    var(--rest-color, #3b82f6) 0
+  );
+}
+
   .donut.fancy::after{
     content:""; height:66%; width:66%; background:#fff; border-radius:9999px; box-shadow:inset 0 0 0 1px var(--ring);
   }
@@ -1614,6 +1639,17 @@ max-width: 150px;         /* optional — so it wraps instead of going super lon
     cursor:pointer; 
     padding: 4px;
   }
+
+/* keyframes */
+@keyframes donutFill {
+  from {
+    --animated-spent: 0;
+  }
+  to {
+    --animated-spent: var(--spent);
+  }
+}
+
  /* =========================
    TOAST NOTIFICATION
 ========================= */
