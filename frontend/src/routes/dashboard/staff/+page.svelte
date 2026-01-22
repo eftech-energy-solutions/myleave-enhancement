@@ -1207,7 +1207,7 @@ async function loadApprovedUsedDays() {
         {/if}
       </div>
       <div class="recent-footer">
-  <a class="view-more" href="/dashboard/manager/myhistory">View more →</a>
+  <a class="view-more" href="/dashboard/staff/staffhistory">View more →</a>
 </div>
     </div>
   </div>

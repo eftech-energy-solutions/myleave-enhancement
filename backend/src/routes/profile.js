@@ -215,24 +215,40 @@ router.post('/', async (req, res) => {
     });
 
     // EMAIL TO EMPLOYEE
-    await transporter.sendMail({
-      from: '"Eftech HR" <no-reply@eftech.com.my>',
-      to: email,
-      subject: "Your MyLeave Account",
-      text: `Hi ${name},
 
-Your MyLeave account has been created.
+     await transporter.sendMail({
+          from: '"Eftech HR" <no-reply@eftech.com.my>',
+          to: email,
+          subject: "Your MyLeave Account (Email Updated)",
+          text: `Hi ${full_name || oldName},
 
-Email: ${email}
-Password: ${randomPassword}
+      Your MyLeave account email has been successfully updated.
 
-Your Annual Leave Entitlement: ${proratedAnnualLeave} days
-Your Medical Leave Entitlement: ${proratedMedicalLeave} days
-${yearsOfService >= 5 ? '(16 AL / 22 MC base - 5+ years service)' : yearsOfService >= 2 ? '(14 AL / 18 MC base - 2-4 years service)' : '(14 AL / 14 MC base - <2 years service)'}
-${(proratedAnnualLeave < baseAnnualLeave || proratedMedicalLeave < baseMedicalLeave) ? `(Prorated for joining mid-year)` : ''}
+      Here are your login details:
 
-Please log in and change your password.`,
-    });
+      Email: ${email}
+      Temporary Password: ${originalPassword}
+
+      Your Annual Leave Entitlement: ${proratedAnnualLeave} days
+      Your Medical Leave Entitlement: ${proratedMedicalLeave} days
+      ${yearsOfService >= 5 ? '(16 AL / 22 MC base - 5+ years service)' : yearsOfService >= 2 ? '(14 AL / 18 MC base - 2-4 years service)' : '(14 AL / 14 MC base - <2 years service)'}
+      ${(proratedAnnualLeave < baseAnnualLeave || proratedMedicalLeave < baseMedicalLeave) ? `(Prorated for joining mid-year)` : ''}
+
+      🔐 Please log in using the link below and change your password immediately:
+      ${loginUrl}
+
+      ---------------------------------------
+      MyLeave System – Eftech
+      ${loginUrl}
+
+      ⚠️ This is an automated email. Please do not reply.
+      If you did not request this change, please contact IT support immediately.
+      ---------------------------------------
+
+      Thank you,
+      Eftech HR Team
+      `
+        });
 
     // EMAIL TO ADMIN
     await transporter.sendMail({
@@ -650,35 +666,49 @@ router.put("/:staff_id", async (req, res) => {
     /* ------------------------------
        3) RESEND ORIGINAL TEMP PASSWORD IF EMAIL CHANGED
     ------------------------------ */
-    if (emailChanged) {
-      const transporter = nodemailer.createTransport({
-        host: "mail.eftech.com.my",
-        port: 465,
-        secure: true,
-        auth: {
-          user: process.env.EMAIL_USER,
-          pass: process.env.EMAIL_PASS
-        }
-      });
+      if (emailChanged) {
+        const loginUrl = "http://edsdata.com.my:3000"; // tukar ke https bila production
 
-      await transporter.sendMail({
-        from: '"Eftech HR" <no-reply@eftech.com.my>',
-        to: email,
-        subject: "Your MyLeave Account (Corrected Email)",
-        text: `Hi ${full_name || oldName},
+        const transporter = nodemailer.createTransport({
+          host: "mail.eftech.com.my",
+          port: 465,
+          secure: true,
+          auth: {
+            user: process.env.EMAIL_USER,
+            pass: process.env.EMAIL_PASS
+          }
+        });
 
-Your MyLeave account email has been corrected.
+        await transporter.sendMail({
+          from: '"Eftech HR" <no-reply@eftech.com.my>',
+          to: email,
+          subject: "Your MyLeave Account (Email Updated)",
+          text: `Hi ${full_name || oldName},
 
-Here is your temporary password:
+      Your MyLeave account email has been successfully updated.
 
-Email: ${email}
-Temporary Password: ${originalPassword}
+      Here are your login details:
 
-Please log in and change your password.
+      Email: ${email}
+      Temporary Password: ${originalPassword}
 
-Thank you.`
-      });
-    }
+      🔐 Please log in using the link below and change your password immediately:
+      ${loginUrl}
+
+      ---------------------------------------
+      MyLeave System – Eftech
+      ${loginUrl}
+
+      ⚠️ This is an automated email. Please do not reply.
+      If you did not request this change, please contact IT support immediately.
+      ---------------------------------------
+
+      Thank you,
+      Eftech HR Team
+      `
+        });
+      }
+
 
     await logAdminAction(
       req, 
