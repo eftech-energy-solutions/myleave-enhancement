@@ -12,6 +12,7 @@ import {
   sendCancellationApproved
 } from "../utils/emailService.js";
 import { logAdminAction } from '../middleware/adminLogger.js';
+import { safeSendEmail } from "../utils/safeEmail.js";
 
 const leaveTypeFullName = {
   AL: "Annual / Emergency",
@@ -449,7 +450,12 @@ router.post("/", upload.single("attachment"), async (req, res) => {
     const leave = result.rows[0];
 
     // Send emails...
-    sendLeaveSubmitted(user.email, user.full_name, leave);
+    safeSendEmail(
+      sendLeaveSubmitted,
+      user.email,
+      user.full_name,
+      leave
+    );
 
     // 🔔 APPROVER NOTIFICATIONS
 
@@ -461,7 +467,12 @@ router.post("/", upload.single("attachment"), async (req, res) => {
     );
 
     for (const row of adminRes.rows) {
-      sendPendingApproval(row.email, user.full_name, leave);
+    safeSendEmail(
+      sendPendingApproval,
+      row.email,
+      user.full_name,
+      leave
+    );
     }
 
     // =========================
@@ -489,7 +500,12 @@ router.post("/", upload.single("attachment"), async (req, res) => {
 
         for (const row of directorMgrRes.rows) {
           if (row.email !== user.email) {
-            sendPendingApproval(row.email, user.full_name, leave);
+            safeSendEmail(
+            sendPendingApproval,
+            row.email,
+            user.full_name,
+            leave
+          );
           }
         }
 
@@ -505,7 +521,12 @@ router.post("/", upload.single("attachment"), async (req, res) => {
         );
 
         for (const row of directorMgrRes.rows) {
-          sendPendingApproval(row.email, user.full_name, leave);
+          safeSendEmail(
+          sendPendingApproval,
+          row.email,
+          user.full_name,
+          leave
+        );
         }
 
         // ❌ Tak notify Director role
@@ -527,7 +548,12 @@ router.post("/", upload.single("attachment"), async (req, res) => {
       );
 
       for (const row of mgrRes.rows) {
-        sendPendingApproval(row.email, user.full_name, leave);
+        safeSendEmail(
+        sendPendingApproval,
+        row.email,
+        user.full_name,
+        leave
+      );
       }
     }
 
@@ -847,20 +873,6 @@ router.patch("/:id", async (req, res) => {
     const leaveId = req.params.id;
 
     // EMPLOYEE REQUESTS CANCEL
-    // if (status === "cancellation_pending") {
-    //   await pool.query(
-    //     `UPDATE leave_requests
-    //      SET request_type='cancellation_request', status='cancellation_pending'
-    //      WHERE leave_id=$1`,
-    //     [leaveId]
-    //   );
-
-    //   return res.json({
-    //     success: true,
-    //     message: "Cancellation request submitted"
-    //   });
-    // }
-    // EMPLOYEE REQUESTS CANCEL
     if (status === "cancellation_pending") {
   const { cancellation_reason } = req.body;
 
@@ -874,14 +886,15 @@ router.patch("/:id", async (req, res) => {
   // ⏱ CANCELLATION RULE (NEW)
   // ==========================
   const find = await pool.query(
-    `SELECT date_from FROM leave_requests WHERE leave_id = $1`,
-    [leaveId]
-  );
+  `SELECT * FROM leave_requests WHERE leave_id = $1`,
+  [leaveId]
+);
 
   if (!find.rows.length) {
     return res.status(404).json({ message: "Leave not found" });
   }
 
+  const leave = find.rows[0]; 
   const leaveStart = new Date(find.rows[0].date_from);
   const today = new Date();
 
@@ -913,6 +926,19 @@ router.patch("/:id", async (req, res) => {
      WHERE leave_id = $2`,
     [cancellation_reason, leaveId]
   );
+  // 🔔 NOTIFY ADMIN (CANCELLATION PENDING)
+const adminRes = await pool.query(
+  `SELECT email FROM profiles WHERE LOWER(role) = 'admin'`
+);
+
+for (const row of adminRes.rows) {
+    safeSendEmail(
+    sendCancellationPending,
+    row.email,
+    leave.staff_name,
+    leave
+  );
+    }
 
   return res.json({
     success: true,
@@ -934,6 +960,12 @@ router.patch("/:id", async (req, res) => {
 
     const leave = find.rows[0];
     const staffId = leave.staff_id;
+    const emailRes = await pool.query(
+  `SELECT email FROM profiles WHERE staff_id = $1`,
+  [staffId]
+);
+
+const staffEmail = emailRes.rows[0]?.email;
     const leaveType = String(leave.leave_type || "").trim().toUpperCase();
     const days = Number(leave.total_days);
     const leaveDate = new Date(leave.date_from);
@@ -964,7 +996,13 @@ router.patch("/:id", async (req, res) => {
         `UPDATE leave_requests SET status='cancelled' WHERE leave_id=$1 RETURNING *`,
         [leaveId]
       );
-      
+
+      safeSendEmail(
+      sendCancellationApproved,
+      staffEmail,
+      updated.rows[0]
+    );
+
       // ✅ CORRECT: Log AFTER status is updated
       await logAdminAction(
         req, 
@@ -1181,21 +1219,33 @@ router.patch("/:id", async (req, res) => {
     );
     console.log('✅ Status updated successfully');
     if (status === 'approved') {
-          await logAdminAction(
-            req, 
-            'Approved Leave Request', 
-            `Approved leave request #${leaveId} for ${leave.staff_name}`
-          );
-        
-        } else if (status === 'rejected') {
-          await logAdminAction(
-            req, 
-            'Rejected Leave Request', 
-            `Rejected leave request #${leaveId} for ${leave.staff_name}`
-          );
-        }
+        safeSendEmail(
+        sendLeaveApproved,
+        staffEmail,
+        leave
+      );
 
-        res.json(updated.rows[0]);
+        await logAdminAction(
+          req, 
+          'Approved Leave Request', 
+          `Approved leave request #${leaveId} for ${leave.staff_name}`
+        );
+      }
+      else if (status === 'rejected') {
+        safeSendEmail(
+        sendLeaveRejected,
+        staffEmail,
+        leave
+      );
+
+        await logAdminAction(
+          req, 
+          'Rejected Leave Request', 
+          `Rejected leave request #${leaveId} for ${leave.staff_name}`
+        );
+      }
+
+              res.json(updated.rows[0]);
 
   } catch (err) {
     console.error("PATCH /:id error:", err);

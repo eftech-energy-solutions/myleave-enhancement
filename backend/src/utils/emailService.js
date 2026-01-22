@@ -13,6 +13,12 @@ const transporter = nodemailer.createTransport({
   }
 });
 
+// const transporter = nodemailer.createTransport({
+//   host: "localhost",
+//   port: 1025,
+//   secure: false,
+// });
+
 // ======================================================
 // HELPER: FORMAT TARIKH DD/MM/YYYY
 // ======================================================
