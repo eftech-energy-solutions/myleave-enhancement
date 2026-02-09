@@ -8,6 +8,7 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [tailwindcss(), sveltekit()],
     server: {
+      allowedHosts: true,
       proxy: {
         '/api': {
           target: env.PUBLIC_VITE_API_BASE,

@@ -50,7 +50,7 @@ const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:3000",
   "https://localhost:5173",
-  // "https://ees.edsdata.com.my"
+  "http://edsdata.com.my:3000"
 ];
 app.use(cors({
   origin: function (origin, callback) {

@@ -356,6 +356,13 @@ async function loadRecent() {
 
   const todayISO = localISO(today);
 
+    // ✅ MC boleh backdate max 7 hari
+  const mcBackdateLimit = (() => {
+    const d = new Date(today);
+    d.setDate(d.getDate() - 7);
+    return d;
+  })();
+  
   let viewBase = atStartOfDay(new Date());
   function clampToWindowMonth(d) {
     // ⬇️ DIUBAHSUAI: Logik fallback ditambah untuk pastikan ia sentiasa ada nilai
@@ -606,6 +613,17 @@ async function loadRecent() {
   $: showAttachmentReminder =
     (leaveType === 'MC') && (!attachmentFiles || attachmentFiles.length === 0);
 
+    // 🔄 Reset backdated MC dates when switching to other leave types
+$: if (
+  leaveType !== 'MC' &&
+  dateFrom &&
+  parseLocalISO(dateFrom) < today
+) {
+  dateFrom = todayISO;
+  dateUntil = todayISO;
+  duration = 'Full';
+}
+
   const fixedDurations = {
     MAT : 98,
     PAT : 7,
@@ -627,9 +645,15 @@ async function loadRecent() {
     return localISO(d);
   };
 
-  $: if (dateFrom && dateUntil && parseLocalISO(dateUntil) < parseLocalISO(dateFrom)) {
-    dateUntil = dateFrom;
-  }
+  $: if (
+  leaveType !== 'MC' &&
+  dateFrom &&
+  dateUntil &&
+  parseLocalISO(dateUntil) < parseLocalISO(dateFrom)
+) {
+  dateUntil = dateFrom;
+}
+
   $: {
   const n = fixedDurations[leaveType];
   endLocked = Boolean(n);
@@ -740,6 +764,28 @@ async function submitLeave(e) {
   e.preventDefault();
 
   if (!formEl.reportValidity()) return;
+
+  const from = parseLocalISO(dateFrom);
+
+// ❌ selain MC → tak boleh past
+if (leaveType !== 'MC' && from < today) {
+  showToast(
+    "You cannot apply leave for past dates.",
+    "warning",
+    "Invalid Date"
+  );
+  return;
+}
+
+// ❌ MC → max 7 hari je
+if (leaveType === 'MC' && from < mcBackdateLimit) {
+  showToast(
+    "Medical Leave can only be backdated up to 7 days.",
+    "warning",
+    "Invalid Date"
+  );
+  return;
+}
 
   // ✅ CHECK FOR OVERLAPPING DATES
   const overlapping = checkDateRangeOverlap(dateFrom, dateUntil);
@@ -1119,9 +1165,10 @@ async function loadApprovedUsedDays() {
                 d.outOfWindow ||
                 d.beyondSixMonths ||
                 d.holiday ||
-                (!d.blocked && d.weekend)  // 👈 KEY PART
+                (!d.blocked && d.weekend) ||
                 (!d.today && atStartOfDay(d.date) < today)
               }
+
               on:click={() => {
                 if (d.beyondSixMonths) {
                   showToast(
@@ -1129,6 +1176,7 @@ async function loadApprovedUsedDays() {
                     "warning",
                     "Invalid Date"
                   );
+                  return;
                 }
 
                 if (d.blocked) {
@@ -1146,25 +1194,18 @@ async function loadApprovedUsedDays() {
                     "warning",
                     "Public Holiday"
                   );
+                  return;
                 }
 
                 if (d.weekend) {
-                showToast(
-                  "You cannot apply for leave on weekends.",
-                  "warning",
-                  "Weekend"
-                );
-                }
-
-                if (!d.today && atStartOfDay(d.date) < today) {
                   showToast(
-                    "You cannot apply for past dates.",
+                    "You cannot apply for leave on weekends.",
                     "warning",
-                    "Invalid Date"
+                    "Weekend"
                   );
+                  return;
                 }
 
-                // ✅ Always allow form to open
                 openLeaveForm(d.date);
               }}
 
@@ -1254,20 +1295,28 @@ async function loadApprovedUsedDays() {
     <div class="dates">
       <label>
         <span>Date from</span>
-        <input type="date" name="dateFrom" bind:value={dateFrom} required min={todayISO} on:change={onFromChange} />
+        <input type="date" name="dateFrom" bind:value={dateFrom} required min={
+            leaveType === 'MC'
+              ? localISO(mcBackdateLimit)
+              : todayISO
+          } on:change={onFromChange} />
       </label>
 
       <label>
         <span>Date until</span>
         <input
-          type="date"
-          name="dateUntil"
-          bind:value={dateUntil}
-          min={dateFrom || todayISO}
-          disabled={duration === 'Half' || endLocked}
-          aria-disabled={duration === 'Half' || endLocked}
-          readonly={endLocked}
-        />
+            type="date"
+            name="dateUntil"
+            bind:value={dateUntil}
+            min={
+              leaveType === 'MC'
+                ? (dateFrom || localISO(mcBackdateLimit))
+                : (dateFrom || todayISO)
+            }
+            disabled={duration === 'Half' || endLocked}
+            aria-disabled={duration === 'Half' || endLocked}
+            readonly={endLocked}
+          />
         {#if duration === 'Half'}
           <input type="hidden" name="dateUntil" value={dateUntil} />
         {/if}

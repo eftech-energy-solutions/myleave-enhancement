@@ -371,6 +371,14 @@ async function loadRecent() {
   const todayISO = localISO(today);
 
   let viewBase = atStartOfDay(new Date());
+
+  // ✅ MC boleh backdate max 7 hari
+  const mcBackdateLimit = (() => {
+    const d = new Date(today);
+    d.setDate(d.getDate() - 7);
+    return d;
+  })();
+
   function clampToWindowMonth(d) {
     // ⬇️ DIUBAHSUAI: Logik fallback ditambah untuk pastikan ia sentiasa ada nilai
     if (!d || !minMonthStart || !maxMonthStart || !minMonthStart.getTime() || !maxMonthStart.getTime()) {
@@ -616,6 +624,17 @@ async function loadRecent() {
   $: showAttachmentReminder =
     (leaveType === 'MC') && (!attachmentFiles || attachmentFiles.length === 0);
 
+    // 🔄 Reset backdated MC dates when switching to other leave types
+$: if (
+  leaveType !== 'MC' &&
+  dateFrom &&
+  parseLocalISO(dateFrom) < today
+) {
+  dateFrom = todayISO;
+  dateUntil = todayISO;
+  duration = 'Full';
+}
+
   const fixedDurations = {
       MAT : 98,
       PAT : 7,
@@ -638,9 +657,15 @@ async function loadRecent() {
     return localISO(d);
   };
 
-  $: if (dateFrom && dateUntil && parseLocalISO(dateUntil) < parseLocalISO(dateFrom)) {
-    dateUntil = dateFrom;
-  }
+  $: if (
+  leaveType !== 'MC' &&
+  dateFrom &&
+  dateUntil &&
+  parseLocalISO(dateUntil) < parseLocalISO(dateFrom)
+) {
+  dateUntil = dateFrom;
+}
+
   $: {
   const n = fixedDurations[leaveType];
   endLocked = Boolean(n);
@@ -1037,7 +1062,7 @@ async function submitLeave(e) {
                 d.outOfWindow ||
                 d.beyondSixMonths ||
                 d.holiday ||
-                (!d.blocked && d.weekend) // 👈 KEY PART
+                (!d.blocked && d.weekend) ||   
                 (!d.today && atStartOfDay(d.date) < today)
               }
               on:click={() => {
@@ -1174,20 +1199,28 @@ async function submitLeave(e) {
     <div class="dates">
       <label>
         <span>Date from</span>
-        <input type="date" name="dateFrom" bind:value={dateFrom} required min={todayISO} on:change={onFromChange} />
-      </label>
+        <input type="date" name="dateFrom" bind:value={dateFrom} required min={
+        leaveType === 'MC'
+          ? localISO(mcBackdateLimit)
+          : todayISO
+      } on:change={onFromChange} />
+          </label>
 
       <label>
         <span>Date until</span>
         <input
-          type="date"
-          name="dateUntil"
-          bind:value={dateUntil}
-          min={dateFrom || todayISO}
-          disabled={duration === 'Half' || endLocked}
-          aria-disabled={duration === 'Half' || endLocked}
-          readonly={endLocked}
-        />
+            type="date"
+            name="dateUntil"
+            bind:value={dateUntil}
+            min={
+              leaveType === 'MC'
+                ? (dateFrom || localISO(mcBackdateLimit))
+                : (dateFrom || todayISO)
+            }
+            disabled={duration === 'Half' || endLocked}
+            aria-disabled={duration === 'Half' || endLocked}
+            readonly={endLocked}
+          />
         {#if duration === 'Half'}
           <input type="hidden" name="dateUntil" value={dateUntil} />
         {/if}
