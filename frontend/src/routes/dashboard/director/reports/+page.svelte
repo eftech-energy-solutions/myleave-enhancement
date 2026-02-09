@@ -143,16 +143,27 @@ $: donuts = user ? [
     })(),
     
     remaining: (() => {
-      const al = Number(user.leave_entitlement_annual ?? 14);
-      const remainingCF = Number(user.carry_forward_balance ?? 0); // Already has deductions
-      const expiry = user.carry_forward_expiry ? new Date(user.carry_forward_expiry) : null;
-      const today = new Date();
-      
-      const validCF = (expiry && today > expiry) ? 0 : remainingCF;
-      
-      // ✅ Don't subtract approvedAL - it's already reflected in carry_forward_balance
-      return al + validCF;
-    })()
+    const alOriginal = Number(user.leave_entitlement_annual_original ?? 0);
+    const approved = Number(approvedAL || 0);
+    const cfOriginal = Number(user.carry_forward_original ?? 0);
+    const cfRemaining = Number(user.carry_forward_balance ?? 0);
+
+    const expiry = user.carry_forward_expiry ? new Date(user.carry_forward_expiry) : null;
+    const today = new Date();
+    const validCF = (expiry && today > expiry) ? 0 : cfRemaining;
+
+    // 🔥 CF that has been used
+    const cfUsed = Math.max(0, cfOriginal - validCF);
+
+    // 🔥 AL used AFTER CF is exhausted
+    const alUsed = Math.max(0, approved - cfUsed);
+
+    // 🔥 Remaining AL
+    const remainingAL = Math.max(0, alOriginal - alUsed);
+
+    return remainingAL + validCF;
+  })()
+
   },
   {
     title: "Medical Leave Summary",
@@ -1021,7 +1032,7 @@ async function submitLeave(e) {
                 d.outOfWindow ||
                 d.beyondSixMonths ||
                 d.holiday ||
-                (!d.blocked && d.weekend) ||   // 👈 KEY PART
+                (!d.blocked && d.weekend)  // 👈 KEY PART
                 (!d.today && atStartOfDay(d.date) < today)
               }
               on:click={() => {
