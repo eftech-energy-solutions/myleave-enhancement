@@ -121,6 +121,12 @@ export function sendPendingApproval(managerEmail, staffName, leave) {
       <b>Days:</b> ${leave.total_days}
     </p>
 
+    <p>
+      <a href="https://myleave.edsdata.com.my/" target="_blank">
+      Click here to review and approve the request
+      </a>
+    </p>
+
     ${EMAIL_FOOTER}
     `
   );
