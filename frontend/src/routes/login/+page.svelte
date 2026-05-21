@@ -342,7 +342,7 @@
 		</div>
 
 		{#if uiState === 'login'}
-			<h1 class="title">Hi, Welcome!</h1>
+			<h1 class="title">Hi, Welcomesssssss!</h1>
 			<form on:submit|preventDefault={handleLogin} class="form-layout">
 				<input type="email" name="email" bind:value={email} placeholder="Email" autocomplete="email" required />
 				<input type="password" name="password" bind:value={password} placeholder="Password" required />
