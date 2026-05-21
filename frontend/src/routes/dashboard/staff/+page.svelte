@@ -807,7 +807,9 @@ if (leaveType === 'MC' && from < mcBackdateLimit) {
     return;
   }
   const limit = {
-    AL: Number(user.leave_entitlement_annual_original ?? 14),
+    AL:
+        Number(user.leave_entitlement_annual_original ?? 14) +
+        Number(user.carry_forward_balance ?? 0),
     MC: Number(user.leave_entitlement_medical_original ?? 14),
     HOSP: Number(user.hosp_entitlement ?? 60),
     MAT: 98,
