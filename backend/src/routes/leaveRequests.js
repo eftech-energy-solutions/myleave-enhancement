@@ -404,7 +404,7 @@ router.post("/", upload.single("attachment"), async (req, res) => {
     }
 
     // FINAL CHECK
-    if (used + serverDays > entitlement) {
+    if (serverDays > entitlement) {
       return res.status(400).json({
         message: `${getLeaveFullName(type)} leave application limit exceeded.`,
         entitlement,
@@ -818,7 +818,7 @@ router.patch("/:id/edit", upload.single("attachment"), async (req, res) => {
       used = Number(u.rows[0].used);
     }
 
-    if (used + serverDays > entitlement) {
+    if (serverDays > entitlement){
       return res.status(400).json({
         message: `Cannot update. ${leave_type} limit exceeded.`,
         entitlement,
