@@ -578,6 +578,21 @@ const canGoNextYear = () => {
     // Initialize Chart.js
     const Chart = (await import('chart.js/auto')).default;
     if (!canvasEl) return;
+    const departmentOrder = [
+      'Director',
+      'Operations',
+      'Operations Support',
+      'Technical Data',
+      'Technical Data - Consultant',
+      'Sales & Technical Excellence',
+      'Business Development'
+    ];
+
+    dataByDept.sort(
+      (a, b) =>
+        departmentOrder.indexOf(a.name) -
+        departmentOrder.indexOf(b.name)
+    );
     new Chart(canvasEl, {
       type: 'bar',
       data: {

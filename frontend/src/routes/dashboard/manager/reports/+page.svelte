@@ -625,15 +625,15 @@ async function loadRecent() {
     (leaveType === 'MC') && (!attachmentFiles || attachmentFiles.length === 0);
 
     // 🔄 Reset backdated MC dates when switching to other leave types
-$: if (
-  leaveType !== 'MC' &&
-  dateFrom &&
-  parseLocalISO(dateFrom) < today
-) {
-  dateFrom = todayISO;
-  dateUntil = todayISO;
-  duration = 'Full';
-}
+// $: if (
+//   leaveType !== 'MC' &&
+//   dateFrom &&
+//   parseLocalISO(dateFrom) < today
+// ) {
+//   dateFrom = todayISO;
+//   dateUntil = todayISO;
+//   duration = 'Full';
+// }
 
   const fixedDurations = {
       MAT : 98,
@@ -1199,11 +1199,8 @@ async function submitLeave(e) {
     <div class="dates">
       <label>
         <span>Date from</span>
-        <input type="date" name="dateFrom" bind:value={dateFrom} required min={
-        leaveType === 'MC'
-          ? localISO(mcBackdateLimit)
-          : todayISO
-      } on:change={onFromChange} />
+        <input type="date" name="dateFrom" bind:value={dateFrom} required 
+         on:change={onFromChange} />
           </label>
 
       <label>

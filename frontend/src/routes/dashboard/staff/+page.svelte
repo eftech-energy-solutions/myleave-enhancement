@@ -614,15 +614,15 @@ async function loadRecent() {
     (leaveType === 'MC') && (!attachmentFiles || attachmentFiles.length === 0);
 
     // 🔄 Reset backdated MC dates when switching to other leave types
-$: if (
-  leaveType !== 'MC' &&
-  dateFrom &&
-  parseLocalISO(dateFrom) < today
-) {
-  dateFrom = todayISO;
-  dateUntil = todayISO;
-  duration = 'Full';
-}
+// $: if (
+//   leaveType !== 'MC' &&
+//   dateFrom &&
+//   parseLocalISO(dateFrom) < today
+// ) {
+//   dateFrom = todayISO;
+//   dateUntil = todayISO;
+//   duration = 'Full';
+// }
 
   const fixedDurations = {
     MAT : 98,
@@ -768,14 +768,14 @@ async function submitLeave(e) {
   const from = parseLocalISO(dateFrom);
 
 // ❌ selain MC → tak boleh past
-if (leaveType !== 'MC' && from < today) {
-  showToast(
-    "You cannot apply leave for past dates.",
-    "warning",
-    "Invalid Date"
-  );
-  return;
-}
+// if (leaveType !== 'MC' && from < today) {
+//   showToast(
+//     "You cannot apply leave for past dates.",
+//     "warning",
+//     "Invalid Date"
+//   );
+//   return;
+// }
 
 // ❌ MC → max 7 hari je
 if (leaveType === 'MC' && from < mcBackdateLimit) {
@@ -1297,11 +1297,8 @@ async function loadApprovedUsedDays() {
     <div class="dates">
       <label>
         <span>Date from</span>
-        <input type="date" name="dateFrom" bind:value={dateFrom} required min={
-            leaveType === 'MC'
-              ? localISO(mcBackdateLimit)
-              : todayISO
-          } on:change={onFromChange} />
+        <input type="date" name="dateFrom" bind:value={dateFrom} required  
+          on:change={onFromChange} />
       </label>
 
       <label>
