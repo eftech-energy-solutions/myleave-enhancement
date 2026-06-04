@@ -1167,8 +1167,8 @@ async function loadApprovedUsedDays() {
                 d.outOfWindow ||
                 d.beyondSixMonths ||
                 d.holiday ||
-                (!d.blocked && d.weekend) ||
-                (!d.today && atStartOfDay(d.date) < today)
+                (!d.blocked && d.weekend)
+                // (!d.today && atStartOfDay(d.date) < today)
               }
 
               on:click={() => {

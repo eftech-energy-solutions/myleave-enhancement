@@ -1057,8 +1057,8 @@ async function submitLeave(e) {
                 d.outOfWindow ||
                 d.beyondSixMonths ||
                 d.holiday ||
-                (!d.blocked && d.weekend) ||  // 👈 KEY PART
-                (!d.today && atStartOfDay(d.date) < today)
+                (!d.blocked && d.weekend)  // 👈 KEY PART
+                // (!d.today && atStartOfDay(d.date) < today)
               }
               on:click={() => {
                 if (d.beyondSixMonths) {
@@ -1097,14 +1097,14 @@ async function submitLeave(e) {
                   return;
                 }
 
-                if (!d.today && atStartOfDay(d.date) < today) {
-                 showToast(
-                    "You cannot apply for past dates.",
-                    "warning",
-                    "Invalid Date"
-                  );
-                  return;
-                }
+                // if (!d.today && atStartOfDay(d.date) < today) {
+                //  showToast(
+                //     "You cannot apply for past dates.",
+                //     "warning",
+                //     "Invalid Date"
+                //   );
+                //   return;
+                // }
 
                 // ✅ Always allow form to open
                 openLeaveForm(d.date);

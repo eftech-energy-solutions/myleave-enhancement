@@ -487,7 +487,7 @@
 					{#if sending}
 						Sending...
 					{:else if resendCooldown > 0}
-						Resend in {resendCooldown}s
+						Resend in {resendCooldown}
 					{:else}
 						Resend code
 					{/if}

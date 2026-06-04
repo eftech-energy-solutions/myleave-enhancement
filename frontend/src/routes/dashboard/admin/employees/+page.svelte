@@ -78,7 +78,9 @@ function getAttachmentUrl(path) {
     "Technical Data",
     "Operations",
     "Sales & Technical Excellence",
-    "Director"
+    "Director",
+    "Business Development",
+    "Technical Data - Consultant"
   ];
 
   // =======================
