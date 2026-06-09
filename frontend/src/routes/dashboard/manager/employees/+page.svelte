@@ -137,6 +137,19 @@ function showToast(message, type = "success", title = "", duration = 3000) {
       );
       const data = await res.json();
 
+      console.log("========== API RESPONSE ==========");
+      console.log(data);
+
+      data.forEach((e) => {
+        console.log(
+          e.full_name,
+          "|",
+          e.department,
+          "|",
+          e.role
+        );
+      });
+
       if (!res.ok) {
         console.error(
           "❌ Failed to fetch employees:",
@@ -198,6 +211,31 @@ const pendingIds = new Set(
 
 
 // 1) Filter ONLY employees in manager's department (kalau manager)
+// let deptFiltered;
+
+// if (manager?.role === "Manager" && managerDept === "Director") {
+//   // 🔥 Manager Director:
+//   // - Staff Director
+//   // - Semua Manager
+//   deptFiltered = fullProfileList.filter(
+//     (e) => e.department === "Director" || e.role === "Manager"
+//   );
+// } else if (manager?.role === "Manager") {
+//   // Manager biasa → dept sendiri
+//   deptFiltered = fullProfileList.filter(
+//     (e) => e.department === managerDept
+//   );
+// } else {
+//   // Admin
+//   deptFiltered = fullProfileList;
+// }
+
+// // 2) Buang semua staff yang ada dalam pendingIds
+// employees = deptFiltered.filter(
+//   (emp) => !pendingIds.has(emp.empId)
+// );
+
+// 1) Filter ONLY employees in manager's department (kalau manager)
 let deptFiltered;
 
 if (manager?.role === "Manager" && managerDept === "Director") {
@@ -207,19 +245,94 @@ if (manager?.role === "Manager" && managerDept === "Director") {
   deptFiltered = fullProfileList.filter(
     (e) => e.department === "Director" || e.role === "Manager"
   );
+
+// } else if (manager?.role === "Manager") {
+
+//   // Convert manager departments into array
+//   const managerDepartments = (managerDept || "")
+//     .split(",")
+//     .map(d => d.trim());
+
+//   deptFiltered = fullProfileList.filter((e) => {
+
+//     // Convert employee departments into array
+//     const employeeDepartments = (e.department || "")
+//       .split(",")
+//       .map(d => d.trim());
+
+//     // Return true if at least one department matches
+//     return employeeDepartments.some(dep =>
+//       managerDepartments.includes(dep)
+//     );
+//   });
+
+// } else {
+//   // Admin
+//   deptFiltered = fullProfileList;
+// }
+
 } else if (manager?.role === "Manager") {
-  // Manager biasa → dept sendiri
-  deptFiltered = fullProfileList.filter(
-    (e) => e.department === managerDept
-  );
+
+  // Convert manager departments into array
+  const managerDepartments = (managerDept || "")
+    .split(",")
+    .map(d => d.trim());
+
+  console.log("========== DEBUG ==========");
+  console.log("Manager Dept:", managerDept);
+  console.log("Manager Departments:", managerDepartments);
+
+  fullProfileList.forEach((e) => {
+    console.log(
+      "Employee:",
+      e.name,
+      "| Department:",
+      e.department
+    );
+  });
+
+  deptFiltered = fullProfileList.filter((e) => {
+
+    // Convert employee departments into array
+    const employeeDepartments = (e.department || "")
+      .split(",")
+      .map(d => d.trim());
+
+    const matched = employeeDepartments.some(dep =>
+      managerDepartments.includes(dep)
+    );
+
+    console.log(
+      e.name,
+      "=>",
+      employeeDepartments,
+      "Matched:",
+      matched
+    );
+
+    return matched;
+  });
+
 } else {
   // Admin
   deptFiltered = fullProfileList;
 }
 
-// 2) Buang semua staff yang ada dalam pendingIds
+// 2) Remove pending employees
 employees = deptFiltered.filter(
   (emp) => !pendingIds.has(emp.empId)
+);
+
+console.log("========== FINAL EMPLOYEES ==========");
+
+console.log("pendingIds:", [...pendingIds]);
+
+console.log(
+  employees.map(e => ({
+    name: e.name,
+    id: e.empId,
+    dept: e.department
+  }))
 );
 
     } catch (err) {
@@ -248,15 +361,54 @@ employees = deptFiltered.filter(
 
   $: pendingCount = pendingLeave.length + pendingCancel.length;
 
-  async function loadPendingRequests() {
+//   async function loadPendingRequests() {
+//   const res = await fetch(
+//   `${PUBLIC_VITE_API_BASE}/api/leave-requests`,  // ✅ Correct - matching backticks
+//   {
+//     credentials: "include",
+//   }
+// );
+//     const all = await res.json();
+//     const view =
+//     manager?.role === "Manager"
+//       ? all.filter((r) => {
+//           const dept =
+//             r.profile_department ||
+//             r.staff_department ||
+//             r.department ||
+//             "";
+
+//           // 🔥 Manager Director
+//          if (managerDept === "Director") {
+//             return (
+//               dept === "Director" ||
+//               r.requester_role === "Manager"
+//             );
+//           }
+
+//           // Manager biasa
+//           return (
+//             dept === managerDept &&
+//             r.requester_role === "Staff"
+//           );
+//         })
+//       : all;
+
+// pendingRequests = view;
+
+// }
+
+async function loadPendingRequests() {
   const res = await fetch(
-  `${PUBLIC_VITE_API_BASE}/api/leave-requests`,  // ✅ Correct - matching backticks
-  {
-    credentials: "include",
-  }
-);
-    const all = await res.json();
-    const view =
+    `${PUBLIC_VITE_API_BASE}/api/leave-requests`,
+    {
+      credentials: "include",
+    }
+  );
+
+  const all = await res.json();
+
+  const view =
     manager?.role === "Manager"
       ? all.filter((r) => {
           const dept =
@@ -265,25 +417,34 @@ employees = deptFiltered.filter(
             r.department ||
             "";
 
-          // 🔥 Manager Director
-         if (managerDept === "Director") {
+          // 🔥 Director Manager
+          if (managerDept === "Director") {
             return (
               dept === "Director" ||
               r.requester_role === "Manager"
             );
           }
 
-          // Manager biasa
+          // 🔥 Normal Manager (supports multiple departments)
+          const managerDepartments = (managerDept || "")
+            .split(",")
+            .map((d) => d.trim());
+
+          const employeeDepartments = (dept || "")
+            .split(",")
+            .map((d) => d.trim());
+
           return (
-            dept === managerDept &&
+            employeeDepartments.some((d) =>
+              managerDepartments.includes(d)
+            ) &&
             r.requester_role === "Staff"
           );
         })
       : all;
 
-pendingRequests = view;
-
-  }
+  pendingRequests = view;
+}
 
   async function loadPending() {
 

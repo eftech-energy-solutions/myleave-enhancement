@@ -72,9 +72,13 @@
         );
       } else {
         // normal manager (non-director)
-        filteredData = data.filter(
-          (r) => r.department === me.department
-        );
+        const managerDepartments = me.department
+        .split(",")
+        .map(d => d.trim());
+
+      filteredData = data.filter(
+        r => managerDepartments.includes(r.department?.trim())
+      );
       }
     }
   }

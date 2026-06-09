@@ -231,11 +231,30 @@ onMount(async () => {
 
     // 🔥 FILTER: Only employees in manager's department
     const deptEmployees = allEmployees.filter(emp => {
+
+      // Director Manager
       if (user?.role === "Manager" && user?.department === "Director") {
         if (emp.role === "Manager") return true;
         return emp.department === "Director";
       }
-      return emp.department === user?.department;
+
+      // Normal Manager (support multiple departments)
+      if (user?.role === "Manager") {
+
+        const managerDepartments = (user.department || "")
+          .split(",")
+          .map(d => d.trim());
+
+        const employeeDepartments = (emp.department || "")
+          .split(",")
+          .map(d => d.trim());
+
+        return employeeDepartments.some(dep =>
+          managerDepartments.includes(dep)
+        );
+      }
+
+      return true;
     });
 
 // ================= BUILD STAFF MAP =================
@@ -280,15 +299,33 @@ const leaveRes = await fetch(
 const allLeaveData = await leaveRes.json();
 
 const leaveData = allLeaveData.filter(r => {
+
   const emp = allEmployees.find(e => e.staff_id === r.staff_id);
   if (!emp) return false;
 
+  // Director Manager
   if (user?.role === "Manager" && user?.department === "Director") {
     if (emp.role === "Manager") return true;
     return emp.department === "Director";
   }
 
-  return emp.department === user?.department;
+  // Normal Manager (support multiple departments)
+  if (user?.role === "Manager") {
+
+    const managerDepartments = (user.department || "")
+      .split(",")
+      .map(d => d.trim());
+
+    const employeeDepartments = (emp.department || "")
+      .split(",")
+      .map(d => d.trim());
+
+    return employeeDepartments.some(dep =>
+      managerDepartments.includes(dep)
+    );
+  }
+
+  return true;
 });
 
 // ================= MERGE TAKEN LEAVE INTO STAFF MAP =================

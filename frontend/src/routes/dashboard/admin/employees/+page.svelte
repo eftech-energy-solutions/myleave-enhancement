@@ -210,7 +210,10 @@ pending = pendingRequests;
           name: emp.full_name,
           position: emp.position,
           role: emp.role,
-          department: emp.department,
+          // department: emp.department,
+          department: emp.department
+          ? emp.department.split(",")
+          : [],
           email: emp.email,
           photoUrl: url,
           employmentDate: formatDate(emp.employment_date),
@@ -262,8 +265,19 @@ pending = pendingRequests;
   $: filteredEmployees = (
     deptFilter === "All"
       ? employees
-      : employees.filter((e) => e.department === deptFilter)
-  )
+      : 
+    //   employees.filter((e) =>
+    //   e.department
+    //     ?.split(",")
+    //     .includes(deptFilter)
+    // )
+
+      employees.filter((e) =>
+        e.department
+          ?.split(",")
+          .includes(deptFilter)
+      )
+    ) 
     .slice()
     .sort((a, b) => {
       const byName = a.name.localeCompare(b.name, "en", {
@@ -301,7 +315,7 @@ pending = pendingRequests;
     gender: "Male",
     annualLeave: "",
     medicalLeave: "",
-    department: "Technical Data",
+    department: [],
     notes: ""
   };
 
@@ -321,7 +335,7 @@ pending = pendingRequests;
       gender: "Male",
       annualLeave: "",
       medicalLeave: "",
-      department: "Technical Data",
+      department: [],
       notes: ""
     };
   }
@@ -400,7 +414,7 @@ pending = pendingRequests;
       email: newEmp.email,
       position: newEmp.position,
       role: newEmp.role,
-      department: newEmp.department,
+      department: newEmp.department.join(","),
       employmentDate: newEmp.employmentDate,
       confirmationDate: newEmp.confirmationDate,
       terminationDate: newEmp.terminationDate,
@@ -596,7 +610,8 @@ pending = pendingRequests;
               email: detailsForm.email,
               position: detailsForm.position,
               role: detailsForm.role,
-              department: detailsForm.department,
+              // department: detailsForm.department,
+              department: detailsForm.department.join(","),
               employment_date: detailsForm.employmentDate,
               confirmation_date: detailsForm.confirmationDate,
               termination_date: detailsForm.terminationDate,
@@ -1171,7 +1186,12 @@ async function rejectCancellation(item) {
           <h3>{emp.name}</h3>
           <p>{emp.position}</p>
           <p>Staff ID: {emp.id}</p>
-          <p>Department: {emp.department}</p>
+          <p>
+            Department:
+            {Array.isArray(emp.department)
+              ? emp.department.join(", ")
+              : emp.department}
+        </p>
         </div>
         <div class="emp-spacer"></div>
         <div class="emp-actions">
@@ -1434,8 +1454,10 @@ async function rejectCancellation(item) {
                 <div>
                   <label>Department</label>
                   <div class="ctl pill">
-                    <select bind:value={newEmp.department}>
-                      {#each DEPTS as d}<option value={d}>{d}</option>{/each}
+                    <select multiple bind:value={newEmp.department}>
+                      {#each DEPTS as d}
+                        <option value={d}>{d}</option>
+                      {/each}
                     </select>
                   </div>
                 </div>

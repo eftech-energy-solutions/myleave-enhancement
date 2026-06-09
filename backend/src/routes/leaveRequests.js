@@ -541,9 +541,14 @@ router.post("/", upload.single("attachment"), async (req, res) => {
 
       // Notify Manager department sendiri
       const mgrRes = await pool.query(
-        `SELECT email FROM profiles
+        `SELECT email
+        FROM profiles
         WHERE LOWER(role) = 'manager'
-          AND LOWER(department) = $1`,
+        AND EXISTS (
+            SELECT 1
+            FROM unnest(string_to_array(LOWER(department), ',')) mgrDept
+            WHERE trim(mgrDept) = $1
+        )`,
         [userDept]
       );
 
@@ -605,9 +610,15 @@ router.get("/", async (req, res) => {
         params.push('Director');
 
       } else {
-        // Manager biasa → dept sendiri
-        where.push(`lr.department = $${params.length + 1}`);
         params.push(user.department);
+
+        where.push(`
+          EXISTS (
+            SELECT 1
+            FROM unnest(string_to_array($${params.length}, ',')) mgrDept
+            WHERE trim(mgrDept) = lr.department
+          )
+        `);
       }
     }
 
@@ -1406,8 +1417,15 @@ router.get("/history/all", async (req, res) => {
           `);
           params.push("Director");
         } else {
-          where.push(`lr.department = $${params.length + 1}`);
-          params.push(user.department);
+            params.push(user.department);
+
+            where.push(`
+              EXISTS (
+                SELECT 1
+                FROM unnest(string_to_array($${params.length}, ',')) mgrDept
+                WHERE trim(mgrDept) = lr.department
+              )
+            `);
         }
       }
       // canAllView === true → no filter
@@ -1422,6 +1440,8 @@ router.get("/history/all", async (req, res) => {
     sql += ` ORDER BY lr.date_from DESC`;
 
     // 4️⃣ EXECUTE
+    console.log("SQL:", sql);
+    console.log("PARAMS:", params);
     const result = await pool.query(sql, params);
     return res.json(result.rows);
 

@@ -440,23 +440,29 @@ router.get("/", async (req, res) => {
         `);
       } else {
         result = await pool.query(`
-          SELECT id, staff_id, full_name, role, position, department, email,
-                employment_date, confirmation_date, termination_date,
-                gender,
-                leave_entitlement_annual_original,
-                leave_entitlement_medical_original,
-                leave_entitlement_annual,
-                leave_entitlement_medical,
-                carry_forward_original,
-                carry_forward_balance,
-                carry_forward_expiry,
-                photourl,
-                notes
-          FROM profiles
-          WHERE department = $1
-          ORDER BY id DESC
-        `, [meData.department]);
-      }
+        SELECT id, staff_id, full_name, role, position, department, email,
+              employment_date, confirmation_date, termination_date,
+              gender,
+              leave_entitlement_annual_original,
+              leave_entitlement_medical_original,
+              leave_entitlement_annual,
+              leave_entitlement_medical,
+              carry_forward_original,
+              carry_forward_balance,
+              carry_forward_expiry,
+              photourl,
+              notes
+        FROM profiles p
+        WHERE EXISTS (
+            SELECT 1
+            FROM unnest(string_to_array(p.department, ',')) empDept
+            WHERE trim(empDept) = ANY (
+                string_to_array($1, ',')
+            )
+        )
+        ORDER BY id DESC
+      `, [meData.department]);
+            }
     } else {
       return res.status(403).json({ error: "Unauthorized" });
     }
@@ -716,7 +722,7 @@ router.put("/:staff_id", async (req, res) => {
        3) RESEND ORIGINAL TEMP PASSWORD IF EMAIL CHANGED
     ------------------------------ */
     if (emailChanged) {
-  const loginUrl = "http://edsdata.com.my:3000";
+  const loginUrl = "https://myleave.edsdata.com.my/login";
 
   const EMAIL_FOOTER = `
     <hr style="margin-top:30px; border:none; border-top:1px solid #eee;" />

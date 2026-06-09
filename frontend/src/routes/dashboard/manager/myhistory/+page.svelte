@@ -240,6 +240,7 @@ $: if (leaveType && dateFrom) {
           { credentials: "include" }
         );
       user = { ...(await meRes.json()) };
+      console.log("USER:", user);
       console.log("HOSP DATA — entitlement:", user?.hosp_entitlement, "balance:", user?.hosp_balance);
       console.log("USER:", user);
 
@@ -258,6 +259,17 @@ $: if (leaveType && dateFrom) {
         }
       );
       const all = await res.json();
+
+      console.log("ALL LEAVES LENGTH =", all.length);
+
+      console.log("USER STAFF ID:", user.staff_id);
+
+      const myLeaves = all.filter(
+        x => String(x.staff_id).trim() === String(user.staff_id).trim()
+      );
+
+      console.log("MY LEAVES LENGTH:", myLeaves.length);
+      console.table(myLeaves);
 
       // ⭐ Manager ONLY sees his own leave
         leaves = all.filter(l => l.staff_id === user.staff_id)
