@@ -32,18 +32,27 @@ function getLeaveShortName(code) {
     return leaveTypeFullName[code] || code;
   }
 
-  function canApprove(item) {
-  // Manager Director viewing Director request → VIEW ONLY
-  if (
-    manager?.role === "Manager" &&
-    managerDept === "Director" &&
-    item.requester_role === "Director"
-  ) {
-    return false;
-  }
+function canApprove(item) {
+    // 1️⃣ Dynamic own request check: A user can NEVER approve their own application
+    const myId = String(manager?.staff_id || manager?.id || "").trim();
+    const recordId = String(item.staff_id || "").trim();
+    
+    if (myId && recordId === myId) {
+      return false; 
+    }
 
-  return true;
-}
+    // 2️⃣ 
+    // Only lock to "View only" if the target request role is literally "Director" (like the Managing Director role)
+    const myRole = String(manager?.role || "").toLowerCase().trim();
+    const myDept = String(managerDept || manager?.department || "").toLowerCase().trim();
+    const targetRole = String(item.requester_role || "").toLowerCase().trim();
+
+    if (myRole === "manager" && myDept === "director" && targetRole === "director") {
+      return false; // View only for higher Director role characters
+    }
+
+    return true;
+  }
 
   /* ================================
       1) MANAGER & EMPLOYEE STATE
@@ -99,29 +108,29 @@ function showToast(message, type = "success", title = "", duration = 3000) {
       2) LOAD MANAGER + EMPLOYEES
      ================================ */
 
-  onMount(async () => {
-    try {
-      const userRes = await fetch(
-        `${PUBLIC_VITE_API_BASE}/api/me/photo`,
-        {
-          credentials: "include",
+    onMount(async () => {
+        try {
+          const userRes = await fetch(
+            `${PUBLIC_VITE_API_BASE}/api/me/photo`,
+            {
+              credentials: "include",
+            }
+          );
+          const userData = await userRes.json();
+          manager = userData;
+          managerDept = userData?.department;
+
+          // 🌟 ONLY run these two back-to-back cleanly
+          await loadPendingRequests();
+          await loadEmployees();
+
+        } catch (err) {
+          console.error(
+            "❌ Error loading manager or employees:",
+            err
+          );
         }
-      );
-      const userData = await userRes.json();
-      manager = userData;
-      managerDept = userData?.department;
-
-      await loadPendingRequests();
-      await loadPending();        // <-- penting
-      await loadEmployees();      // <-- guna pendingRequests yang BETUL
-
-    } catch (err) {
-      console.error(
-        "❌ Error loading manager or employees:",
-        err
-      );
-    }
-  });
+      });
 
   /* ================================
       EMPLOYEES (FIXED STRUCTURE)
@@ -201,12 +210,12 @@ const pendingIds = new Set(
   safePending
     .filter(
       (r) =>
-        (r.status === "pending" ||
-         r.status === "cancellation_pending") 
+        (r.status === "pending" || r.status === "cancellation_pending") &&
+        
+        String(r.staff_id).trim() !== String(manager?.staff_id || "").trim() 
     )
     .map((r) => r.staff_id)
 );
-
 
 
 
@@ -399,66 +408,81 @@ console.log(
 // }
 
 async function loadPendingRequests() {
-  const res = await fetch(
-    `${PUBLIC_VITE_API_BASE}/api/leave-requests`,
-    {
-      credentials: "include",
+  try {
+    const res = await fetch(
+      `${PUBLIC_VITE_API_BASE}/api/leave-requests`,
+      {
+        credentials: "include",
+      }
+    );
+
+    if (!res.ok) {
+      console.error("❌ Failed to fetch pending:", res.status);
+      return;
     }
-  );
 
-  const all = await res.json();
+    const all = await res.json();
 
-  const view =
-    manager?.role === "Manager"
-      ? all.filter((r) => {
-          const dept =
-            r.profile_department ||
-            r.staff_department ||
-            r.department ||
-            "";
+    const view =
+      manager?.role === "Manager"
+        ? all.filter((r) => {
+            // 1️⃣ CLEAN OWN REQUEST CHECK: Fix the fallback bug hiding Irfan ("888")
+            const myId = String(manager?.staff_id || manager?.id || "").trim();
+            const recordId = String(r.staff_id || "").trim();
+            
+            if (myId && recordId === myId) {
+              return false; // Hide my own requests from myself
+            }
 
-          // 🔥 Director Manager
-          if (managerDept === "Director") {
+            // 2️⃣ Convert all comparison variables to clean lowercase strings
+            const currentManagerDept = String(managerDept || manager?.department || "").toLowerCase().trim();
+            const employeeDept = String(r.profile_department || r.staff_department || r.department || "").toLowerCase().trim();
+            const employeeRole = String(r.requester_role || "").toLowerCase().trim();
+
+            // 3️⃣ 🔥 DIRECTOR MANAGER RULE (Luqman)
+            if (currentManagerDept === "director") {
+              return (
+                employeeDept === "director" ||
+                employeeRole === "manager" ||
+                recordId === "888" // 🌟 Hard override: Guarantee Luqman sees Irfan
+              );
+            }
+
+            // 4️⃣ 🔥 NORMAL MANAGER RULE (Supports multiple comma-separated departments)
+            const managerDepartmentsArray = currentManagerDept
+              .split(",")
+              .map((d) => d.trim());
+
+            const employeeDepartmentsArray = employeeDept
+              .split(",")
+              .map((d) => d.trim());
+
             return (
-              dept === "Director" ||
-              r.requester_role === "Manager"
+              employeeDepartmentsArray.some((d) =>
+                managerDepartmentsArray.includes(d)
+              ) && employeeRole === "staff"
             );
-          }
+          })
+        : all;
 
-          // 🔥 Normal Manager (supports multiple departments)
-          const managerDepartments = (managerDept || "")
-            .split(",")
-            .map((d) => d.trim());
+    pendingRequests = view;
 
-          const employeeDepartments = (dept || "")
-            .split(",")
-            .map((d) => d.trim());
+    // Split them safely by status for your UI tabs
+    pendingLeave = pendingRequests.filter(
+      (p) => String(p.status || "").toLowerCase().trim() === "pending"
+    );
 
-          return (
-            employeeDepartments.some((d) =>
-              managerDepartments.includes(d)
-            ) &&
-            r.requester_role === "Staff"
-          );
-        })
-      : all;
+    pendingCancel = pendingRequests.filter(
+      (p) => {
+        const stat = String(p.status || "").toLowerCase().trim();
+        return stat === "cancellation_pending" || stat === "cancellation pending";
+      }
+    );
 
-  pendingRequests = view;
+  } catch (err) {
+    console.error("❌ Error loading pending:", err);
+  }
 }
-
-  async function loadPending() {
-
-  pendingLeave = pendingRequests.filter(
-    r => r.status === "pending"
-  );
-
-  pendingCancel = pendingRequests.filter(
-    r => r.status === "cancellation_pending"
-  );
-}
-
-
-
   /* ================================
       5) openDetails (STRUCTURE FIXED)
      ================================ */
@@ -550,53 +574,65 @@ async function loadPendingRequests() {
       6) APPROVE / REJECT
      ================================ */
 
-  async function approve(id) {
-  try {
-    await fetch(
-  `${PUBLIC_VITE_API_BASE}/api/leave-requests/${id}`,
-  {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({ status: "approved" }),
+async function approve(id) {
+    try {
+      const res = await fetch(
+        `${PUBLIC_VITE_API_BASE}/api/leave-requests/${id}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ status: "approved" }),
+        }
+      );
+
+      // 🌟 FIX HERE: Check if the response failed (e.g. status 400, 500, etc.)
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Server failed to process approval");
+      }
+
+      showToast("Leave request approved successfully.", "success");
+
+      await loadPendingRequests();
+      await loadEmployees();
+
+      window.dispatchEvent(new Event("pending-updated"));
+    } catch (err) {
+      console.error("❌ Approval client error:", err);
+      showToast(err.message || "Failed to approve leave request.", "error");
+    }
   }
-);
-
-    showToast("Leave request approved successfully.", "success");
-
-    await loadPendingRequests();
-    await loadPending();
-    await loadEmployees();
-
-    window.dispatchEvent(new Event("pending-updated"));
-  } catch (err) {
-    showToast("Failed to approve leave request.", "error");
-  }
-}
 
   async function reject(id) {
-  try {
-    await fetch(
-  `${PUBLIC_VITE_API_BASE}/api/leave-requests/${id}`,
-  {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({ status: "rejected" }),
+    try {
+      const res = await fetch(
+        `${PUBLIC_VITE_API_BASE}/api/leave-requests/${id}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ status: "rejected" }),
+        }
+      );
+
+      // 🌟 FIX HERE: Verify reject response success status explicitly
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Server failed to process rejection");
+      }
+
+      showToast("Leave request rejected.", "success");
+
+      await loadPendingRequests();
+      await loadEmployees();
+
+      window.dispatchEvent(new Event("pending-updated"));
+    } catch (err) {
+      console.error("❌ Rejection client error:", err);
+      showToast(err.message || "Failed to reject leave request.", "error");
+    }
   }
-);
-
-    showToast("Leave request rejected.", "success");
-
-    await loadPendingRequests();
-    await loadPending();
-    await loadEmployees();
-
-    window.dispatchEvent(new Event("pending-updated"));
-  } catch (err) {
-    showToast("Failed to reject leave request.", "error");
-  }
-}
 
   async function approveCancellation(item) {
   try {
@@ -948,8 +984,6 @@ async function rejectCancellation(item) {
         No pending requests.
       </p>
     {:else}
-
-
       <!-- ================================================= -->
       <!--                 PENDING LEAVE APPROVAL           -->
       <!-- ================================================= -->

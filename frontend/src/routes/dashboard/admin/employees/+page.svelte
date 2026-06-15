@@ -211,9 +211,7 @@ pending = pendingRequests;
           position: emp.position,
           role: emp.role,
           // department: emp.department,
-          department: emp.department
-          ? emp.department.split(",")
-          : [],
+          department: emp.department || "",
           email: emp.email,
           photoUrl: url,
           employmentDate: formatDate(emp.employment_date),
@@ -528,7 +526,9 @@ pending = pendingRequests;
       // Overwrite/fill missing
       empId: profile.empId || leave.staff_id,
       name: profile.name || leave.profile_name || leave.staff_name || "",
-      department: profile.department || leave.department || "",
+      department: typeof profile.department === 'string' && profile.department
+  ? profile.department.split(",").map(d => d.trim())
+  : (Array.isArray(profile.department) ? profile.department : []),
       email: profile.email || leave.email || "",
       role: profile.role || leave.requester_role || "",
       position: profile.position || leave.requester_position || "",
@@ -611,7 +611,9 @@ pending = pendingRequests;
               position: detailsForm.position,
               role: detailsForm.role,
               // department: detailsForm.department,
-              department: detailsForm.department.join(","),
+              department: Array.isArray(detailsForm.department)
+              ? detailsForm.department.join(",")
+              : (detailsForm.department || ""),
               employment_date: detailsForm.employmentDate,
               confirmation_date: detailsForm.confirmationDate,
               termination_date: detailsForm.terminationDate,
@@ -1187,11 +1189,11 @@ async function rejectCancellation(item) {
           <p>{emp.position}</p>
           <p>Staff ID: {emp.id}</p>
           <p>
-            Department:
-            {Array.isArray(emp.department)
-              ? emp.department.join(", ")
-              : emp.department}
-        </p>
+            Department: 
+            {typeof emp.department === 'string' 
+              ? emp.department.split(',').join(', ') 
+              : (Array.isArray(emp.department) ? emp.department.join(', ') : (emp.department || '-'))}
+          </p>
         </div>
         <div class="emp-spacer"></div>
         <div class="emp-actions">
@@ -1452,15 +1454,16 @@ async function rejectCancellation(item) {
                   <div class="ctl pill"><input name="position" placeholder="e.g., Data Engineer" bind:value={newEmp.position} autocomplete="on" required /></div>
                 </div>
                 <div>
-                  <label>Department</label>
-                  <div class="ctl pill">
-                    <select multiple bind:value={newEmp.department}>
-                      {#each DEPTS as d}
-                        <option value={d}>{d}</option>
-                      {/each}
-                    </select>
-                  </div>
+                <label style="margin-bottom: 8px;">Department (Select all that apply)</label>
+                <div style="background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px; max-height: 150px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">
+                  {#each DEPTS as d}
+                    <label style="display: flex; align-items: center; gap: 8px; font-weight: normal; margin: 0; cursor: pointer;">
+                      <input type="checkbox" value={d} bind:group={newEmp.department} style="width: auto; cursor: pointer;" />
+                      <span>{d}</span>
+                    </label>
+                  {/each}
                 </div>
+              </div>
               </div>
 
               <div class="row">
@@ -1595,15 +1598,25 @@ async function rejectCancellation(item) {
     </div>
   </div>
   <div>
-    <label>Department</label>
-    <div class={"ctl pill " + (!editMode ? 'disabled' : '')}>
-      <select bind:value={detailsForm.department} disabled={!editMode}>
-        {#each DEPTS as d}
-          <option value={d}>{d}</option>
-        {/each}
-      </select>
+  <label style="margin-bottom: 8px;">Department</label>
+  {#if editMode}
+    <div style="background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px; max-height: 150px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">
+      {#each DEPTS as d}
+        <label style="display: flex; align-items: center; gap: 8px; font-weight: normal; margin: 0; cursor: pointer;">
+          <input type="checkbox" value={d} bind:group={detailsForm.department} style="width: auto; cursor: pointer;" />
+          <span>{d}</span>
+        </label>
+      {/each}
     </div>
-  </div>
+  {:else}
+    <div class="ctl pill disabled">
+      <input 
+        value={Array.isArray(detailsForm.department) ? detailsForm.department.join(", ") : (detailsForm.department || "-")} 
+        disabled 
+      />
+    </div>
+  {/if}
+</div>
 </div>
 
 <!-- EMAIL + EMPLOYMENT DATE -->

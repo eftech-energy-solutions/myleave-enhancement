@@ -8,6 +8,9 @@
   let pendingCancel = [];
   let pendingCount = 0;
 
+  let sessionUser = null;
+  let sessionDept = null;
+
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
   import { PUBLIC_VITE_API_BASE } from '$env/static/public';
@@ -77,6 +80,9 @@ onMount(async () => {
       profilePhotoUrl = safeUser.photoUrl
         ? `${PUBLIC_VITE_API_BASE}${safeUser.photoUrl}`
         : '';
+
+      sessionUser = safeUser.role;
+      sessionDept = (safeUser.department || '').trim().toLowerCase();
 
       // ✅ PANGGIL LEPAS safeUser DAH ADA
       await loadPendingCount();
@@ -488,6 +494,19 @@ async function saveProfile(e) {
               </span>
             {/if}
         </a>
+
+        {#if sessionUser === 'Manager' && sessionDept === 'director'}
+          <div class="sub-links" style="margin-top: -6px; margin-bottom: 6px;">
+            <a
+              href="/dashboard/manager/employees/all"
+              class:active={$page.url.pathname === '/dashboard/manager/employees/all'}
+              style="padding-left: 12px; font-size: 14px; opacity: 0.9;"
+            >
+              <span class="text" style="color: #217859; font-weight: 500;">All Employees</span>
+            </a>
+          </div>
+                {/if}
+
       </nav>
     </div>
 

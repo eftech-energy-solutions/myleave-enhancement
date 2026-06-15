@@ -362,6 +362,7 @@ router.get("/", async (req, res) => {
     const meData = meQuery.rows[0];
     let result;
 
+    const { viewMode } = req.query;
     // =====================
     // ADMIN → SEE ALL
     // =====================
@@ -382,6 +383,29 @@ router.get("/", async (req, res) => {
         FROM profiles
         ORDER BY id DESC
       `);
+
+// =====================================================================
+    // 🌟 DIRECTOR / MANAGER BYPASS
+    // =====================================================================
+    } else if (meData.role?.toLowerCase() === "manager" && meData.department === 'Director' && viewMode === 'all') {
+      // 🔓 LIFT ALL RESTRICTIONS FOR LUQMAN: Return the absolute full registry list!
+      result = await pool.query(`
+        SELECT id, staff_id, full_name, role, position, department, email,
+               employment_date, confirmation_date, termination_date,
+               gender,
+               leave_entitlement_annual_original,
+               leave_entitlement_medical_original,
+               leave_entitlement_annual,
+               leave_entitlement_medical,
+               carry_forward_original,
+               carry_forward_balance,
+               carry_forward_expiry,
+               photourl,
+               notes
+        FROM profiles
+        ORDER BY id DESC
+      `);
+
 
     // =====================
     // DIRECTOR → LIMITED

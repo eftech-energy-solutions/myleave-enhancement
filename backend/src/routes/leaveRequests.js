@@ -590,38 +590,51 @@ router.get("/", async (req, res) => {
     // STATUS FILTER (optional)
     // =========================
     if (status) {
-      where.push(`lr.status = $${params.length + 1}`);
+      // 🌟 FIX: Add LOWER(TRIM()) here so spaces in your DB status column can't hide rows
+      where.push(`LOWER(TRIM(lr.status)) = LOWER(TRIM($${params.length + 1}))`);
       params.push(status);
     }
 
-    // =========================
+  // =========================
     // ROLE + DEPARTMENT RULE
     // =========================
-    if (user.role === 'Manager') {
+if (user.role === 'Manager') {
+      
+      // 1️⃣ Always push the manager's own staff_id first to establish a safe static index token
+      params.push(user.staff_id);
+      const myOwnStaffIdToken = `$${params.length}`;
 
-      // 🔥 Manager department Director
+      // 🔥 Manager department Director (Luqman)
       if (user.department === 'Director') {
+        params.push('Director');
+        const directorDeptToken = `$${params.length}`;
+
+        // Clean up the query logic so it safely checks strings
         where.push(`
           (
-            lr.department = $${params.length + 1}
-            OR lr.requester_role = 'Manager'
+            lr.staff_id = ${myOwnStaffIdToken}
+            OR LOWER(TRIM(lr.department)) = LOWER(TRIM(${directorDeptToken}))
+            OR LOWER(TRIM(lr.requester_role)) = 'manager'
           )
         `);
-        params.push('Director');
 
       } else {
+        // 🔥 Normal Manager (Irfan)
         params.push(user.department);
+        const normalMgrDeptToken = `$${params.length}`;
 
         where.push(`
-          EXISTS (
-            SELECT 1
-            FROM unnest(string_to_array($${params.length}, ',')) mgrDept
-            WHERE trim(mgrDept) = lr.department
+          (
+            lr.staff_id = ${myOwnStaffIdToken}
+            OR EXISTS (
+              SELECT 1
+              FROM unnest(string_to_array(LOWER(${normalMgrDeptToken}), ',')) mgrDept
+              WHERE trim(mgrDept) = LOWER(TRIM(lr.department))
+            )
           )
         `);
       }
     }
-
     // Admin → no filter (see all)
 
     const sql = `

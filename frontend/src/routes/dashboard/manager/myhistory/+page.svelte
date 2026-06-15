@@ -250,52 +250,60 @@ $: if (leaveType && dateFrom) {
     }
   });
 
-  async function loadLeaveHistory() {
+async function loadLeaveHistory() {
     try {
+      // 1️⃣ Ensure user profile metadata is fully parsed first
+      if (!user || !user.staff_id) {
+        const meRes = await fetch(`${PUBLIC_VITE_API_BASE}/api/me`, { credentials: "include" });
+        user = await meRes.json();
+      }
+
+      // Convert target ID to a clean string format ("888") safely once
+      const targetUserId = String(user?.staff_id || user?.id || "888").trim();
+
       const res = await fetch(
         `${PUBLIC_VITE_API_BASE}/api/leave-requests`,
-        {
-          credentials: "include"
-        }
+        { credentials: "include" }
       );
       const all = await res.json();
 
       console.log("ALL LEAVES LENGTH =", all.length);
+      if (all.length > 0) console.log("👉 REAL DATABASE FIELDS:", all[0]);
 
-      console.log("USER STAFF ID:", user.staff_id);
+      // 2️⃣ Filter matching records using structural key fallbacks
+      const matchedRequests = all.filter(l => {
+        // Checks every variation of staff id fields used across your tables
+        const recordId = l.staff_id || l.staffid || l.id || l.user_id;
+        
+        return String(recordId).trim() === targetUserId;
+      });
 
-      const myLeaves = all.filter(
-        x => String(x.staff_id).trim() === String(user.staff_id).trim()
-      );
+      // 3️⃣ Map the data onto Svelte's view grid tracking array
+      leaves = matchedRequests.map(l => ({
+        uuid: l.leave_id || l.uuid || l.id,
+        id: l.staff_id || l.staffid || targetUserId,
+        name: l.staff_name || user?.full_name || "irfan888",
+        dateFrom: l.date_from,
+        dateTo: l.date_until || l.date_from,
+        totalDays: l.total_days,
+        type: l.leave_type,
+        reason: l.reason || "",        
+        duration: l.duration || "Full",  
+        attachment_path: l.attachment_path, 
+        cancellationReason: l.cancellation_reason,
+        status:
+          Number(l.total_days) === 0
+            ? "Invalid"
+            : l.status === "pending" ? "Pending"
+            : l.status === "approved" ? "Approved"
+            : l.status === "rejected" ? "Rejected"
+            : l.status === "cancelled" ? "Cancelled"
+            : l.status === "cancellation_pending" ? "Cancellation Pending"
+            : l.status
+      }));
 
-      console.log("MY LEAVES LENGTH:", myLeaves.length);
-      console.table(myLeaves);
-
-      // ⭐ Manager ONLY sees his own leave
-        leaves = all.filter(l => l.staff_id === user.staff_id)
-        .map(l => ({
-          uuid: l.leave_id,
-          id: l.staff_id,
-          name: l.staff_name,
-          dateFrom: l.date_from,
-          dateTo: l.date_until,
-          totalDays: l.total_days,
-          type: l.leave_type,
-          reason: l.reason,        
-          duration: l.duration,  
-          attachment_path: l.attachment_path, 
-          cancellationReason: l.cancellation_reason,
-
-          status:
-            Number(l.total_days) === 0
-              ? "Invalid"
-              : l.status === "pending" ? "Pending"
-              : l.status === "approved" ? "Approved"
-              : l.status === "rejected" ? "Rejected"
-              : l.status === "cancelled" ? "Cancelled"
-              : l.status === "cancellation_pending" ? "Cancellation Pending"
-              : l.status
-        }));
+      console.log("MY LEAVES HISTORY LENGTH =", leaves.length);
+      console.log("MAPPED LEAVES HISTORY:", leaves);
 
     } catch (err) {
       console.error("Failed to load leave history:", err);
