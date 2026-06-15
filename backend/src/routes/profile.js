@@ -359,36 +359,16 @@ router.get("/", async (req, res) => {
     if (!meQuery.rows.length)
       return res.status(404).json({ error: "User not found" });
 
-    const meData = meQuery.rows[0];
+const meData = meQuery.rows[0];
     let result;
 
+    // 👥 Read the viewMode query string flag sent from Luqman's Svelte page
     const { viewMode } = req.query;
+
     // =====================
     // ADMIN → SEE ALL
     // =====================
     if (meData.role?.toLowerCase() === "admin") {
-      result = await pool.query(`
-        SELECT id, staff_id, full_name, role, position, department, email,
-              employment_date, confirmation_date, termination_date,
-              gender,
-              leave_entitlement_annual_original,
-              leave_entitlement_medical_original,
-              leave_entitlement_annual,
-              leave_entitlement_medical,
-              carry_forward_original,
-              carry_forward_balance,
-              carry_forward_expiry,
-              photourl,
-              notes
-        FROM profiles
-        ORDER BY id DESC
-      `);
-
-// =====================================================================
-    // 🌟 DIRECTOR / MANAGER BYPASS
-    // =====================================================================
-    } else if (meData.role?.toLowerCase() === "manager" && meData.department === 'Director' && viewMode === 'all') {
-      // 🔓 LIFT ALL RESTRICTIONS FOR LUQMAN: Return the absolute full registry list!
       result = await pool.query(`
         SELECT id, staff_id, full_name, role, position, department, email,
                employment_date, confirmation_date, termination_date,
@@ -406,32 +386,25 @@ router.get("/", async (req, res) => {
         ORDER BY id DESC
       `);
 
-
-    // =====================
-    // DIRECTOR → LIMITED
-    // =====================
-    } else if (meData.role?.toLowerCase() === "director") {
+    // =====================================================================
+    // 🌟 DIRECTOR / MANAGER BYPASS (Luqman's full registry access check)
+    // =====================================================================
+    } else if (meData.role?.toLowerCase() === "manager" && meData.department === 'Director' && viewMode === 'all') {
       result = await pool.query(`
         SELECT id, staff_id, full_name, role, position, department, email,
-              employment_date, confirmation_date, termination_date,
-              gender,
-              leave_entitlement_annual_original,
-              leave_entitlement_medical_original,
-              leave_entitlement_annual,
-              leave_entitlement_medical,
-              carry_forward_original,
-              carry_forward_balance,
-              carry_forward_expiry,
-              photourl,
-              notes
+               employment_date, confirmation_date, termination_date,
+               gender,
+               leave_entitlement_annual_original,
+               leave_entitlement_medical_original,
+               leave_entitlement_annual,
+               leave_entitlement_medical,
+               carry_forward_original,
+               carry_forward_balance,
+               carry_forward_expiry,
+               photourl,
+               notes
         FROM profiles
-        WHERE
-          department = 'Director'
-          OR role = 'Manager'
-        ORDER BY
-          CASE WHEN role = 'Manager' THEN 0 ELSE 1 END,
-          department,
-          id DESC
+        ORDER BY id DESC
       `);
 
     // =====================
@@ -486,7 +459,7 @@ router.get("/", async (req, res) => {
         )
         ORDER BY id DESC
       `, [meData.department]);
-            }
+      }
     } else {
       return res.status(403).json({ error: "Unauthorized" });
     }
