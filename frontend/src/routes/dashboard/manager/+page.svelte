@@ -221,26 +221,22 @@ onMount(async () => {
     }
 
     // ================= FETCH ALL STAFF (FILTER BY DEPARTMENT) =================
-    const empRes = await fetch(
+const empRes = await fetch(
       `${PUBLIC_VITE_API_BASE}/api/employee`,
-      {
-        credentials: "include"
-      }
+      { credentials: "include" }
     );
     const allEmployees = await empRes.json();
 
-    // 🔥 FILTER: Only employees in manager's department
+    // 🔥 FILTER: Only employees in manager's department (With Luqman Override!)
     const deptEmployees = allEmployees.filter(emp => {
 
-      // Director Manager
+      // 🌟 FIX HERE: If Director Manager (Luqman), allow absolutely EVERY employee into the chart!
       if (user?.role === "Manager" && user?.department === "Director") {
-        if (emp.role === "Manager") return true;
-        return emp.department === "Director";
+        return true; 
       }
 
-      // Normal Manager (support multiple departments)
+      // Normal Manager (support multiple departments) remains restricted
       if (user?.role === "Manager") {
-
         const managerDepartments = (user.department || "")
           .split(",")
           .map(d => d.trim());

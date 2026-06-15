@@ -537,32 +537,33 @@ router.post("/", upload.single("attachment"), async (req, res) => {
     // =========================
     // 4️⃣ ROLE: STAFF
     // =========================
-    else {
-
-      // Notify Manager department sendiri
+else {
+      
       const mgrRes = await pool.query(
         `SELECT email
-        FROM profiles
-        WHERE LOWER(role) = 'manager'
-        AND EXISTS (
-            SELECT 1
-            FROM unnest(string_to_array(LOWER(department), ',')) mgrDept
-            WHERE trim(mgrDept) = $1
-        )`,
+         FROM profiles
+         WHERE LOWER(role) = 'manager'
+         AND EXISTS (
+             SELECT 1
+             FROM unnest(string_to_array(LOWER(department), ',')) mgrDept
+             WHERE trim(mgrDept) = $1
+         )`,
         [userDept]
       );
 
+      // 🌟 STEP 2: Loop through the rows we found and email BOTH Azira and irfan888!
       for (const row of mgrRes.rows) {
         safeSendEmail(
-        sendPendingApproval,
-        row.email,
-        user.full_name,
-        leave
-      );
+          sendPendingApproval,
+          row.email,
+          user.full_name,
+          leave
+        );
       }
     }
 
-        return res.status(201).json(leave);
+    // This line comes right after the closing block (around line 470)
+    return res.status(201).json(leave);
 
       } catch (err) {
         console.error("POST /api/leave-requests error:", err);

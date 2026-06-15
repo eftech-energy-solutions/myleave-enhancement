@@ -585,7 +585,8 @@ const canGoNextYear = () => {
       'Technical Data',
       'Technical Data - Consultant',
       'Sales & Technical Excellence',
-      'Business Development'
+      'Business Development',
+      'Technical Data,Technical Data - Consultant'
     ];
 
     dataByDept.sort(
