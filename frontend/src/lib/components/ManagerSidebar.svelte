@@ -500,7 +500,7 @@ async function saveProfile(e) {
             <a
               href="/dashboard/manager/employees/all"
               class:active={$page.url.pathname === '/dashboard/manager/employees/all'}
-              style="padding-left: 12px; font-size: 14px; opacity: 0.9;"
+              style="padding-left: 12px; font-size: 16px; opacity: 0.9;"
             >
               <span class="text" style="color: #217859; font-weight: 500;">All Employees</span>
             </a>

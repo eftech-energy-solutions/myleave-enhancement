@@ -13,11 +13,11 @@
   let selectedEmp = null;
 
   const DEPTS = [
+    "Director",
     "Operations Support",
     "Technical Data",
     "Operations",
     "Sales & Technical Excellence",
-    "Director",
     "Business Development",
     "Technical Data - Consultant"
   ];
@@ -112,7 +112,7 @@ if (empRes.ok) {
 
 <div class="main">
   <div class="toprow">
-    <div class="title-label" style="color: #fff; font-size: 16px; font-weight: 600; margin-top: 10px;">All Company Employees</div>
+    <div class="title-label" style="color: #fff; font-size: 16px; font-weight: 600; margin-top: 10px;">All Employee Details</div>
 
     <div class="rightcol filter-wrap">
       <svg class="filter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 16px; height: 16px; color: #fff;">

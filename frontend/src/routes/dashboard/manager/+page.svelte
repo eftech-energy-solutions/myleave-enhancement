@@ -189,6 +189,13 @@ onMount(async () => {
       color: palette[i % palette.length]
     }));
 
+    // Put Director first
+    dataByDept.sort((a, b) => {
+      if (a.name === "Director") return -1;
+      if (b.name === "Director") return 1;
+      return 0;
+    });
+
     totalEmployees = dataByDept.reduce((a,b)=>a+b.count, 0);
 
     await tick();
@@ -609,8 +616,6 @@ if (professor) {
     <div class="card employee-card" style="grid-column: span 6;">
       <h3>Employees Overview</h3>
 
-      <div class="stats-wrap"></div>
-
       <div class="stats">
         <div class="stat total-tile">
           <div class="label">Total Employees</div>
@@ -659,16 +664,17 @@ if (professor) {
 }
 
   .donut-title{ font-size:12px; font-weight:700; color:#374151; margin:0 0 6px; }
- .donut-container {
+.donut-container {
   width: 110px;
   height: 110px;
-  margin: 6px auto 2px auto;
+
   display: flex;
-  align-items: center;
   justify-content: center;
-  transform: translateY(-10px);
-  margin-left: 145px;
-  overflow: visible !important;
+  align-items: center;
+
+  margin: 8px auto;
+
+  transform: translate(10px, -6px); /* move 10px right */
 }
 .card.donut-card {
   padding: 8px 10px !important;  /* smaller top/bottom */
@@ -686,6 +692,11 @@ if (professor) {
   margin-top: 0px;
 }
 
+.employee-card{
+    display:flex;
+    flex-direction:column;
+    height:430px;
+}
 .legend-row-top {
   display: flex;
   gap: 18px;
@@ -726,7 +737,24 @@ if (professor) {
 }
 
   /* numbers panel */
-  .stats{ display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:10px; margin-top:8px; height: 20px; } /*grid employee overview*/
+  .stats{
+    scrollbar-width:none;
+    -ms-overflow-style:none;
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:10px;
+
+    flex:1;
+
+    overflow-y:auto;
+
+    max-height:340px;
+
+    padding-right:4px;
+}
+.stats::-webkit-scrollbar{
+    display:none;
+}
   @media (max-width:980px){ .stats{ grid-template-columns: repeat(2, minmax(0,1fr)); } }
   @media (max-width:580px){ .stats{ grid-template-columns: 1fr; } }
 
@@ -738,7 +766,16 @@ if (professor) {
   .stat .label{ color:#6b7280; font-size:12px; display:flex; align-items:center; gap:8px; }
   .stat .value{ font-size:25px; font-weight:800; color:#111827; line-height:1; }
   .dot{ width:10px; height:10px; border-radius:999px; display:inline-block; }
-  .numbers-link{ display:inline-block; margin-top:270px; font-weight:600; color:#2563eb; text-decoration:none;  margin-left: 463px; white-space: nowrap;  } /* RIGHT side */
+.numbers-link{
+    margin-top:12px;
+    align-self:center;
+
+    transform: translateX(250px);
+
+    font-weight:600;
+    color:#2563eb;
+    text-decoration:none;
+}
   .numbers-link:hover{ text-decoration:underline; }
 
 

@@ -389,23 +389,27 @@ const meData = meQuery.rows[0];
     // =====================================================================
     // 🌟 DIRECTOR / MANAGER BYPASS (Luqman's full registry access check)
     // =====================================================================
-    } else if (meData.role?.toLowerCase() === "manager" && meData.department === 'Director' && viewMode === 'all') {
-      result = await pool.query(`
-        SELECT id, staff_id, full_name, role, position, department, email,
-               employment_date, confirmation_date, termination_date,
-               gender,
-               leave_entitlement_annual_original,
-               leave_entitlement_medical_original,
-               leave_entitlement_annual,
-               leave_entitlement_medical,
-               carry_forward_original,
-               carry_forward_balance,
-               carry_forward_expiry,
-               photourl,
-               notes
-        FROM profiles
-        ORDER BY id DESC
-      `);
+      } else if (
+            meData.role?.toLowerCase() === "manager" && 
+            meData.department?.includes("Director") // 🌟 Use .includes so multi-department works!
+          ) {
+            // Fetch absolutely EVERY active employee in the company for the dashboard
+            result = await pool.query(`
+              SELECT id, staff_id, full_name, role, position, department, email,
+                    employment_date, confirmation_date, termination_date,
+                    gender,
+                    leave_entitlement_annual_original,
+                    leave_entitlement_medical_original,
+                    leave_entitlement_annual,
+                    leave_entitlement_medical,
+                    carry_forward_original,
+                    carry_forward_balance,
+                    carry_forward_expiry,
+                    photourl,
+                    notes
+              FROM profiles
+              ORDER BY id DESC
+            `);
 
     // =====================
     // MANAGER
