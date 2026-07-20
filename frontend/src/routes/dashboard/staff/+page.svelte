@@ -267,14 +267,16 @@ async function loadRecent() {
 
     // ✅ PENDING AL
     pendingAL = all
-      .filter(l =>
-        String(l.staff_id) === String(user.staff_id) &&
-        l.status?.toLowerCase() === "pending" &&
-        (l.leave_type === "AL" || l.leave_type === "EL") &&
-        new Date(l.date_from).getFullYear() === currentYear
-      )
-      .reduce((sum, l) => sum + Number(l.total_days || 0), 0);
-
+  .filter(l =>
+    String(l.staff_id) === String(user.staff_id) &&
+    l.status?.toLowerCase() === "pending" &&
+    (l.leave_type === "AL" || l.leave_type === "EL") &&
+    new Date(l.date_from).getFullYear() === currentYear
+  )
+  .reduce(
+    (sum, l) => sum + Number(l.total_days || 0),
+    0
+  );
     // ✅ PENDING MC
     pendingMC = all
       .filter(l =>
@@ -806,41 +808,74 @@ if (leaveType === 'MC' && from < mcBackdateLimit) {
     );
     return;
   }
-  const limit = {
-    AL:
-        Number(user.leave_entitlement_annual_original ?? 14) +
-        Number(user.carry_forward_balance ?? 0),
-    MC: Number(user.leave_entitlement_medical_original ?? 14),
-    HOSP: Number(user.hosp_entitlement ?? 60),
-    MAT: 98,
-    PAT: 7,
-    COMP_A: 3,
-    COMP_B: 1,
-    MAR: 3,
-    UNPAID: Infinity
-  }[leaveType];
+let availableBalance = Infinity;
 
-  const totalUsed = {
-    AL: totalALUsed,
-    MC: totalMCUsed,
-    HOSP: totalHOSPUsed,
-    MAT: 0,
-    PAT: 0,
-    COMP_A: 0,
-    COMP_B: 0,
-    MAR: 0,
-    UNPAID: 0
-  }[leaveType];
+if (leaveType === "AL") {
+  const annualBalance = Number(user.leave_entitlement_annual ?? 0);
 
-  if (limit !== Infinity && (totalUsed + totalDays) > limit) {
-    showToast(
-  `${getLeaveFullName(leaveType)} limit (${limit} days) has been reached.`,
-  "warning",
-  "Limit Exceeded"
-);
-return;
+  const cfBalance = Number(user.carry_forward_balance ?? 0);
+  const cfExpiry = user.carry_forward_expiry
+    ? new Date(user.carry_forward_expiry)
+    : null;
 
-  }
+  const today = new Date();
+  const validCF =
+    cfExpiry && today > cfExpiry
+      ? 0
+      : cfBalance;
+
+  // Current annual balance already excludes approved leave.
+  // Only pending leave must be deducted here.
+  availableBalance =
+    annualBalance +
+    validCF -
+    Number(pendingAL || 0);
+}
+
+else if (leaveType === "MC") {
+  availableBalance =
+    Number(user.leave_entitlement_medical ?? 0) -
+    Number(pendingMC || 0);
+}
+
+else if (leaveType === "HOSP") {
+  availableBalance =
+    Number(user.hosp_balance ?? user.hosp_entitlement ?? 0) -
+    Number(pendingHOSP || 0);
+}
+
+else if (leaveType === "MAT") {
+  availableBalance = 98;
+}
+
+else if (leaveType === "PAT") {
+  availableBalance = 7;
+}
+
+else if (leaveType === "COMP_A") {
+  availableBalance = 3;
+}
+
+else if (leaveType === "COMP_B") {
+  availableBalance = 1;
+}
+
+else if (leaveType === "MAR") {
+  availableBalance = 3;
+}
+
+if (
+  availableBalance !== Infinity &&
+  Number(totalDays) > availableBalance
+) {
+  showToast(
+    `Insufficient ${getLeaveFullName(leaveType)} balance. ` +
+    `You have ${Math.max(0, availableBalance)} day(s) available.`,
+    "warning",
+    "Insufficient Balance"
+  );
+  return;
+}
 
   const fd = new FormData(formEl);
   fd.set("type", leaveType);

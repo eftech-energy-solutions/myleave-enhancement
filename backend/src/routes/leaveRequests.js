@@ -337,7 +337,7 @@ router.post("/", upload.single("attachment"), async (req, res) => {
         `SELECT COALESCE(SUM(total_days),0) AS used
          FROM leave_requests
          WHERE staff_id=$1 AND leave_type IN ('AL','EL')
-           AND status IN ('approved','pending','cancellation_pending')`,
+           AND status IN ('pending','cancellation_pending')`,
         [staffId]
       );
 
@@ -357,7 +357,7 @@ router.post("/", upload.single("attachment"), async (req, res) => {
         `SELECT COALESCE(SUM(total_days),0) AS used
          FROM leave_requests
          WHERE staff_id=$1 AND leave_type='MC'
-           AND status IN ('approved','pending','cancellation_pending')`,
+           AND status IN ('pending','cancellation_pending')`,
         [staffId]
       );
       used = Number(u.rows[0].used);
@@ -377,7 +377,7 @@ router.post("/", upload.single("attachment"), async (req, res) => {
         `SELECT COALESCE(SUM(total_days),0) AS used
          FROM leave_requests
          WHERE staff_id=$1 AND leave_type='HOSP'
-           AND status IN ('approved','pending','cancellation_pending')`,
+           AND status IN ('pending','cancellation_pending')`,
         [staffId]
       );
       used = Number(u.rows[0].used);
@@ -397,7 +397,7 @@ router.post("/", upload.single("attachment"), async (req, res) => {
         `SELECT COALESCE(SUM(total_days),0) AS used
          FROM leave_requests
          WHERE staff_id=$1 AND leave_type=$2
-           AND status IN ('approved','pending','cancellation_pending')`,
+           AND status IN ('pending','cancellation_pending')`,
         [staffId, type]
       );
       used = Number(u.rows[0].used);
@@ -773,7 +773,7 @@ router.patch("/:id/edit", upload.single("attachment"), async (req, res) => {
          FROM leave_requests
          WHERE staff_id=$1
            AND leave_type IN ('AL','EL')
-           AND status IN ('approved','pending','cancellation_pending')
+           AND status IN ('pending','cancellation_pending')
            AND leave_id != $2`,
         [staffId, leaveId]
       );
@@ -793,7 +793,7 @@ router.patch("/:id/edit", upload.single("attachment"), async (req, res) => {
         `SELECT COALESCE(SUM(total_days),0) AS used
          FROM leave_requests
          WHERE staff_id=$1 AND leave_type='MC'
-           AND status IN ('approved','pending','cancellation_pending')
+           AND status IN ('pending','cancellation_pending')
            AND leave_id != $2`,
         [staffId, leaveId]
       );
@@ -814,7 +814,7 @@ router.patch("/:id/edit", upload.single("attachment"), async (req, res) => {
         `SELECT COALESCE(SUM(total_days),0) AS used
          FROM leave_requests
          WHERE staff_id=$1 AND leave_type='HOSP'
-           AND status IN ('approved','pending','cancellation_pending')
+           AND status IN ('pending','cancellation_pending')
            AND leave_id != $2`,
         [staffId, leaveId]
       );
@@ -835,7 +835,7 @@ router.patch("/:id/edit", upload.single("attachment"), async (req, res) => {
         `SELECT COALESCE(SUM(total_days),0) AS used
          FROM leave_requests
          WHERE staff_id=$1 AND leave_type=$2
-           AND status IN ('approved','pending','cancellation_pending')
+           AND status IN ('pending','cancellation_pending')
            AND leave_id != $3`,
         [staffId, leave_type, leaveId]
       );

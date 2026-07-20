@@ -561,14 +561,18 @@ async function saveProfile(e) {
   }
 
   // Page title
-  $: pageTitle =
-    $page.url.pathname === roleBase
-      ? 'Dashboard'
-      : $page.url.pathname.startsWith('/dashboard/admin/history')
-      ? 'Approved Leave History'
-      : $page.url.pathname.startsWith('/dashboard/admin/employees')
-      ? 'Employees'
-      : 'My Dashboard';
+$: pageTitle =
+  $page.url.pathname === roleBase
+    ? 'Dashboard'
+    : $page.url.pathname.startsWith('/dashboard/admin/history')
+    ? 'Approved Leave History'
+    : $page.url.pathname.startsWith('/dashboard/admin/employees')
+    ? 'Employees'
+    : $page.url.pathname.startsWith('/dashboard/admin/logs')
+    ? 'Activity Logs'
+    : $page.url.pathname.startsWith('/dashboard/admin/chat')
+    ? 'Chat'
+    : 'My Dashboard';
 
   // Settings Modal Title
   $: settingsModalTitle =
@@ -617,6 +621,18 @@ async function saveProfile(e) {
           </span>
           <span class="text">Activity Logs</span>
         </a>
+          <a
+            href="/dashboard/admin/chat"
+            class:active={isActive('/dashboard/admin/chat')}
+          >
+            <span class="ico">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                <path d="M4 4h16c1.1 0 2 .9 2 2v10c0 1.1-.9 2-2 2H8l-4 4V6c0-1.1.9-2 2-2zm2 2v11.17L7.17 16H20V6H6zm2 3h8v2H8V9zm0 4h6v2H8v-2z"/>
+              </svg>
+            </span>
+
+            <span class="text">Chat</span>
+          </a>
       </nav>
     </div>
 
@@ -677,8 +693,14 @@ async function saveProfile(e) {
       </div>
     </header>
 
-    <div class="content-wrap">
-      <main class="content">
+    <div
+  class="content-wrap"
+  class:chat-mode={$page.url.pathname.startsWith('/dashboard/admin/chat')}
+>
+      <main
+  class="content"
+  class:chat-content={$page.url.pathname.startsWith('/dashboard/admin/chat')}
+>
         <slot />
       </main>
     </div>
@@ -927,22 +949,30 @@ async function saveProfile(e) {
 
 <style>
   /* Layout (Tidak berubah) */
- .layout {
+.layout {
   display: grid;
-  grid-template-columns: 220px 1fr;
-  min-height: 100dvh;   /* NORMAL, biar auto expand */
-  overflow: visible;    /* scroll dibenarkan */
+  grid-template-columns: 220px minmax(0, 1fr);
+  min-height: 100dvh;
   background: #fafafa;
 }
 
   /* RIGHT SIDE (Tidak berubah) */
-  .right{
-    position: relative;
-    display:flex;
-    flex-direction:column;
-    min-height:100dvh;
-    background: linear-gradient(180deg,#49bdb3 0%,#2bb7b3 35%,#1798a5 65%,#0c4a6e 100%);
-    overflow-y: hidden;
+.right {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 100dvh;
+
+  background: linear-gradient(
+    180deg,
+    #49bdb3 0%,
+    #2bb7b3 35%,
+    #1798a5 65%,
+    #0c4a6e 100%
+  );
+
+  overflow: visible;
 }
   .right::before{
     content:"";
@@ -1079,15 +1109,92 @@ async function saveProfile(e) {
   a.menu-btn{ text-decoration:none; } 
 
   /* Content (Tidak berubah) */
-  .content-wrap {
+.content-wrap {
   flex: 1;
-  background: transparent;
+  min-width: 0;
   padding: 16px;
-  overflow-y: auto;       /* ⭐ allow scroll dalam content sahaja */
-  height: calc(100vh - 90px);  /* ⭐ adjust ikut tinggi topbar */
+  overflow-y: auto;
+  background: transparent;
 }
 
-  .content{ max-width:1600px; margin:0 auto; }
+.content {
+  width: 100%;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+.content-wrap.chat-mode {
+  height: calc(100dvh - 100px);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.content.chat-content {
+  height: 100%;
+  min-height: 0;
+}
+
+.chat-container {
+  display: grid;
+  grid-template-columns: 340px minmax(0, 1fr);
+
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+
+  overflow: hidden;
+  background: #ffffff;
+  border-radius: 18px;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.14);
+}
+
+.conversation-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-right: 1px solid #e5e7eb;
+}
+
+.employee-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 10px 14px;
+}
+
+.chat-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.messages-area {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+.message-form {
+  flex-shrink: 0;
+}
+
+.empty-chat {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  padding: 30px;
+  text-align: center;
+}
 
   /* Modal styles (Umum) (Tidak berubah) */
   .modal-wrap{ position:fixed; inset:0; background:rgba(0,0,0,.4); display:grid; place-items:center; z-index:50; }

@@ -443,8 +443,7 @@ async function loadPendingRequests() {
             if (currentManagerDept === "director") {
               return (
                 employeeDept === "director" ||
-                employeeRole === "manager" ||
-                recordId === "888" // 🌟 Hard override: Guarantee Luqman sees Irfan
+                employeeRole === "manager" 
               );
             }
 

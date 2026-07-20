@@ -309,12 +309,14 @@ function handlePhotoFile(e) {
   }
 
   // ---- Page title (staff paths) ----
-  $: pageTitle =
-    $page.url.pathname === roleBase
-      ? 'My Dashboard'
-      : $page.url.pathname.startsWith('/dashboard/staff/staffhistory')
-        ? 'Leave Timeline'
-        : 'My Dashboard'; // Fallback title
+$: pageTitle =
+  $page.url.pathname === roleBase
+    ? 'My Dashboard'
+    : $page.url.pathname.startsWith('/dashboard/staff/staffhistory')
+    ? 'Leave History'
+    : $page.url.pathname.startsWith('/dashboard/staff/chat')
+    ? 'Chat'
+    : 'My Dashboard';
 </script>
 
 <div class="layout">
@@ -339,6 +341,18 @@ function handlePhotoFile(e) {
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zM9 14H7v-2h2v2zm4 0h-2v-2h2v2zm4 0h-2v-2h2v2zM5 8V6h14v2H5z"></path></svg>
           </span>
           <span class="text">Leave History</span>
+        </a>
+        <a
+            href="/dashboard/staff/chat"
+            class:active={isActive('/dashboard/staff/chat')}
+          >
+          <span class="ico">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v10c0 1.1-.9 2-2 2H8l-4 4V6c0-1.1.9-2 2-2zm2 2v11.17L7.17 16H20V6H6zm2 3h8v2H8V9zm0 4h6v2H8v-2z"/>
+            </svg>
+          </span>
+
+          <span class="text">Chat</span>
         </a>
       </nav>
     </div>
@@ -585,14 +599,21 @@ function handlePhotoFile(e) {
 }
 
   /* RIGHT SIDE gradient */
-  .right{
-    position: relative;
-    display:flex;
-    flex-direction:column;
-    min-height:100dvh;
-    background: linear-gradient(180deg,#49bdb3 0%,#2bb7b3 35%,#1798a5 65%,#0c4a6e 100%);
-    overflow-y:auto;
-  }
+.right {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  min-height: 0;
+  background: linear-gradient(
+    180deg,
+    #49bdb3 0%,
+    #2bb7b3 35%,
+    #1798a5 65%,
+    #0c4a6e 100%
+  );
+  overflow: hidden;
+}
   .right::before{
     content:"";
     position:absolute; inset:0;
@@ -746,7 +767,20 @@ function handlePhotoFile(e) {
   .menu-btn:hover{ background:#f3f4f6; }
 
   /* Content */
-  .content-wrap{ flex:1; background:transparent; padding:16px; }
+  .content-wrap {
+  flex: 1;
+  min-height: 0;
+  background: transparent;
+  padding: 16px;
+  overflow: hidden;
+}
+
+.content {
+  height: 100%;
+  min-height: 0;
+  max-width: 1600px;
+  margin: 0 auto;
+}
   .content{ max-width:1600px; margin:0 auto; }
 
   /* Modal styles */
