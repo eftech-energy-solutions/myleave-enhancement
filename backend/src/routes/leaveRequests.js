@@ -35,7 +35,26 @@ function getLeaveFullName(code) {
 }
 
 const router = express.Router();
-const upload = multer({ dest: "uploads/leave_attachments/" });
+const uploadDir = "uploads/leave_attachments";
+
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    const uniqueName =
+      Date.now() + "-" + Math.round(Math.random() * 1e9) + ext;
+
+    cb(null, uniqueName);
+  },
+});
+
+const upload = multer({ storage });
 
 /* ============================================================
     HELPER FUNCTIONS FOR LEAVE CALCULATION
@@ -984,6 +1003,13 @@ for (const row of adminRes.rows) {
       return res.status(404).json({ message: "Leave not found" });
 
     const leave = find.rows[0];
+
+    if (status === "approved" && leave.status === "approved") {
+      return res.status(400).json({
+        message: "This leave request has already been approved."
+      });
+    }
+
     const staffId = leave.staff_id;
     const emailRes = await pool.query(
   `SELECT email FROM profiles WHERE staff_id = $1`,

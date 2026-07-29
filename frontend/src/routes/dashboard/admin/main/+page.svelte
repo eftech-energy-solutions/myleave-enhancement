@@ -1,6 +1,7 @@
 <script>
   export let data;
   const user = data?.user;
+  console.log("USER:", user);
   import { onMount } from 'svelte';
   import { tick } from "svelte";
   import Chart from "chart.js/auto";
@@ -47,7 +48,7 @@
   };
 
   let selectedDepartment = "All"; 
-  let isDirectorManager = user?.role === "Manager" && user?.department === "Director";
+    let canViewAllDepartments = true;
 
   function filterByDept(list, dept) {
     if (dept === "All") return list;
@@ -230,8 +231,14 @@
       const allEmployees = await empRes.json();
 
       const deptEmployees = allEmployees.filter(emp => {
-        if (user?.role === "Manager" && user?.department === "Director") {
-          return true; 
+        const role = String(user?.role || "").toLowerCase();
+        const department = String(user?.department || "").toLowerCase();
+
+        if (
+            role === "admin" ||
+            (role === "manager" && department === "director")
+        ) {
+            return true;
         }
 
         if (user?.role === "Manager") {
@@ -295,8 +302,14 @@
         const isValidStatus = ["approved", "pending", "cancellation_pending", "cancellation pending"].includes(statusClean);
         if (!isValidStatus) return false;
 
-        if (user?.role === "Manager" && user?.department === "Director") {
-          return true; 
+        const role = String(user?.role || "").toLowerCase();
+        const department = String(user?.department || "").toLowerCase();
+
+        if (
+        role === "admin" ||
+        (role === "manager" && department === "director")
+        ) {
+        return true;
         }
 
         if (user?.role === "Manager") {
@@ -352,12 +365,30 @@
         }))
       },
         medical: {
-          taken: Object.values(staffMap).map(s => ({ name: s.name, days: s.medical_taken, department: s.department })),
-          remaining: Object.values(staffMap).map(s => ({ name: s.name, days: Math.max(0, s.medical_entitlement - s.medical_taken), department: s.department }))
+        taken: Object.values(staffMap).map(s => ({
+            name: s.name,
+            days: s.medical_taken,
+            department: s.department
+        })),
+
+        remaining: Object.values(staffMap).map(s => ({
+            name: s.name,
+            days: s.medical_balance,
+            department: s.department
+        }))
         },
         hospital: {
-          taken: Object.values(staffMap).map(s => ({ name: s.name, days: s.hospital_taken, department: s.department })),
-          remaining: Object.values(staffMap).map(s => ({ name: s.name, days: Math.max(0, s.hospital_entitlement - s.hospital_taken), department: s.department }))
+        taken: Object.values(staffMap).map(s => ({
+            name: s.name,
+            days: s.hospital_taken,
+            department: s.department
+        })),
+
+        remaining: Object.values(staffMap).map(s => ({
+            name: s.name,
+            days: s.hospital_balance,
+            department: s.department
+        }))
         }
       };
 
@@ -456,7 +487,7 @@
         <div class="donut-card-header">
           <h3 class="donut-title">{d.title}</h3>
           
-          {#if isDirectorManager}
+          {#if canViewAllDepartments}
             <select bind:value={selectedDepartment} class="inline-dept-select">
               <option value="All">All Depts</option>
               {#each dataByDept as dept}
@@ -524,7 +555,7 @@
         {/each}
       </div>
 
-      <a class="numbers-link" href="/dashboard/manager/employees">
+      <a class="numbers-link" href="/dashboard/admin/employees">
         View employees
       </a>
     </div>

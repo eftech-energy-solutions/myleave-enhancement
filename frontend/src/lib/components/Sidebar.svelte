@@ -51,6 +51,22 @@ function showToast(message, type = "success", title = "", duration = 3000) {
   // NAVIGATION (unchanged)
   const roleBase = '/dashboard/admin';
 
+  let dashboardOpen = true;
+
+$: {
+  const path = $page.url.pathname;
+
+  if (
+    path.startsWith("/dashboard/admin") &&
+    !path.startsWith("/dashboard/admin/history") &&
+    !path.startsWith("/dashboard/admin/employees") &&
+    !path.startsWith("/dashboard/admin/logs") &&
+    !path.startsWith("/dashboard/admin/chat")
+  ) {
+    dashboardOpen = true;
+  }
+}
+
   const isActive = (href) => {
     const current = $page.url.pathname;
     if (href === roleBase) return current === href;
@@ -588,12 +604,42 @@ $: pageTitle =
         <img src="/images/myleave.logo.png" alt="MyLeave" />
       </div>
       <nav class="nav">
-        <a href={roleBase} class:active={isActive(roleBase)}>
-          <span class="ico">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 3H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1zm0 11H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-6a1 1 0 0 0-1-1zm11-11h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1zm0 11h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-6a1 1 0 0 0-1-1z"/></svg>
-          </span>
-          <span class="text">Dashboard</span>
-        </a>
+        <div class="nav-group">
+  <a
+    href={roleBase}
+    class:active={isActive(roleBase)}
+    on:click={() => dashboardOpen = !dashboardOpen}
+  >
+    <span class="ico">
+      <!-- keep your existing dashboard icon -->
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+        <path d="M10 3H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1zm0 11H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-6a1 1 0 0 0-1-1zm11-11h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1zm0 11h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-6a1 1 0 0 0-1-1z"/>
+      </svg>
+    </span>
+
+    <span class="text">Dashboard</span>
+  </a>
+
+        {#if dashboardOpen}
+          <div class="submenu">
+
+            <a
+              href="/dashboard/admin"
+              class:active={$page.url.pathname === "/dashboard/admin"}
+            >
+              • Overview
+            </a>
+
+            <a
+              href="/dashboard/admin/main"
+              class:active={$page.url.pathname === "/dashboard/admin/main"}
+            >
+              • Main
+            </a>
+
+          </div>
+        {/if}
+      </div>
         <a href="/dashboard/admin/history" class:active={isActive('/dashboard/admin/history')}>
           <span class="ico">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zM9 14H7v-2h2v2zm4 0h-2v-2h2v2zm4 0h-2v-2h2v2zM5 8V6h14v2H5z"/></svg>
@@ -1605,4 +1651,37 @@ $: pageTitle =
     .settings-form-layout{ grid-template-columns:1fr; }
     .permission-box{ max-height:250px; }
   }
+
+
+.nav-group{
+  display:flex;
+  flex-direction:column;
+}
+
+.submenu{
+  display:flex;
+  flex-direction:column;
+  margin-left:34px;
+  margin-top:6px;
+  gap:4px;
+}
+
+.submenu a{
+  padding:8px 10px;
+  border-radius:10px;
+  font-size:15px;
+  font-weight:500;
+  color:#6b7280;
+  text-decoration:none;
+}
+
+.submenu a:hover{
+  background:#f3f4f6;
+}
+
+.submenu a.active{
+  background:#eaf6f7;
+  color:#1fb3b2;
+  border-left:3px solid #1fb3b2;
+}
 </style>
