@@ -54,6 +54,24 @@ function calculateWorkingDays(fromDate, toDate) {
   let pendingAL = 0;
   let pendingMC = 0;
   let pendingHOSP = 0;
+  let availableAnnualLeave = 0;
+
+$: {
+  const annual = Number(user?.leave_entitlement_annual ?? 0);
+
+  const expiry = user?.carry_forward_expiry
+    ? new Date(user.carry_forward_expiry)
+    : null;
+
+  const today = new Date();
+
+  const validCF =
+    expiry && today > expiry
+      ? 0
+      : Number(user?.carry_forward_balance ?? 0);
+
+  availableAnnualLeave = annual + validCF;
+}
 
 
   // ----- user/profile -----
@@ -1319,7 +1337,14 @@ async function loadApprovedUsedDays() {
         <option value="COMP_B">Compassionate B (Grandparent/Sibling)</option>
         <option value="MAR">Marriage</option>
         <option value="HOSP">Hospitalization</option>
-        <option value="UNPAID">Unpaid Leave</option>
+        <option
+          value="UNPAID"
+          disabled={availableAnnualLeave > 0}
+        >
+          {availableAnnualLeave > 0
+            ? `Unpaid Leave (Use Annual Leave first)`
+            : `Unpaid Leave`}
+        </option>
       </select>
     </label>
 

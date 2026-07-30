@@ -104,7 +104,7 @@ async function resetAnnualLeaveForNewYear() {
     `);
 
     const currentYear = new Date().getFullYear();
-    const expiryDate = `${currentYear + 1}-04-30`;
+    const expiryDate = `${currentYear}-04-30`;
 
     let successCount = 0;
     let errorCount = 0;
@@ -327,7 +327,55 @@ router.post("/", upload.single("attachment"), async (req, res) => {
     let used = 0;
 
     // ===== UNPAID LEAVE (NO LIMITS, NO DB TRACKING) =====
+    // ===== UNPAID LEAVE =====
+    // User can only apply UNPAID when all available AL + valid CF
+    // are not enough for the requested leave.
     if (type === "UNPAID") {
+      const p = await pool.query(
+        `SELECT
+            leave_entitlement_annual,
+            carry_forward_balance,
+            carry_forward_expiry
+        FROM profiles
+        WHERE staff_id = $1`,
+        [staffId]
+      );
+
+      if (!p.rows.length) {
+        return res.status(404).json({
+          message: "Employee profile not found."
+        });
+      }
+
+      const row = p.rows[0];
+
+      const AL = Number(row.leave_entitlement_annual || 0);
+      let CF = Number(row.carry_forward_balance || 0);
+
+      const expiry = row.carry_forward_expiry
+        ? new Date(row.carry_forward_expiry)
+        : null;
+
+      // Use the requested leave date, not today's date
+      const requestedStartDate = new Date(dateFrom);
+
+      if (expiry && requestedStartDate > expiry) {
+        CF = 0;
+      }
+
+      const availableAnnualLeave = AL + CF;
+
+      // Block UNPAID when AL/CF can fully cover the request
+      if (availableAnnualLeave >= serverDays) {
+        return res.status(400).json({
+          message:
+            `You still have ${availableAnnualLeave} day(s) of Annual Leave available. Please apply Annual Leave instead.`,
+          annualBalance: AL,
+          carryForwardBalance: CF,
+          requested: serverDays
+        });
+      }
+
       entitlement = Infinity;
       used = 0;
     }
@@ -762,8 +810,51 @@ router.patch("/:id/edit", upload.single("attachment"), async (req, res) => {
     let entitlement = 0;
     let used = 0;
 
-    // ===== UNPAID LEAVE (NO LIMITS) =====
+    // ===== UNPAID LEAVE =====
     if (leave_type === "UNPAID") {
+      const p = await pool.query(
+        `SELECT
+            leave_entitlement_annual,
+            carry_forward_balance,
+            carry_forward_expiry
+        FROM profiles
+        WHERE staff_id = $1`,
+        [staffId]
+      );
+
+      if (!p.rows.length) {
+        return res.status(404).json({
+          message: "Employee profile not found."
+        });
+      }
+
+      const row = p.rows[0];
+
+      const AL = Number(row.leave_entitlement_annual || 0);
+      let CF = Number(row.carry_forward_balance || 0);
+
+      const expiry = row.carry_forward_expiry
+        ? new Date(row.carry_forward_expiry)
+        : null;
+
+      const requestedStartDate = new Date(date_from);
+
+      if (expiry && requestedStartDate > expiry) {
+        CF = 0;
+      }
+
+      const availableAnnualLeave = AL + CF;
+
+      if (availableAnnualLeave >= serverDays) {
+        return res.status(400).json({
+          message:
+            `You still have ${availableAnnualLeave} day(s) of Annual Leave available. Please apply Annual Leave instead.`,
+          annualBalance: AL,
+          carryForwardBalance: CF,
+          requested: serverDays
+        });
+      }
+
       entitlement = Infinity;
       used = 0;
     }
