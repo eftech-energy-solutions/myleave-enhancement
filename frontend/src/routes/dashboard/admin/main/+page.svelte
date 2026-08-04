@@ -42,7 +42,7 @@
   ];
 
   let staffLeaveData = {
-    annual: { taken: [], remaining: [], carry: [] },
+    annual: { taken: [], remaining: [], carry: [], unpaid: [] },
     medical: { taken: [], remaining: [], carry: [] },
     hospital: { taken: [], remaining: [], carry: [] }
   };
@@ -58,21 +58,53 @@
     });
   }
 
-  $: filteredStaffLeaveData = {
-    annual: {
-      taken: filterByDept(staffLeaveData.annual.taken, selectedDepartment),
-      remaining: filterByDept(staffLeaveData.annual.remaining, selectedDepartment),
-      carry: filterByDept(staffLeaveData.annual.carry, selectedDepartment)
-    },
-    medical: {
-      taken: filterByDept(staffLeaveData.medical.taken, selectedDepartment),
-      remaining: filterByDept(staffLeaveData.medical.remaining, selectedDepartment)
-    },
-    hospital: {
-      taken: filterByDept(staffLeaveData.hospital.taken, selectedDepartment),
-      remaining: filterByDept(staffLeaveData.hospital.remaining, selectedDepartment)
-    }
-  };
+$: filteredStaffLeaveData = {
+  annual: {
+    taken: filterByDept(
+      staffLeaveData.annual.taken || [],
+      selectedDepartment
+    ),
+
+    remaining: filterByDept(
+      staffLeaveData.annual.remaining || [],
+      selectedDepartment
+    ),
+
+    carry: filterByDept(
+      staffLeaveData.annual.carry || [],
+      selectedDepartment
+    ),
+
+    unpaid: filterByDept(
+      staffLeaveData.annual.unpaid || [],
+      selectedDepartment
+    )
+  },
+
+  medical: {
+    taken: filterByDept(
+      staffLeaveData.medical.taken || [],
+      selectedDepartment
+    ),
+
+    remaining: filterByDept(
+      staffLeaveData.medical.remaining || [],
+      selectedDepartment
+    )
+  },
+
+  hospital: {
+    taken: filterByDept(
+      staffLeaveData.hospital.taken || [],
+      selectedDepartment
+    ),
+
+    remaining: filterByDept(
+      staffLeaveData.hospital.remaining || [],
+      selectedDepartment
+    )
+  }
+};
 
   $: if (!loading && selectedDepartment) {
     updateCharts();
@@ -269,23 +301,20 @@
         const proratedMedical = Number(emp.leave_entitlement_medical_prorated ?? 14);
 
         staffMap[emp.staff_id] = {
-          name: emp.full_name,
-          department: emp.department,
+        name: emp.full_name,
+        department: emp.department,
 
-          // Calculate spent leave from leave requests
-          annual_taken: 0,
+        annual_taken: 0,
+        annual_balance: Number(emp.leave_entitlement_annual ?? 0),
+        carry_forward: validCF,
+        unpaid_taken: 0,
 
-          // Read current balance directly from employee profile
-          annual_balance: Number(emp.leave_entitlement_annual ?? 0),
+        medical_taken: 0,
+        medical_balance: Number(emp.leave_entitlement_medical ?? 0),
 
-          carry_forward: validCF,
-
-          medical_taken: 0,
-          medical_balance: Number(emp.leave_entitlement_medical ?? 0),
-
-          hospital_taken: 0,
-          hospital_balance: 60
-        };
+        hospital_taken: 0,
+        hospital_balance: 60
+      };
       });
 
       const leaveRes = await fetch(
@@ -336,73 +365,93 @@
       const days = Number(r.total_days || 0);
 
       if (r.leave_type === "AL" || r.leave_type === "EL") {
-        staffMap[id].annual_taken += days;
-      } else if (r.leave_type === "MC") {
-        staffMap[id].medical_taken += days;
-      } else if (r.leave_type === "HOSP") {
-        staffMap[id].hospital_taken += days;
-      }
+      staffMap[id].annual_taken += days;
+    } else if (r.leave_type === "UNPAID") {
+      staffMap[id].unpaid_taken += days;
+    } else if (r.leave_type === "MC") {
+      staffMap[id].medical_taken += days;
+    } else if (r.leave_type === "HOSP") {
+      staffMap[id].hospital_taken += days;
+    }
     });
 
-      staffLeaveData = {
-        annual: {
-        taken: Object.values(staffMap).map(s => ({
-          name: s.name,
-          days: s.annual_taken,
-          department: s.department
-        })),
+staffLeaveData = {
+  annual: {
+    taken: Object.values(staffMap).map(s => ({
+      name: s.name,
+      days: s.annual_taken,
+      department: s.department
+    })),
 
-        remaining: Object.values(staffMap).map(s => ({
-          name: s.name,
-          days: s.annual_balance,
-          department: s.department
-        })),
+    remaining: Object.values(staffMap).map(s => ({
+      name: s.name,
+      days: s.annual_balance,
+      department: s.department
+    })),
 
-        carry: Object.values(staffMap).map(s => ({
-          name: s.name,
-          days: s.carry_forward,
-          department: s.department
-        }))
-      },
-        medical: {
-        taken: Object.values(staffMap).map(s => ({
-            name: s.name,
-            days: s.medical_taken,
-            department: s.department
-        })),
+    carry: Object.values(staffMap).map(s => ({
+      name: s.name,
+      days: s.carry_forward,
+      department: s.department
+    })),
 
-        remaining: Object.values(staffMap).map(s => ({
-            name: s.name,
-            days: s.medical_balance,
-            department: s.department
-        }))
-        },
-        hospital: {
-        taken: Object.values(staffMap).map(s => ({
-            name: s.name,
-            days: s.hospital_taken,
-            department: s.department
-        })),
+    unpaid: Object.values(staffMap).map(s => ({
+      name: s.name,
+      days: s.unpaid_taken,
+      department: s.department
+    }))
+  },
 
-        remaining: Object.values(staffMap).map(s => ({
-            name: s.name,
-            days: s.hospital_balance,
-            department: s.department
-        }))
-        }
-      };
+  medical: {
+    taken: Object.values(staffMap).map(s => ({
+      name: s.name,
+      days: s.medical_taken,
+      department: s.department
+    })),
+
+    remaining: Object.values(staffMap).map(s => ({
+      name: s.name,
+      days: s.medical_balance,
+      department: s.department
+    }))
+  },
+
+  hospital: {
+    taken: Object.values(staffMap).map(s => ({
+      name: s.name,
+      days: s.hospital_taken,
+      department: s.department
+    })),
+
+    remaining: Object.values(staffMap).map(s => ({
+      name: s.name,
+      days: s.hospital_balance,
+      department: s.department
+    }))
+  }
+};
 
       donuts.forEach(d => {
         const hasCarry = d.key === "annual";
         const labels = hasCarry
-          ? ['Spent Leave', 'Balance Leave', 'Carry-forward Leave']
-          : ['Spent Leave', 'Balance Leave'];
+        ? [
+            'Spent Leave',
+            'Balance Leave',
+            'Carry-forward Leave',
+            'Unpaid Leave'
+          ]
+        : ['Spent Leave', 'Balance Leave'];
 
-        const colors = hasCarry
-          ? ['#ef4444', '#3b82f6', '#10b981']
-          : ['#ef4444', '#3b82f6'];
+      const colors = hasCarry
+        ? [
+            '#ef4444',
+            '#3b82f6',
+            '#10b981',
+            '#f59e0b'
+          ]
+        : ['#ef4444', '#3b82f6'];
 
-        const values = hasCarry ? [1,1,1] : [1,1];
+      const values = hasCarry ? [1, 1, 1, 1] : [1, 1];
 
         d.instance = new Chart(d.canvas, {
           type: 'doughnut',
@@ -430,19 +479,31 @@
                 callbacks: {
                   title: (items) => items[0].label,
                   label: (ctx) => {
-                    let slice;
-                    if (ctx.label.includes('Spent')) slice = 'taken';
-                    else if (ctx.label.includes('Balance')) slice = 'remaining';
-                    else slice = 'carry';
+  let slice;
 
-                    const list = filteredStaffLeaveData[d.key][slice];
-                    
-                    return list.map(s => {
-                      const days = Number(s.days);
-                      const formatted = days % 1 === 0 ? days.toFixed(0) : days.toFixed(1);
-                      return `${s.name}: ${formatted}`;
-                    });
-                  }
+  if (ctx.label.includes("Spent")) {
+    slice = "taken";
+  } else if (ctx.label.includes("Balance")) {
+    slice = "remaining";
+  } else if (ctx.label.includes("Carry-forward")) {
+    slice = "carry";
+  } else if (ctx.label.includes("Unpaid")) {
+    slice = "unpaid";
+  }
+
+  const list =
+    filteredStaffLeaveData?.[d.key]?.[slice] || [];
+
+  return list.map((s) => {
+    const days = Number(s.days || 0);
+    const formatted =
+      days % 1 === 0
+        ? days.toFixed(0)
+        : days.toFixed(1);
+
+    return `${s.name}: ${formatted}`;
+  });
+}
                 }
               },
               legend: { display: false }
@@ -516,11 +577,16 @@
 
           {#if d.key === "annual"}
             <div class="legend-row-bottom">
-              <div class="legend-item">
-                <span class="chip" style="background:#10b981"></span>
-                <span>Carry-forward Leave</span>
-              </div>
+            <div class="legend-item">
+              <span class="chip" style="background:#10b981"></span>
+              <span>Carry-forward Leave</span>
             </div>
+
+            <div class="legend-item">
+              <span class="chip" style="background:#f59e0b"></span>
+              <span>Unpaid Leave</span>
+            </div>
+          </div>
           {/if}
         </div>
       </div>
