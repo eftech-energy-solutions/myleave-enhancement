@@ -1337,14 +1337,21 @@ async function loadApprovedUsedDays() {
         <option value="COMP_B">Compassionate B (Grandparent/Sibling)</option>
         <option value="MAR">Marriage</option>
         <option value="HOSP">Hospitalization</option>
-        <option
-          value="UNPAID"
-          disabled={availableAnnualLeave > 0}
-        >
-          {availableAnnualLeave > 0
-            ? `Unpaid Leave (Use Annual Leave first)`
-            : `Unpaid Leave`}
-        </option>
+        {#if !user?.department
+          ?.split(",")
+          .map((d) => d.trim().toLowerCase())
+          .includes("technical data - consultant")}
+
+          <option
+            value="UNPAID"
+            disabled={availableAnnualLeave > 0}
+          >
+            {availableAnnualLeave > 0
+              ? `Unpaid Leave (Use Annual Leave first)`
+              : `Unpaid Leave`}
+          </option>
+
+        {/if}
       </select>
     </label>
 
