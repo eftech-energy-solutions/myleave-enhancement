@@ -1245,19 +1245,26 @@ async function rejectCancellation(item) {
 
             <!-- Dates -->
             <div class="kv">
-              <div>
-                <span class="k">From:</span>
-                <span class="v">{fmt(item.date_from)}</span>
-              </div>
-              <div>
-                <span class="k">To:</span>
-                <span class="v">{fmt(item.date_until)}</span>
-              </div>
-              <div>
-                <span class="k">Requested:</span>
-                <span class="v">{fmt(item.created_at)}</span>
-              </div>
+            <div>
+              <span class="k">From:</span>
+              <span class="v">{fmt(item.date_from)}</span>
             </div>
+
+            <div>
+              <span class="k">To:</span>
+              <span class="v">{fmt(item.date_until)}</span>
+            </div>
+
+            <div>
+              <span class="k">Requested:</span>
+              <span class="v">{fmt(item.created_at)}</span>
+            </div>
+
+            <div>
+              <span class="k">Remaining:</span>
+              <span class="v">{item.leave_entitlement_annual ?? "-"} day(s)</span>
+            </div>
+          </div>
 
             <!-- ACTIONS + INLINE LEAVE DETAILS LINK -->
             <div class="actions">
@@ -1348,10 +1355,26 @@ async function rejectCancellation(item) {
 
             <!-- Dates -->
             <div class="kv">
-              <div><span class="k">Leave From:</span> <span class="v">{fmt(item.date_from)}</span></div>
-              <div><span class="k">Leave To:</span> <span class="v">{fmt(item.date_until)}</span></div>
-              <div><span class="k">Requested:</span> <span class="v">{fmt(item.created_at)}</span></div>
+            <div>
+              <span class="k">From:</span>
+              <span class="v">{fmt(item.date_from)}</span>
             </div>
+
+            <div>
+              <span class="k">To:</span>
+              <span class="v">{fmt(item.date_until)}</span>
+            </div>
+
+            <div>
+              <span class="k">Requested:</span>
+              <span class="v">{fmt(item.created_at)}</span>
+            </div>
+
+            <div>
+              <span class="k">Remaining:</span>
+              <span class="v">{item.leave_entitlement_annual ?? "-"} day(s)</span>
+            </div>
+          </div>
 
             <!-- ACTIONS + INLINE LEAVE DETAILS LINK -->
             <div class="actions">
