@@ -827,7 +827,23 @@ if (leaveType === 'MC' && from < mcBackdateLimit) {
     return;
   }
 let availableBalance = Infinity;
+const isTechnicalConsultant = String(user.department || "")
+  .split(",")
+  .map((d) => d.trim().toLowerCase())
+  .includes("technical data - consultant");
 
+if (
+  isTechnicalConsultant &&
+  leaveType === "AL" &&
+  availableAnnualLeave <= 0
+) {
+  showToast(
+    "You have no remaining Annual Leave balance. Please contact your manager for further assistance.",
+    "warning",
+    "Annual Leave Unavailable"
+  );
+  return;
+}
 if (leaveType === "AL") {
   const annualBalance = Number(user.leave_entitlement_annual ?? 0);
 
