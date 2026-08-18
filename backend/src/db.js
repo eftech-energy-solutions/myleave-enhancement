@@ -12,7 +12,12 @@
 // export default pool;
 
 import pg from "pg";
-import "dotenv/config";
+import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.resolve(__dirname, "../../.env") });
 
 pg.types.setTypeParser(1082, (val) => val); // DATE → string
 

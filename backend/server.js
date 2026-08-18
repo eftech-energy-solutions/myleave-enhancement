@@ -50,16 +50,18 @@ app.use('/uploads', express.static('uploads', {
 // Middleware
 // ============================
 const allowedOrigins = [
-  "http://localhost:5173",
-  "http://localhost:3000",
-  "https://localhost:5173",
+  /^https?:\/\/localhost:\d+$/,
   "http://edsdata.com.my:3000"
 ];
 app.use(cors({
   origin: function (origin, callback) {
     if (!origin) return callback(null, true); // Postman / server-side
 
-    if (allowedOrigins.includes(origin)) {
+    const allowed = allowedOrigins.some((o) =>
+      o instanceof RegExp ? o.test(origin) : o === origin
+    );
+
+    if (allowed) {
       return callback(null, true);
     }
 
