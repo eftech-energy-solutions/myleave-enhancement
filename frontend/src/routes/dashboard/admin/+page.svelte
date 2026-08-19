@@ -618,13 +618,6 @@ const canGoNextYear = () => {
     });
   });
 </script>
-<svelte:head>
-  <style>
-    html, body, .right, .content-wrap {
-      overflow: hidden !important;
-    }
-  </style>
-</svelte:head>
 
 
 <!-- ======================= -->
@@ -1120,5 +1113,16 @@ const canGoNextYear = () => {
 
 .toast-item.closing {
   animation: fadeOut 0.25s ease forwards;
+}
+
+@media (max-width: 860px) {
+  .grid { grid-template-columns: 1fr !important; }
+  .grid > [style] { grid-column: unset !important; }
+  .main { padding: 10px; }
+  .mini-metrics { grid-template-columns: repeat(2, 1fr); }
+  .chart-box { width: 100%; height: 260px; margin-left: 0; margin-top: 20px; }
+  .calendar-wide { max-width: 100%; }
+  .calendar-wide .days button { width: auto; height: 38px; font-size: 12px; padding: 4px; }
+  .toast-item { min-width: 0; width: calc(100vw - 32px); max-width: none; }
 }
 </style>

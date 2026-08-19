@@ -960,13 +960,6 @@ async function submitLeave(e) {
   });
 
 </script>
-<svelte:head>
-  <style>
-    body {
-      overflow-y: hidden;
-    }
-  </style>
-</svelte:head>
 <main class="main">
   <!-- POKOK 'if loading' DIBUANG DARI SINI UNTUK MEMASTIKAN UI SENTIASA KELIHATAN -->
   <div class="grid">
@@ -1335,10 +1328,6 @@ async function submitLeave(e) {
   .grid{ margin-top:-35px; display:grid; gap:10px; grid-template-columns:repeat(12, minmax(0,1fr)); }
 
   :global(:root){ --spentRed:#ef4444; --restBlue:#3b82f6; --ring:#e5e7eb; --shadow:0 2px 12px rgba(0,0,0,.06); }
-  html, body {
-  overflow: hidden;
-  height: 100%;
-}
   .card{ border:1px solid var(--ring); border-radius:12px; padding:8px; background:#fff; box-shadow:var(--shadow); overflow: visible; }
   .text-red-600 { color: #dc2626; }
 
@@ -1849,17 +1838,15 @@ max-width: 150px;         /* optional — so it wraps instead of going super lon
 }
 
 
-/* =========================
-   MOBILE RESPONSIVE
-========================= */
-@media (max-width: 640px) {
-  .toast {
-    left: 50%;
-    right: auto;
-    transform: translateX(-50%);
-    width: calc(100% - 32px);
-    max-width: none;
-  }
+@media (max-width: 860px) {
+  .main { padding: 10px; }
+  .grid { grid-template-columns: 1fr !important; }
+  .grid > [style] { grid-column: unset !important; }
+  .donut-card { height: auto; min-height: 160px; }
+  .recent-card { height: auto; min-height: 300px; }
+  .calendar-card { height: auto; }
+  .calendar .days button { width: auto; height: 38px; font-size: 12px; }
+  .toast-item { min-width: 0; width: calc(100vw - 32px); max-width: none; }
 }
 
 </style>

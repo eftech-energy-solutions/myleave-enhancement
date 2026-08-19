@@ -535,12 +535,6 @@ staffLeaveData = {
   });
 </script>
 
-<svelte:head>
-  <style>
-    body { overflow-y: hidden; }
-  </style>
-</svelte:head>
-
 <main class="main">
   <div class="grid">
     {#each donuts as d}
@@ -733,4 +727,11 @@ staffLeaveData = {
     text-decoration:none;
   }
   .numbers-link:hover{ text-decoration:underline; }
+
+  @media (max-width: 860px) {
+    .main { padding: 10px; }
+    .grid { grid-template-columns: 1fr !important; }
+    .grid > [style] { grid-column: unset !important; }
+    .donut-card { height: auto; min-height: 160px; }
+  }
 </style>
