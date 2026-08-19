@@ -19,8 +19,10 @@ import chatRoutes from './src/routes/chat.js';
 
 
 import path from "path";
+import { fileURLToPath } from "url";
 
-dotenv.config();
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.join(__dirname, "..", ".env") });
 
 const app = express();
 
@@ -396,4 +398,11 @@ app.put('/api/employee/:staffId/password', async (req, res) => {
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`🚀 API running at http://localhost:${PORT}`);
+});
+
+process.on('unhandledRejection', (err) => {
+  console.error('Unhandled rejection:', err.message || err);
+});
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught exception:', err.message || err);
 });
