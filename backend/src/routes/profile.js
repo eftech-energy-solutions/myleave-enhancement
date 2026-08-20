@@ -805,14 +805,17 @@ router.get("/department-summary", async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT 
-        department AS name,
+        trim(dept) AS name,
         COUNT(*)::int AS count
-      FROM profiles
+      FROM profiles,
+        unnest(string_to_array(department, ',')) AS dept
       WHERE department IS NOT NULL
         AND department <> ''
+        AND trim(dept) <> ''
+        AND trim(dept) <> 'Administrator'
         AND termination_date IS NULL
-      GROUP BY department
-      ORDER BY department ASC
+      GROUP BY trim(dept)
+      ORDER BY trim(dept) ASC
     `);
 
     const filtered = result.rows.filter(r => r.name !== "Administrator");
