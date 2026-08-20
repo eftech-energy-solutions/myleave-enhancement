@@ -28,8 +28,14 @@ const pool = new Pool({
   ssl: process.env.DB_SSL === "true"
     ? { rejectUnauthorized: false }
     : false,
+  max: 10,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000,
 });
 
-console.log(`✅ DB init, using ${process.env.DATABASE_URL}`);
+const dbHost = process.env.DATABASE_URL
+  ? new URL(process.env.DATABASE_URL).host
+  : "unknown";
+console.log(`✅ DB init, connected to ${dbHost}`);
 
 export default pool;

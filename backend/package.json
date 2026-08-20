@@ -7,7 +7,12 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node server.js",
-    "dev": "nodemon server.js"
+    "dev": "nodemon server.js",
+    "db:up": "docker compose -f db/docker-compose.yml up -d",
+    "db:down": "docker compose -f db/docker-compose.yml down",
+    "db:logs": "docker compose -f db/docker-compose.yml logs -f postgres",
+    "db:seed": "node db/seed-admin.js",
+    "db:reset": "docker compose -f db/docker-compose.yml down -v && docker compose -f db/docker-compose.yml up -d && timeout 5 > nul && node db/seed-admin.js"
   },
   "keywords": [],
   "author": "",
