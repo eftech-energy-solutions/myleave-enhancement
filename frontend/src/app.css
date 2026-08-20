@@ -170,7 +170,8 @@ ul{margin:0; padding:0; list-style:none}
   .aside .text{display:inline}
 }
 @media (max-width: 860px){
-  .grid{grid-template-columns: 1fr}
+  .grid{grid-template-columns: 1fr !important}
+  .grid > [style]{grid-column: unset !important}
 }
   .card {
   padding: 1rem;

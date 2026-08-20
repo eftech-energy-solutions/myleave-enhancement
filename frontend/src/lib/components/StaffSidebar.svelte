@@ -1,7 +1,13 @@
 <script>
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
+  import { afterNavigate } from '$app/navigation';
   import { PUBLIC_VITE_API_BASE } from '$env/static/public';
+
+  // --- SIDEBAR TOGGLE ---
+  let sidebarOpen = false;
+  afterNavigate(() => { sidebarOpen = false; });
+
   let selectedFile = null;
   // ---- NAV (staff role) ----
   const roleBase = '/dashboard/staff';
@@ -319,7 +325,12 @@ $: pageTitle =
     : 'My Dashboard';
 </script>
 
-<div class="layout">
+<div class="layout" class:sidebar-open={sidebarOpen}>
+  <!-- ============ MOBILE OVERLAY ============ -->
+  {#if sidebarOpen}
+    <div class="sidebar-overlay" on:click={() => sidebarOpen = false} aria-hidden="true"></div>
+  {/if}
+
   <!-- LEFT SIDEBAR (STAFF) -->
   <aside class="aside">
     <div class="top">
@@ -371,6 +382,13 @@ $: pageTitle =
   <!-- RIGHT: HEADER + CONTENT -->
   <div class="right">
     <header class="topbar">
+      <button class="hamburger" on:click={() => sidebarOpen = !sidebarOpen} aria-label="Toggle sidebar">
+        {#if sidebarOpen}
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        {:else}
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
+        {/if}
+      </button>
       <div class="title-wrap">
         <div class="hello">Welcome back, {safeUser?.name}!</div>
         <h1 class="page-title">{pageTitle}</h1>
@@ -603,8 +621,7 @@ $: pageTitle =
   position: relative;
   display: flex;
   flex-direction: column;
-  height: 100dvh;
-  min-height: 0;
+  min-height: 100dvh;
   background: linear-gradient(
     180deg,
     #49bdb3 0%,
@@ -612,7 +629,7 @@ $: pageTitle =
     #1798a5 65%,
     #0c4a6e 100%
   );
-  overflow: hidden;
+  overflow: visible;
 }
   .right::before{
     content:"";
@@ -772,7 +789,7 @@ $: pageTitle =
   min-height: 0;
   background: transparent;
   padding: 16px;
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 .content {
@@ -946,6 +963,84 @@ $: pageTitle =
 
 .toast-item.closing {
   animation: fadeOut 0.25s ease forwards;
+}
+
+/* ========= HAMBURGER BUTTON ========= */
+.hamburger {
+  display: none;
+  background: transparent;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 8px;
+  line-height: 0;
+}
+.hamburger svg {
+  width: 26px;
+  height: 26px;
+}
+.hamburger:hover {
+  background: rgba(255,255,255,.12);
+}
+
+/* ========= MOBILE OVERLAY ========= */
+.sidebar-overlay {
+  display: none;
+}
+
+/* ========= MOBILE RESPONSIVE ========= */
+@media (max-width: 860px) {
+  .hamburger {
+    display: grid;
+    place-items: center;
+  }
+
+  .sidebar-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.4);
+    z-index: 40;
+  }
+
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .right {
+    height: 100dvh;
+  }
+
+  .aside {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 260px;
+    z-index: 50;
+    transform: translateX(-100%);
+    transition: transform .25s ease;
+    box-shadow: none;
+  }
+
+  .layout.sidebar-open .aside {
+    transform: translateX(0);
+    box-shadow: 4px 0 24px rgba(0,0,0,.15);
+  }
+
+  .page-title {
+    font-size: 28px;
+  }
+
+  .hello {
+    font-size: 14px;
+  }
+
+  .avatar-img {
+    height: 44px;
+    width: 44px;
+  }
 }
 </style>
 

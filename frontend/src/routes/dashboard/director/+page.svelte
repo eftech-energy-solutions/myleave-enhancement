@@ -482,13 +482,6 @@ donuts.forEach(d => {
   }
 })
 </script>
-<svelte:head>
-  <style>
-    body {
-      overflow-y: hidden;
-    }
-  </style>
-</svelte:head>
 <main class="main">
 
   <div class="grid">
@@ -678,5 +671,12 @@ donuts.forEach(d => {
   .numbers-link{ display:inline-block; margin-top:270px; font-weight:600; color:#2563eb; text-decoration:none;  margin-left: 463px; white-space: nowrap;  } /* RIGHT side */
   .numbers-link:hover{ text-decoration:underline; }
 
-
+  @media (max-width: 860px) {
+    .main { padding: 10px; }
+    .grid { grid-template-columns: 1fr !important; }
+    .grid > [style] { grid-column: unset !important; }
+    .donut-card { height: auto; min-height: 160px; }
+    .donut-container { margin-left: 0; transform: none; }
+    .numbers-link { margin-left: 0; margin-top: 12px; display: block; text-align: center; }
+  }
 </style>

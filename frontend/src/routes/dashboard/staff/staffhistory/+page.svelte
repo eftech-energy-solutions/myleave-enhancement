@@ -1468,9 +1468,12 @@ function onUntilChange() {
 
 
   /* ===== Responsive (keep filters usable) ===== */
-  @media (max-width: 640px) {
-    .filters { gap: .75rem; }
+  @media (max-width: 860px) {
+    .filter-bar { justify-content: center; padding-right: 0; }
+    .filters { flex-wrap: wrap; gap: .75rem; }
     .filter select { font-size: 13px; }
-    th, td { padding: 8px 10px; }
+    table.leave-table { font-size: 13px; width: 100%; display: block; overflow-x: auto; }
+    th, td { padding: 8px 10px; white-space: nowrap; }
+    .toast-item { min-width: 0; width: calc(100vw - 32px); max-width: none; }
   }
 </style>

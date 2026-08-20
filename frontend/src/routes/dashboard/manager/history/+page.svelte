@@ -269,13 +269,6 @@ $: filtered = (() => {
 
   $: total = filtered.length;
 </script>
-<svelte:head>
-  <style>
-    body {
-      overflow-y: hidden;
-    }
-  </style>
-</svelte:head>
 
 <svelte:window on:keydown={handleKey}/>
 
@@ -722,6 +715,18 @@ $: filtered = (() => {
     .controls{ flex-wrap:wrap; }
     .control select, .control input{ min-width:140px; }
   }
-  @media(max-width:560px){ .grid{ grid-template-columns:1fr; } }
+  @media(max-width:860px){
+    .card-grid{ grid-template-columns: repeat(2, 1fr); }
+    .month-card{ height: auto; min-height: 150px; }
+    .page{ padding: 1rem; }
+    .dialog{ width: 96vw; max-height: 90vh; }
+    .table{ font-size: 13px; }
+    .table thead th, .table tbody td{ padding: 8px 10px; }
+  }
+  @media(max-width:560px){
+    .card-grid{ grid-template-columns: 1fr; }
+    .dialog-body{ grid-template-columns: 1fr; }
+    .rail{ flex-direction:row; overflow-x:auto; }
+  }
 </style>
 
