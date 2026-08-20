@@ -53,6 +53,9 @@
   let item = null;
   let newAttachmentName = "";
 
+  let showDetailModal = false;
+  let selectedLeave = null;
+
   // ---------- Form State (Unified Same As Leave Application Form) ----------
 let modal;
 let isEdit = false;
@@ -211,6 +214,7 @@ const leaveCodes = {
     duration: l.duration,
     attachment_path: l.attachment_path, 
     cancellationReason: l.cancellation_reason,
+    createdAt: l.created_at,
     status:
   Number(l.total_days) === 0
     ? "Invalid"
@@ -634,6 +638,7 @@ async function loadLeaveHistory() {
         duration: l.duration,
         reason: l.reason,
         attachment_path: l.attachment_path,
+        createdAt: l.created_at,
         status:
           l.status === "pending" ? "Pending" :
           l.status === "approved" ? "Approved" :
@@ -688,6 +693,16 @@ function onFromChange() {
 function onUntilChange() {
   if (duration === "Half") return;
   totalDays = autoCalc(leaveType, dateFrom, dateUntil, duration);
+}
+
+function openDetail(l) {
+  selectedLeave = l;
+  showDetailModal = true;
+}
+
+function closeDetail() {
+  showDetailModal = false;
+  selectedLeave = null;
 }
 </script>
 
@@ -745,8 +760,83 @@ function onUntilChange() {
   </div>
 {/if}
 
+<!-- ===== DETAIL MODAL ===== -->
+{#if showDetailModal && selectedLeave}
+  <div class="modal-backdrop" on:click={closeDetail}>
+    <div class="detail-modal" on:click|stopPropagation>
+      <button class="detail-close-btn" on:click={closeDetail}>✕</button>
+      <h3 class="detail-title">Leave Application Details</h3>
 
-<!-- ===== FILTER BAR (Right aligned) ===== -->
+      <div class="detail-grid">
+        <div class="detail-row">
+          <span class="detail-label">Staff ID</span>
+          <span class="detail-value">{selectedLeave.id}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Name</span>
+          <span class="detail-value">{selectedLeave.name}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Requested On</span>
+          <span class="detail-value">{selectedLeave.createdAt ? fmt(selectedLeave.createdAt) : '-'}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Leave Type</span>
+          <span class="detail-value">{getLeaveFullName(selectedLeave.type)}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Duration</span>
+          <span class="detail-value">{selectedLeave.duration === 'Half' ? 'Half Day' : 'Full Day'}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Date From</span>
+          <span class="detail-value">{fmt(selectedLeave.dateFrom)}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Date Until</span>
+          <span class="detail-value">{fmt(selectedLeave.dateTo)}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Total Days</span>
+          <span class="detail-value">{formatDays(selectedLeave.totalDays)}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Status</span>
+          <span class="detail-value">
+            <span class="badge {selectedLeave.status.toLowerCase().replace(' ', '-')} {selectedLeave.status === 'Approved' && selectedLeave.type === 'UNPAID' ? 'unpaid-approved' : ''}">
+              {selectedLeave.status}
+            </span>
+          </span>
+        </div>
+        <div class="detail-row detail-row-full">
+          <span class="detail-label">Reason</span>
+          <span class="detail-value detail-reason">{selectedLeave.reason || '-'}</span>
+        </div>
+        {#if selectedLeave.attachment_path}
+          <div class="detail-row detail-row-full">
+            <span class="detail-label">Attachment</span>
+            <span class="detail-value">
+              <a
+                href={`${PUBLIC_VITE_API_BASE}${selectedLeave.attachment_path?.startsWith('/') ? '' : '/'}${selectedLeave.attachment_path}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="detail-attachment-link"
+              >
+                View Attachment
+              </a>
+            </span>
+          </div>
+        {/if}
+        {#if selectedLeave.cancellationReason}
+          <div class="detail-row detail-row-full">
+            <span class="detail-label">Cancellation Reason</span>
+            <span class="detail-value detail-reason">{selectedLeave.cancellationReason}</span>
+          </div>
+        {/if}
+      </div>
+    </div>
+  </div>
+{/if}
 <div class="filter-bar">
   <div class="filters">
     <div class="filter">
@@ -902,6 +992,7 @@ function onUntilChange() {
       <th style="width:56px;">No.</th>
       <th>Staff ID</th>
       <th>Name</th>
+      <th>Requested</th>
       <th>Dates</th>
       <th class="center">Total Days</th>
       <th>Leave Type</th>
@@ -911,10 +1002,11 @@ function onUntilChange() {
   </thead>
   <tbody>
     {#each filteredLeaves as l, i}
-      <tr>
+      <tr class="clickable-row" on:click={() => openDetail(l)}>
         <td>{i + 1}</td>
         <td>{l.id}</td>
         <td>{l.name}</td>
+        <td>{l.createdAt ? fmt(l.createdAt) : '-'}</td>
         <td>
           {fmt(l.dateFrom)}
           {#if l.dateTo !== l.dateFrom} – {fmt(l.dateTo)}{/if}
@@ -1463,6 +1555,84 @@ function onUntilChange() {
 
 .toast-item.closing {
   animation: fadeOut 0.25s ease forwards;
+}
+
+/* ===== CLICKABLE ROW ===== */
+.clickable-row {
+  cursor: pointer;
+}
+.clickable-row:hover {
+  background: #e8f5f4 !important;
+}
+
+/* ===== DETAIL MODAL ===== */
+.detail-modal {
+  background: white;
+  padding: 1.5rem 2rem;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+  width: min(520px, 90vw);
+  max-height: 85vh;
+  overflow-y: auto;
+  position: relative;
+}
+.detail-close-btn {
+  position: absolute;
+  right: 12px;
+  top: 10px;
+  border: none;
+  background: transparent;
+  font-size: 20px;
+  cursor: pointer;
+  color: #6b7280;
+  padding: 4px;
+}
+.detail-close-btn:hover {
+  color: #111827;
+}
+.detail-title {
+  margin: 0 0 1rem;
+  color: #49bdb3;
+  font-size: 22px;
+  font-weight: 700;
+}
+.detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.detail-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.detail-row-full {
+  grid-column: 1 / -1;
+}
+.detail-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #6b7280;
+  letter-spacing: 0.5px;
+}
+.detail-value {
+  font-size: 14px;
+  color: #1f2937;
+  font-weight: 500;
+}
+.detail-reason {
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
+}
+.detail-attachment-link {
+  color: #2563eb;
+  text-decoration: underline;
+  font-size: 14px;
+}
+.detail-attachment-link:hover {
+  color: #1d4ed8;
 }
 
 
