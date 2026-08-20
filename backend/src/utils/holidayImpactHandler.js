@@ -131,109 +131,122 @@ async function recalculateAnnualLeaveBalance(leave, oldDays, newDays) {
   const staffId = leave.staff_id;
   const leaveDate = new Date(leave.date_from);
 
-  // Get current profile data
-  const { rows } = await pool.query(
-    `SELECT leave_entitlement_annual, 
-            carry_forward_balance, 
-            carry_forward_expiry
-     FROM profiles 
-     WHERE staff_id = $1`,
-    [staffId]
-  );
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
 
-  let AL = Number(rows[0].leave_entitlement_annual);
-  let CF = Number(rows[0].carry_forward_balance);
-  let expiry = rows[0].carry_forward_expiry ? new Date(rows[0].carry_forward_expiry) : null;
+    // Get current profile data + lock row
+    const { rows } = await client.query(
+      `SELECT leave_entitlement_annual, 
+              carry_forward_balance, 
+              carry_forward_expiry
+       FROM profiles 
+       WHERE staff_id = $1
+       FOR UPDATE`,
+      [staffId]
+    );
 
-  // First, restore the old deductions
-  const oldDeductCF = Number(leave.deduct_cf || 0);
-  const oldDeductAL = Number(leave.deduct_al || 0);
-  
-  AL += oldDeductAL;
-  CF += oldDeductCF;
+    let AL = Number(rows[0].leave_entitlement_annual);
+    let CF = Number(rows[0].carry_forward_balance);
+    let expiry = rows[0].carry_forward_expiry ? new Date(rows[0].carry_forward_expiry) : null;
 
-  console.log(`📥 Restored old deductions: CF+${oldDeductCF}, AL+${oldDeductAL}`);
-
-  // Check if CF is expired
-  const today = new Date();
-  if (expiry && today > expiry) {
-    CF = 0;
-    console.log('⚠️ CF expired, setting to 0');
-  }
-
-  // Calculate new deductions
-  let newDeductCF = 0;
-  let newDeductAL = 0;
-
-  if (CF > 0 && expiry && leaveDate <= expiry) {
-    const leaveEnd = new Date(leave.date_until);
+    // First, restore the old deductions
+    const oldDeductCF = Number(leave.deduct_cf || 0);
+    const oldDeductAL = Number(leave.deduct_al || 0);
     
-    if (leaveEnd > expiry) {
-      // Leave crosses expiry
-      const msDay = 1000 * 60 * 60 * 24;
-      const daysBeforeExpiry = Math.floor((expiry - leaveDate) / msDay) + 1;
-      const daysAfterExpiry = newDays - daysBeforeExpiry;
+    AL += oldDeductAL;
+    CF += oldDeductCF;
+
+    console.log(`📥 Restored old deductions: CF+${oldDeductCF}, AL+${oldDeductAL}`);
+
+    // Check if CF is expired
+    const today = new Date();
+    if (expiry && today > expiry) {
+      CF = 0;
+      console.log('⚠️ CF expired, setting to 0');
+    }
+
+    // Calculate new deductions
+    let newDeductCF = 0;
+    let newDeductAL = 0;
+
+    if (CF > 0 && expiry && leaveDate <= expiry) {
+      const leaveEnd = new Date(leave.date_until);
       
-      console.log(`📅 Leave crosses expiry: ${daysBeforeExpiry} before, ${daysAfterExpiry} after`);
-      
-      if (CF >= daysBeforeExpiry) {
-        newDeductCF = daysBeforeExpiry;
-        newDeductAL = daysAfterExpiry;
+      if (leaveEnd > expiry) {
+        // Leave crosses expiry
+        const msDay = 1000 * 60 * 60 * 24;
+        const daysBeforeExpiry = Math.floor((expiry - leaveDate) / msDay) + 1;
+        const daysAfterExpiry = newDays - daysBeforeExpiry;
+        
+        console.log(`📅 Leave crosses expiry: ${daysBeforeExpiry} before, ${daysAfterExpiry} after`);
+        
+        if (CF >= daysBeforeExpiry) {
+          newDeductCF = daysBeforeExpiry;
+          newDeductAL = daysAfterExpiry;
+        } else {
+          newDeductCF = CF;
+          newDeductAL = newDays - CF;
+        }
       } else {
-        newDeductCF = CF;
-        newDeductAL = newDays - CF;
+        // Entire leave before expiry
+        if (CF >= newDays) {
+          newDeductCF = newDays;
+        } else {
+          newDeductCF = CF;
+          newDeductAL = newDays - CF;
+        }
       }
     } else {
-      // Entire leave before expiry
-      if (CF >= newDays) {
-        newDeductCF = newDays;
-      } else {
-        newDeductCF = CF;
-        newDeductAL = newDays - CF;
-      }
+      // Use AL only
+      newDeductAL = newDays;
     }
-  } else {
-    // Use AL only
-    newDeductAL = newDays;
+
+    console.log(`📤 New deductions: CF-${newDeductCF}, AL-${newDeductAL}`);
+
+    // 🔥 FIX: Check if sufficient balance before updating
+    const finalAL = AL - newDeductAL;
+    const finalCF = CF - newDeductCF;
+
+    if (finalAL < 0) {
+      await client.query('ROLLBACK');
+      console.error(`❌ Insufficient AL balance for leave ${leave.leave_id}. Required: ${newDeductAL}, Available: ${AL}`);
+      throw new Error(`Insufficient Annual Leave balance for ${leave.staff_name}`);
+    }
+
+    // Apply new deductions
+    await client.query(
+      `UPDATE profiles 
+       SET carry_forward_balance = $1, 
+           leave_entitlement_annual = $2 
+       WHERE staff_id = $3`,
+      [finalCF, finalAL, staffId]
+    );
+
+    // Update leave request with new deductions
+    await client.query(
+      `UPDATE leave_requests 
+       SET deduct_cf = $1, deduct_al = $2 
+       WHERE leave_id = $3`,
+      [newDeductCF, newDeductAL, leave.leave_id]
+    );
+
+    // Update remaining leave
+    await client.query(
+      `UPDATE profiles 
+       SET remaining_leave = $1 
+       WHERE staff_id = $2`,
+      [finalAL + finalCF, staffId]
+    );
+
+    await client.query('COMMIT');
+    console.log(`✅ Updated ${leave.staff_name}: AL=${finalAL}, CF=${finalCF}, Remaining=${finalAL + finalCF}`);
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
   }
-
-  console.log(`📤 New deductions: CF-${newDeductCF}, AL-${newDeductAL}`);
-
-  // 🔥 FIX: Check if sufficient balance before updating
-  const finalAL = AL - newDeductAL;
-  const finalCF = CF - newDeductCF;
-
-  if (finalAL < 0) {
-    console.error(`❌ Insufficient AL balance for leave ${leave.leave_id}. Required: ${newDeductAL}, Available: ${AL}`);
-    throw new Error(`Insufficient Annual Leave balance for ${leave.staff_name}`);
-  }
-
-  // Apply new deductions
-  await pool.query(
-    `UPDATE profiles 
-     SET carry_forward_balance = $1, 
-         leave_entitlement_annual = $2 
-     WHERE staff_id = $3`,
-    [finalCF, finalAL, staffId]
-  );
-
-  // Update leave request with new deductions
-  await pool.query(
-    `UPDATE leave_requests 
-     SET deduct_cf = $1, deduct_al = $2 
-     WHERE leave_id = $3`,
-    [newDeductCF, newDeductAL, leave.leave_id]
-  );
-
-  // Update remaining leave
-  await pool.query(
-    `UPDATE profiles 
-     SET remaining_leave = $1 
-     WHERE staff_id = $2`,
-    [finalAL + finalCF, staffId]
-  );
-
-  console.log(`✅ Updated ${leave.staff_name}: AL=${finalAL}, CF=${finalCF}, Remaining=${finalAL + finalCF}`);
 }
 
 /**

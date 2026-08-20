@@ -153,7 +153,10 @@ async function resetAnnualLeaveForNewYear() {
               leave_entitlement_medical = $4::numeric,
               
               -- Total remaining (new AL + carry forward)
-              remaining_leave = $3::numeric + $1::numeric
+              remaining_leave = $3::numeric + $1::numeric,
+              
+              -- Track when reset happened
+              updated_at = NOW()
             WHERE staff_id = $5`,
           [carryForward, expiryDate, newAnnualLeave, newMedicalLeave, s.staff_id]
         );
@@ -206,6 +209,33 @@ async function updateRemainingLeave(staffId) {
     [remaining, staffId]
   );
 }
+// ============================================================
+// ZERO OUT EXPIRED CARRY FORWARD (Runs May 1 at 00:00)
+// ============================================================
+async function zeroExpiredCarryForward() {
+  try {
+    const result = await pool.query(`
+      UPDATE profiles
+      SET carry_forward_balance = 0,
+          carry_forward_original = 0
+      WHERE carry_forward_expiry IS NOT NULL
+        AND carry_forward_expiry < CURRENT_DATE
+        AND (carry_forward_balance > 0 OR carry_forward_original > 0)
+      RETURNING staff_id
+    `);
+
+    if (result.rows.length) {
+      console.log(`🧹 Zeroed out carry forward for ${result.rows.length} employee(s):`,
+        result.rows.map(r => r.staff_id).join(', '));
+    }
+
+    return true;
+  } catch (err) {
+    console.error("❌ Failed to zero expired carry forward:", err);
+    return false;
+  }
+}
+
 // ============================================================
 // MARK APPROVED LEAVES AS INVALID IF TOTAL_DAYS = 0
 // ============================================================
@@ -1121,13 +1151,31 @@ const staffEmail = emailRes.rows[0]?.email;
 
         const { deduct_cf, deduct_al } = leave;
 
-        await pool.query(
-          `UPDATE profiles
-           SET carry_forward_balance = carry_forward_balance + $1,
-               leave_entitlement_annual = leave_entitlement_annual + $2
-           WHERE staff_id=$3`,
-          [deduct_cf, deduct_al, staffId]
-        );
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+
+          // Lock the profile row before restoring balances
+          await client.query(
+            `SELECT 1 FROM profiles WHERE staff_id = $1 FOR UPDATE`,
+            [staffId]
+          );
+
+          await client.query(
+            `UPDATE profiles
+             SET carry_forward_balance = carry_forward_balance + $1,
+                 leave_entitlement_annual = leave_entitlement_annual + $2
+             WHERE staff_id=$3`,
+            [deduct_cf, deduct_al, staffId]
+          );
+
+          await client.query('COMMIT');
+        } catch (e) {
+          await client.query('ROLLBACK');
+          throw e;
+        } finally {
+          client.release();
+        }
       }
       
       // UPDATE REMAINING
@@ -1184,100 +1232,105 @@ const staffEmail = emailRes.rows[0]?.email;
     ============================================================ */
     if (status === "approved" && (leaveType === "AL" || leaveType === "EL")) {
 
-      const p = await pool.query(
-        `SELECT leave_entitlement_annual,
-                carry_forward_balance,
-                carry_forward_expiry
-         FROM profiles
-         WHERE staff_id = $1`,
-        [staffId]
-      );
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
 
-      let AL = Number(p.rows[0].leave_entitlement_annual);
-      let CF = Number(p.rows[0].carry_forward_balance);
-      let expiry = p.rows[0].carry_forward_expiry
-        ? new Date(p.rows[0].carry_forward_expiry)
-        : null;
+        const p = await client.query(
+          `SELECT leave_entitlement_annual,
+                  carry_forward_balance,
+                  carry_forward_expiry
+           FROM profiles
+           WHERE staff_id = $1
+           FOR UPDATE`,
+          [staffId]
+        );
 
-      console.log('🔍 BEFORE APPROVAL:', { AL, CF, expiry, days, leaveDate });
+        let AL = Number(p.rows[0].leave_entitlement_annual);
+        let CF = Number(p.rows[0].carry_forward_balance);
+        let expiry = p.rows[0].carry_forward_expiry
+          ? new Date(p.rows[0].carry_forward_expiry)
+          : null;
 
-      // 🔥 FIX: Check if CF has already expired at TODAY'S date
-      const today = new Date();
-      if (expiry && today > expiry) {
-        CF = 0;
-        console.log('⚠️ CF already expired, setting CF to 0');
-      }
+        console.log('🔍 BEFORE APPROVAL:', { AL, CF, expiry, days, leaveDate });
 
-      let deductCF = 0;
-      let deductAL = 0;
+        const today = new Date();
+        if (expiry && today > expiry) {
+          CF = 0;
+          console.log('⚠️ CF already expired, setting CF to 0');
+        }
 
-      // Only use CF if it's still valid AND leave starts before expiry
-      if (CF > 0 && expiry && leaveDate <= expiry) {
-        // 🔥 FIX: Check if leave spans across expiry date
-        const leaveEnd = new Date(leave.date_until);
-        
-        if (leaveEnd > expiry) {
-          // Leave crosses expiry - split calculation
-          const msDay = 1000 * 60 * 60 * 24;
-          const daysBeforeExpiry = Math.floor((expiry - leaveDate) / msDay) + 1;
-          const daysAfterExpiry = days - daysBeforeExpiry;
+        let deductCF = 0;
+        let deductAL = 0;
+
+        if (CF > 0 && expiry && leaveDate <= expiry) {
+          const leaveEnd = new Date(leave.date_until);
           
-          console.log(`📅 Leave crosses expiry: ${daysBeforeExpiry} days before, ${daysAfterExpiry} days after`);
-          
-          // Use CF for days before expiry only
-          if (CF >= daysBeforeExpiry) {
-            deductCF = daysBeforeExpiry;
-            deductAL = daysAfterExpiry;
+          if (leaveEnd > expiry) {
+            const msDay = 1000 * 60 * 60 * 24;
+            const daysBeforeExpiry = Math.floor((expiry - leaveDate) / msDay) + 1;
+            const daysAfterExpiry = days - daysBeforeExpiry;
+            
+            console.log(`📅 Leave crosses expiry: ${daysBeforeExpiry} days before, ${daysAfterExpiry} days after`);
+            
+            if (CF >= daysBeforeExpiry) {
+              deductCF = daysBeforeExpiry;
+              deductAL = daysAfterExpiry;
+            } else {
+              deductCF = CF;
+              deductAL = days - CF;
+            }
           } else {
-            deductCF = CF;
-            deductAL = days - CF;
+            if (CF >= days) {
+              deductCF = days;
+            } else {
+              deductCF = CF;
+              deductAL = days - CF;
+            }
           }
         } else {
-          // Entire leave is before expiry - use CF first as usual
-          if (CF >= days) {
-            deductCF = days;
-          } else {
-            deductCF = CF;
-            deductAL = days - CF;
-          }
+          deductAL = days;
         }
-      } else {
-        // CF expired or leave starts after expiry - use AL only
-        deductAL = days;
+
+        if (deductAL > AL) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({
+            message: "Insufficient Annual Leave balance.",
+            required: deductAL,
+            available: AL
+          });
+        }
+
+        console.log('💰 Calculated Deduction:', { deductCF, deductAL, totalDays: days });
+        console.log('📊 Expected New Balance:', { newCF: CF - deductCF, newAL: AL - deductAL });
+
+        await client.query(
+          `UPDATE profiles
+           SET carry_forward_balance = carry_forward_balance - $1,
+               leave_entitlement_annual = leave_entitlement_annual - $2
+           WHERE staff_id = $3`,
+          [deductCF, deductAL, staffId]
+        );
+
+        console.log('✅ Profile updated with:', { deductCF, deductAL, staffId });
+
+        await client.query(
+          `UPDATE leave_requests
+           SET deduct_cf=$1, deduct_al=$2
+           WHERE leave_id=$3`,
+          [deductCF, deductAL, leaveId]
+        );
+
+        console.log('✅ Leave request updated with deductions');
+
+        await client.query('COMMIT');
+        console.log('✅ Transaction committed');
+      } catch (e) {
+        await client.query('ROLLBACK');
+        throw e;
+      } finally {
+        client.release();
       }
-
-      // Validate sufficient balance
-      if (deductAL > AL) {
-        return res.status(400).json({
-          message: "Insufficient Annual Leave balance.",
-          required: deductAL,
-          available: AL
-        });
-      }
-
-      console.log('💰 Calculated Deduction:', { deductCF, deductAL, totalDays: days });
-      console.log('📊 Expected New Balance:', { newCF: CF - deductCF, newAL: AL - deductAL });
-
-      // Update profile
-      await pool.query(
-        `UPDATE profiles
-         SET carry_forward_balance = carry_forward_balance - $1,
-             leave_entitlement_annual = leave_entitlement_annual - $2
-         WHERE staff_id = $3`,
-        [deductCF, deductAL, staffId]
-      );
-
-      console.log('✅ Profile updated with:', { deductCF, deductAL, staffId });
-
-      // 🔥 IMPORTANT: Save deductions for cancellation restoration
-      await pool.query(
-        `UPDATE leave_requests
-         SET deduct_cf=$1, deduct_al=$2
-         WHERE leave_id=$3`,
-        [deductCF, deductAL, leaveId]
-      );
-
-      console.log('✅ Leave request updated with deductions');
 
       await updateRemainingLeave(staffId);
       
@@ -1435,14 +1488,31 @@ router.delete("/:id", async (req, res) => {
     if (leave.status === "approved" && leaveType !== "UNPAID") {
       if (leaveType === "AL" || leaveType === "EL") {
         const { deduct_cf, deduct_al } = leave;
-        
-        await pool.query(
-          `UPDATE profiles
-           SET carry_forward_balance = carry_forward_balance + $1,
-               leave_entitlement_annual = leave_entitlement_annual + $2
-           WHERE staff_id=$3`,
-          [deduct_cf || 0, deduct_al || 0, staffId]
-        );
+
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+
+          await client.query(
+            `SELECT 1 FROM profiles WHERE staff_id = $1 FOR UPDATE`,
+            [staffId]
+          );
+
+          await client.query(
+            `UPDATE profiles
+             SET carry_forward_balance = carry_forward_balance + $1,
+                 leave_entitlement_annual = leave_entitlement_annual + $2
+             WHERE staff_id=$3`,
+            [deduct_cf || 0, deduct_al || 0, staffId]
+          );
+
+          await client.query('COMMIT');
+        } catch (e) {
+          await client.query('ROLLBACK');
+          throw e;
+        } finally {
+          client.release();
+        }
       } else if (leaveType === "MC") {
         await pool.query(
           `UPDATE profiles
@@ -1605,60 +1675,41 @@ router.get("/me", async (req, res) => {
   }
 });
 
-// TEMPORARY - Test cron (runs every minute)
-// cron.schedule('* * * * *', async () => {
-//   console.log('🧪 TEST CRON TRIGGERED');
-//   const success = await resetAnnualLeaveForNewYear();
-//   if (success) {
-//     console.log('✅ Test reset completed!');
-//   } else {
-//     console.error('❌ Test reset failed!');
-//   }
-// });
-// console.log('⏰ TEST: Cron running every minute');
+/* ============================================================
+    AUTOMATIC YEARLY RESET - RUNS JANUARY 1 AT 00:00
+    - Carries forward unused AL (max 7 days) with April 30 expiry
+    - Resets annual & medical entitlements based on years of service
+    - Resets remaining_leave = new AL + carry forward
+============================================================ */
+cron.schedule('0 0 1 1 *', async () => {
+  console.log('🎉 AUTO YEARLY RESET TRIGGERED - January 1, 00:00');
+  const success = await resetAnnualLeaveForNewYear();
+  if (success) {
+    console.log('✅ Yearly leave reset completed successfully!');
+  } else {
+    console.error('❌ Yearly leave reset failed!');
+  }
+});
+console.log('⏰ Cron scheduled: Yearly reset on January 1 at midnight');
 
-
-// Calculate time 2 minutes from now
-// const now = new Date();
-// const testTime = new Date(now.getTime() + 2 * 60000);
-// const minute = testTime.getMinutes();
-// const hour = testTime.getHours();
-
-// console.log(`⏰ TEST: Cron will trigger at ${hour}:${minute} (in ~2 minutes)`);
-
-// // Test cron - triggers once at specific time
-// cron.schedule(`${minute} ${hour} * * *`, async () => {
-//   console.log('🎉 TEST TRIGGER - Simulating Jan 1 behavior');
-//   const success = await resetAnnualLeaveForNewYear();
-//   if (success) {
-//     console.log('✅ Test reset completed!');
-//   } else {
-//     console.error('❌ Test reset failed!');
-//   }
-// });
-
-
-// /* ============================================================
-//     AUTOMATIC YEARLY RESET - RUNS JANUARY 1 AT 00:00
-// ============================================================ */
-// // cron.schedule('0 0 1 1 *', async () => {
-// //   console.log('🎉 AUTO YEARLY RESET TRIGGERED - January 1, 00:00');
-// //   const success = await resetAnnualLeaveForNewYear();
-// //   if (success) {
-// //     console.log('✅ Yearly leave reset completed successfully!');
-// //   } else {
-// //     console.error('❌ Yearly leave reset failed!');
-// //   }
-// // });
-
-// // console.log('⏰ Cron job scheduled: Yearly reset on January 1 at midnight');
-// // ============================================================
-// // AUTO MARK APPROVED LEAVES AS INVALID (SAFETY NET)
-// // ============================================================
+/* ============================================================
+    AUTO MARK APPROVED LEAVES AS INVALID (SAFETY NET)
+============================================================ */
 cron.schedule('*/1 * * * *', async () => {
   // console.log('🧹 Checking approved leaves with zero days...');
   await markInvalidApprovedLeaves();
 });
+
+/* ============================================================
+    EXPIRED CARRY FORWARD CLEANUP — May 1 at 00:00
+    Zeros out carry_forward_balance for all employees whose
+    carry_forward_expiry has passed (April 30 of this year).
+============================================================ */
+cron.schedule('0 0 1 5 *', async () => {
+  console.log('🧹 AUTO: Zeroing out expired carry forward balances...');
+  await zeroExpiredCarryForward();
+});
+console.log('⏰ Cron scheduled: Carry forward expiry cleanup on May 1 at midnight');
 
 export default router;
 
