@@ -1,11 +1,15 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
-import nodemailer from 'nodemailer';
 import pool from '../db.js';
 import dotenv from 'dotenv';
 import { logAdminAction } from '../middleware/adminLogger.js';
-dotenv.config();
+import { sendPasswordResetOtp } from '../utils/emailTemplates.js';
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.join(__dirname, "..", "..", ".env") });
 
 const router = express.Router();
 
@@ -96,28 +100,6 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// ---------- SMTP transporter ----------
-const transporter = nodemailer.createTransport({
-  host: "mail.eftech.com.my",
-  port: 465,
-  secure: true,
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
-  },
-  // uncomment if you see SSL/self-signed errors in logs
-  // tls: { rejectUnauthorized: false }
-});
-
-// verify once on server start
-transporter.verify((error, success) => {
-  if (error) {
-    console.error('❌ SMTP connection error:', error.message);
-  } else {
-    console.log('✅ SMTP server is ready to send emails');
-  }
-});
-
 // ---------- CHANGE PASSWORD (email + current + new) ----------
 router.post('/change-password', async (req, res) => {
   try {
@@ -186,14 +168,13 @@ router.post('/forgot', async (req, res) => {
       [email, otpHash, expires]
     );
 
-    await transporter.sendMail({
-      from: '"Eftech HR" <no-reply@eftech.com.my>',
-      to: email,
-      subject: 'Password Reset Code',
-      text: `Your OTP code is ${otp}. It will expire in 10 minutes.`
-    });
-
-    res.json({ success: true, message: 'OTP sent to email' });
+    try {
+      await sendPasswordResetOtp(email, otp);
+      res.json({ success: true, message: 'OTP sent to email' });
+    } catch (emailErr) {
+      console.error("Failed to send OTP email:", emailErr.message);
+      res.json({ success: true, message: 'OTP generated but email delivery failed. Contact HR.' });
+    }
   } catch (err) {
     console.error('Forgot password error:', err);
     res.status(500).json({ error: 'Failed to send OTP' });
