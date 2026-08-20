@@ -9,8 +9,16 @@ export default defineConfig(({ mode }) => {
     plugins: [tailwindcss(), sveltekit()],
     server: {
       allowedHosts: true,
+      fs: {
+        allow: ['.']
+      },
       proxy: {
         '/api': {
+          target: env.PUBLIC_VITE_API_BASE,
+          changeOrigin: true,
+          secure: false
+        },
+        '/uploads': {
           target: env.PUBLIC_VITE_API_BASE,
           changeOrigin: true,
           secure: false
