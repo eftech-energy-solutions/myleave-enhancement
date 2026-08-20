@@ -72,8 +72,8 @@ function calculateProratedLeave(employmentDate, baseEntitlement) {
   
   const prorated = (baseEntitlement / 12) * remainingMonths;
   
-  // Round up (7.5 → 8, 7.1 → 8)
-  return Math.ceil(prorated);
+  // Round down — employee only gets full completed months
+  return Math.floor(prorated);
 }
 
 /* ============================================================
