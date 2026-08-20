@@ -7,10 +7,11 @@ let _transporter;
 
 function getTransporter() {
   if (!_transporter) {
+    const port = Number(process.env.SMTP_PORT) || 465;
     _transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST || "mail.eftech.com.my",
-      port: Number(process.env.SMTP_PORT) || 465,
-      secure: Number(process.env.SMTP_PORT) === 465,
+      port,
+      secure: port === 465,
       ...(process.env.EMAIL_USER ? {
         auth: {
           user: process.env.EMAIL_USER,
