@@ -432,37 +432,7 @@ pending = pendingRequests;
       const data = await res.json();
 
       if (res.ok) {
-        const fullPhotoUrl = uploadedPhotoUrl.startsWith("http")
-        ? uploadedPhotoUrl
-        : `${PUBLIC_VITE_API_BASE}${uploadedPhotoUrl}`;
-
-        const card = {
-          id: newEmp.empId,
-          name: newEmp.name,
-          position: newEmp.position,
-          role: newEmp.role,
-          department: newEmp.department,
-          photoUrl: fullPhotoUrl
-        };
-
-        employees = [card, ...employees];
-
-        detailsById[newEmp.empId] = {
-          photoUrl: fullPhotoUrl,
-          empId: newEmp.empId,
-          name: newEmp.name,
-          email: newEmp.email,
-          position: newEmp.position,
-          role: newEmp.role,
-          department: newEmp.department,
-          employmentDate: newEmp.employmentDate,
-          terminationDate: newEmp.terminationDate,
-          confirmationDate: newEmp.confirmationDate,
-          gender: newEmp.gender,
-          annualLeave: String(newEmp.annualLeave ?? ""),
-          medicalLeave: String(newEmp.medicalLeave ?? ""),
-          notes: newEmp.notes
-        };
+        await loadEmployees();
 
         addModalOpen = false;
          showToast(
