@@ -31,8 +31,8 @@ function getTransporter() {
 // CONSTANTS
 // ======================================================
 const BASE_URL = process.env.APP_URL || "https://myleave.edsdata.com.my";
-const LOGO_EFTECH = `${BASE_URL}/static/images/eftech.logo.png`;
-const LOGO_MYLEAVE = `${BASE_URL}/static/images/myleave.logo.png`;
+const LOGO_EFTECH = `${BASE_URL}/images/eftech.logo.png`;
+const LOGO_MYLEAVE = `${BASE_URL}/images/myleave.logo.png`;
 
 const BRAND = {
   primary: "#49bdb3",
