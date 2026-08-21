@@ -742,7 +742,9 @@ $: pageDesc =
         {/if}
       </button>
       <div class="title-wrap">
-        <div class="hello">Welcome back, {safeUser?.name}!</div>
+        {#if $page.url.pathname === roleBase || $page.url.pathname.startsWith('/dashboard/admin/main')}
+          <div class="hello">Welcome back, {safeUser?.name}!</div>
+        {/if}
         <h1 class="page-title">{pageTitle}</h1>
         <p class="page-desc">{pageDesc}</p>
       </div>

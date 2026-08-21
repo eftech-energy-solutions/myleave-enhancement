@@ -586,7 +586,9 @@ async function saveProfile(e) {
         {/if}
       </button>
       <div class="title-wrap">
-        <div class="hello">Welcome back, {safeUser?.name || 'admin'}!</div>
+        {#if $page.url.pathname === '/dashboard/manager' || $page.url.pathname.startsWith('/dashboard/manager/main')}
+          <div class="hello">Welcome back, {safeUser?.name || 'admin'}!</div>
+        {/if}
 
         {#if $page.url.pathname.startsWith('/dashboard/manager/main')}
           <h1 class="page-title">Dashboard</h1>
