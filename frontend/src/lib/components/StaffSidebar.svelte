@@ -323,6 +323,16 @@ $: pageTitle =
     : $page.url.pathname.startsWith('/dashboard/staff/chat')
     ? 'Chat'
     : 'My Dashboard';
+
+// ---- Page description (staff paths) ----
+$: pageDesc =
+  $page.url.pathname === roleBase
+    ? 'Apply for leave, check your balances and see the holiday calendar.'
+    : $page.url.pathname.startsWith('/dashboard/staff/staffhistory')
+    ? 'Track your leave applications — apply, edit or cancel upcoming leave.'
+    : $page.url.pathname.startsWith('/dashboard/staff/chat')
+    ? 'Real-time messaging with your team.'
+    : 'Apply for leave, check your balances and see the holiday calendar.';
 </script>
 
 <div class="layout" class:sidebar-open={sidebarOpen}>
@@ -392,7 +402,8 @@ $: pageTitle =
       <div class="title-wrap">
         <div class="hello">Welcome back, {safeUser?.name}!</div>
         <h1 class="page-title">{pageTitle}</h1>
-      </div>  
+        <p class="page-desc">{pageDesc}</p>
+      </div>
 
       <div class="profile" use:clickOutside>
         <div class="profile-info">
@@ -692,8 +703,21 @@ $: pageTitle =
   .title-wrap {
     display: flex;
     flex-direction: column;
-    gap: 0.5px;
+    gap: 2px;
     color: #fff;
+    background: rgba(4, 32, 51, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 16px;
+    padding: 10px 20px;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.18);
+  }
+  .page-desc {
+    margin: 2px 0 0;
+    font-size: 13.5px;
+    line-height: 1.35;
+    color: rgba(255, 255, 255, 0.88);
   }
   .hello {
   max-width: 980px;       /* kekalkan limit ruang */

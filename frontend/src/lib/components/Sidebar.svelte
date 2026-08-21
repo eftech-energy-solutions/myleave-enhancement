@@ -58,19 +58,20 @@ function showToast(message, type = "success", title = "", duration = 3000) {
 
   let dashboardOpen = true;
 
-$: {
-  const path = $page.url.pathname;
+afterNavigate(({ to }) => {
+  const path = to?.url?.pathname ?? $page.url.pathname;
 
   if (
     path.startsWith("/dashboard/admin") &&
     !path.startsWith("/dashboard/admin/history") &&
     !path.startsWith("/dashboard/admin/employees") &&
+    !path.startsWith("/dashboard/admin/leave-approvals") &&
     !path.startsWith("/dashboard/admin/logs") &&
     !path.startsWith("/dashboard/admin/chat")
   ) {
     dashboardOpen = true;
   }
-}
+});
 
   const isActive = (href) => {
     const current = $page.url.pathname;
@@ -589,11 +590,31 @@ $: pageTitle =
     ? 'Approved Leave History'
     : $page.url.pathname.startsWith('/dashboard/admin/employees')
     ? 'Employees'
+    : $page.url.pathname.startsWith('/dashboard/admin/leave-approvals')
+    ? 'Leave Approvals'
     : $page.url.pathname.startsWith('/dashboard/admin/logs')
     ? 'Activity Logs'
     : $page.url.pathname.startsWith('/dashboard/admin/chat')
     ? 'Chat'
     : 'My Dashboard';
+
+// Page description
+$: pageDesc =
+  $page.url.pathname === roleBase
+    ? 'Company-wide leave overview and the public holiday calendar.'
+    : $page.url.pathname.startsWith('/dashboard/admin/main')
+    ? 'Key leave statistics and activity across the organisation.'
+    : $page.url.pathname.startsWith('/dashboard/admin/history')
+    ? 'Browse and search approved leave records for all employees.'
+    : $page.url.pathname.startsWith('/dashboard/admin/employees')
+    ? 'Employee directory — view profiles, add new staff and manage details.'
+    : $page.url.pathname.startsWith('/dashboard/admin/leave-approvals')
+    ? 'Review and act on pending leave and cancellation requests from all employees.'
+    : $page.url.pathname.startsWith('/dashboard/admin/logs')
+    ? 'Audit trail of actions performed in the system.'
+    : $page.url.pathname.startsWith('/dashboard/admin/chat')
+    ? 'Real-time messaging between admins and employees.'
+    : 'Company-wide calendar and leave statistics at a glance.';
 
   // Settings Modal Title
   $: settingsModalTitle =
@@ -609,22 +630,23 @@ $: pageTitle =
         <img src="/images/myleave.logo.png" alt="MyLeave" />
       </div>
       <nav class="nav">
-        <div class="nav-group">
-  <a
-    href={roleBase}
-    class:active={isActive(roleBase)}
-    on:click={() => dashboardOpen = !dashboardOpen}
-  >
-    <span class="ico">
-      <!-- keep your existing dashboard icon -->
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-        <path d="M10 3H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1zm0 11H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-6a1 1 0 0 0-1-1zm11-11h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1zm0 11h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-6a1 1 0 0 0-1-1z"/>
-      </svg>
-    </span>
+        <button
+          type="button"
+          class="nav-group"
+          class:open={dashboardOpen}
+          on:click={() => dashboardOpen = !dashboardOpen}
+          aria-expanded={dashboardOpen}
+        >
+          <span class="ico">
+            <!-- keep your existing dashboard icon -->
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+              <path d="M10 3H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1zm0 11H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-6a1 1 0 0 0-1-1zm11-11h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1zm0 11h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-6a1 1 0 0 0-1-1z"/>
+            </svg>
+          </span>
 
-    <span class="text">Dashboard</span>
-  </a>
-
+          <span class="text">Dashboard</span>
+          <svg class="chev" class:open={dashboardOpen} viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5z"/></svg>
+        </button>
         {#if dashboardOpen}
           <div class="submenu">
 
@@ -644,7 +666,6 @@ $: pageTitle =
 
           </div>
         {/if}
-      </div>
         <a href="/dashboard/admin/history" class:active={isActive('/dashboard/admin/history')}>
           <span class="ico">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zM9 14H7v-2h2v2zm4 0h-2v-2h2v2zm4 0h-2v-2h2v2zM5 8V6h14v2H5z"/></svg>
@@ -655,14 +676,16 @@ $: pageTitle =
           <span class="ico">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
           </span>
-           <span class="text">
-              Employees
-              {#if pendingCount > 0}
-                <span class="nav-badge">
-                  {pendingCount > 9 ? '9+' : pendingCount}
-                </span>
-              {/if}
+           <span class="text">Employees</span>
+        </a>
+        <a href="/dashboard/admin/leave-approvals" class="nav-approvals" class:active={isActive('/dashboard/admin/leave-approvals')}>
+          <span class="ico">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M22 5.18L10.59 16.6l-4.24-4.24 1.41-1.41 2.83 2.83 10-10L22 5.18zm-2.21 5.04c.13.57.21 1.17.21 1.78 0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8c1.58 0 3.04.46 4.28 1.25l1.44-1.44C16.1 2.67 14.13 2 12 2 6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10c0-1.19-.22-2.33-.6-3.39l-1.61 1.61z"/></svg>
           </span>
+           <span class="text">Leave Approvals</span>
+           {#if pendingCount > 0}
+             <span class="nav-badge">{pendingCount > 9 ? '9+' : pendingCount}</span>
+           {/if}
         </a>
          <a href="/dashboard/admin/logs" class:active={isActive('/dashboard/admin/logs')}>
           <span class="ico">
@@ -721,6 +744,7 @@ $: pageTitle =
       <div class="title-wrap">
         <div class="hello">Welcome back, {safeUser?.name}!</div>
         <h1 class="page-title">{pageTitle}</h1>
+        <p class="page-desc">{pageDesc}</p>
       </div>
 
       <div class="profile" use:clickOutside>
@@ -1052,6 +1076,10 @@ $: pageTitle =
   .logo img{ height:38px; display:block; margin:auto; }
   .nav{ display:flex; flex-direction:column; gap:12px; }
   .nav a{ display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:12px; color:#217859; font-weight:600; text-decoration:none; }
+  button.nav-group{ display:flex; flex-direction:row; align-items:center; gap:12px; width:100%; padding:10px 12px; border:none; border-radius:12px; background:none; color:#217859; font-family:inherit; font-size:inherit; font-weight:600; text-align:left; cursor:pointer; }
+  button.nav-group:hover{ background:#f3f4f6; }
+  .nav .chev{ width:18px; height:18px; fill:#217859; margin-left:auto; transition:transform .2s ease; opacity:.8; flex-shrink:0; }
+  .nav .chev.open{ transform:rotate(180deg); }
   .nav a:hover{ background:#f3f4f6; }
   .nav a.active{ background:#eaf6f7; border-left:4px solid #1fb3b2; padding-left:8px; color:#1fb3b2; }
   .ico{ font-size:20px; width:24px; height:24px; display:inline-grid; place-items:center; }
@@ -1102,8 +1130,21 @@ $: pageTitle =
   .title-wrap {
     display: flex;
     flex-direction: column;
-    gap: 0.5px;
+    gap: 2px;
     color: #fff;
+    background: rgba(4, 32, 51, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 16px;
+    padding: 10px 20px;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.18);
+  }
+  .page-desc {
+    margin: 2px 0 0;
+    font-size: 13.5px;
+    line-height: 1.35;
+    color: rgba(255, 255, 255, 0.88);
   }
   .hello {
   max-width: 980px;       /* kekalkan limit ruang */
@@ -1121,7 +1162,7 @@ $: pageTitle =
   .page-title{ margin:0; font-size:55px; line-height:1.1; font-weight:700; color:#fff; }
 
   .nav-badge {
-  margin-left: 10px;
+  margin-left: auto;
   background: #dc2626;   /* red */
   color: #fff;
   font-size: 12px;
@@ -1130,8 +1171,12 @@ $: pageTitle =
   border-radius: 9999px;
   line-height: 1.4;
   position: relative;
-  top: -1.5px; 
+  top: -1.5px;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
+
+  .nav-approvals .text{ white-space: nowrap; }
 
 
   /* Profile Dropdown (Tidak berubah) */

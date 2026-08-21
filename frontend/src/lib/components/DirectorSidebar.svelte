@@ -16,7 +16,18 @@
   // --- SIDEBAR TOGGLE ---
   let sidebarOpen = false;
   afterNavigate(() => { sidebarOpen = false; });
-  
+
+  // --- COLLAPSIBLE NAV GROUPS ---
+  let dashOpen = false;
+  let histOpen = false;
+
+  afterNavigate(({ to }) => {
+    const p = to?.url?.pathname ?? $page.url.pathname;
+    const b = '/dashboard/director';
+    dashOpen = p === b || p.startsWith(b + '/reports');
+    histOpen = p.startsWith(b + '/history') || p.startsWith(b + '/myhistory');
+  });
+
   let selectedFile = null;
 
   // Fallback user info (before fetching from server)
@@ -435,7 +446,13 @@ async function saveProfile(e) {
       </div>
 
       <nav class="nav">
-        <div class="nav-group">
+        <button
+          type="button"
+          class="nav-group"
+          class:open={dashOpen}
+          on:click={() => dashOpen = !dashOpen}
+          aria-expanded={dashOpen}
+        >
           <span class="ico">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
               <path
@@ -444,7 +461,9 @@ async function saveProfile(e) {
             </svg>
           </span>
           <span class="text">Dashboard</span>
-        </div>
+          <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5z"/></svg>
+        </button>
+        {#if dashOpen}
         <div class="sub-links">
           <a
             href="/dashboard/director"
@@ -459,8 +478,15 @@ async function saveProfile(e) {
             <span class="text">Reports</span>
           </a>
         </div>
+        {/if}
 
-        <div class="nav-group">
+        <button
+          type="button"
+          class="nav-group"
+          class:open={histOpen}
+          on:click={() => histOpen = !histOpen}
+          aria-expanded={histOpen}
+        >
           <span class="ico">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
               <path
@@ -469,7 +495,9 @@ async function saveProfile(e) {
             </svg>
           </span>
           <span class="text">Leave History</span>
-        </div>
+          <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5z"/></svg>
+        </button>
+        {#if histOpen}
         <div class="sub-links">
           <a
             href="/dashboard/director/history"
@@ -484,6 +512,7 @@ async function saveProfile(e) {
             <span class="text">Personal</span>
           </a>
         </div>
+        {/if}
 
         <a
           href="/dashboard/director/employees"
@@ -497,9 +526,21 @@ async function saveProfile(e) {
             </svg>
           </span>
            <span class="text">Employees</span>
-            <!-- {#if pendingCount > 0}
-              <span class="nav-badge">{pendingCount}</span>
-            {/if} kira tanpa 9+ --> 
+        </a>
+
+        <a
+          href="/dashboard/director/leave-approvals"
+          class="nav-approvals"
+          class:active={$page.url.pathname.startsWith('/dashboard/director/leave-approvals')}
+        >
+          <span class="ico">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+              <path
+                d="M22 5.18L10.59 16.6l-4.24-4.24 1.41-1.41 2.83 2.83 10-10L22 5.18zm-2.21 5.04c.13.57.21 1.17.21 1.78 0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8c1.58 0 3.04.46 4.28 1.25l1.44-1.44C16.1 2.67 14.13 2 12 2 6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10c0-1.19-.22-2.33-.6-3.39l-1.61 1.61z"
+              ></path>
+            </svg>
+          </span>
+           <span class="text">Leave Approvals</span>
             {#if pendingCount > 0}
               <span class="nav-badge">
                 {pendingCount > 9 ? '9+' : pendingCount}
@@ -537,16 +578,25 @@ async function saveProfile(e) {
 
         {#if $page.url.pathname.startsWith('/dashboard/director/main')}
           <h1 class="page-title">Dashboard</h1>
+          <p class="page-desc">Company-wide leave overview and the public holiday calendar.</p>
         {:else if $page.url.pathname.startsWith('/dashboard/director/reports')}
           <h1 class="page-title">My Dashboard</h1>
+          <p class="page-desc">Personal dashboard with your leave statistics and calendar.</p>
         {:else if $page.url.pathname.startsWith('/dashboard/director/myhistory')}
           <h1 class="page-title">My Leave History</h1>
+          <p class="page-desc">View and manage your own past and upcoming leave applications.</p>
         {:else if $page.url.pathname.startsWith('/dashboard/director/history')}
           <h1 class="page-title">Approved Leave History</h1>
+          <p class="page-desc">Browse approved leave records for all managers.</p>
         {:else if $page.url.pathname.startsWith('/dashboard/director/employees')}
           <h1 class="page-title">Employees</h1>
+          <p class="page-desc">Employee directory with quick access to staff profiles.</p>
+        {:else if $page.url.pathname.startsWith('/dashboard/director/leave-approvals')}
+          <h1 class="page-title">Leave Approvals</h1>
+          <p class="page-desc">Review and act on pending leave requests addressed to you.</p>
         {:else}
           <h1 class="page-title">Dashboard</h1>
+          <p class="page-desc">Company-wide leave overview and the public holiday calendar.</p>
         {/if}
       </div>
 
@@ -831,6 +881,26 @@ async function saveProfile(e) {
     text-decoration: none;
     transition: background-color 0.2s;
   }
+  button.nav-group {
+    background: none;
+    border: none;
+    width: 100%;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .nav-group .chev {
+    width: 18px;
+    height: 18px;
+    fill: #217859;
+    margin-left: auto;
+    flex-shrink: 0;
+    opacity: 0.8;
+    transition: transform 0.2s ease;
+  }
+  .nav-group.open .chev {
+    transform: rotate(180deg);
+  }
   .nav a:hover {
     background: #f3f4f6;
   }
@@ -839,7 +909,7 @@ async function saveProfile(e) {
     color: #1fb3b2;
   }
   .nav-badge {
-  margin-left: 10px;
+  margin-left: auto;
   background: #dc2626;   /* red */
   color: #fff;
   font-size: 12px;
@@ -848,8 +918,12 @@ async function saveProfile(e) {
   border-radius: 9999px;
   line-height: 1.4;
   position: relative;
-  top: 1.5px; 
+  top: 1.5px;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
+
+  .nav-approvals .text{ white-space: nowrap; }
 
   /* Sub-links specific styling */
   .sub-links {
@@ -914,8 +988,21 @@ async function saveProfile(e) {
   .title-wrap {
     display: flex;
     flex-direction: column;
-    gap: 0.5px;
+    gap: 2px;
     color: #fff;
+    background: rgba(4, 32, 51, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 16px;
+    padding: 10px 20px;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.18);
+  }
+  .page-desc {
+    margin: 2px 0 0;
+    font-size: 13.5px;
+    line-height: 1.35;
+    color: rgba(255, 255, 255, 0.88);
   }
   .hello {
   max-width: 980px;       /* kekalkan limit ruang */
