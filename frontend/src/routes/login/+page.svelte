@@ -42,13 +42,10 @@
 			loginError = '';
 
 			if (!res.ok) {
-				if (data?.error === 'Email is wrong') {
-					loginError = 'Email is wrong';
-				} else if (data?.error === 'Wrong password') {
-					loginError = 'Wrong password';
-				} else {
-					loginError = data?.error || 'Login failed';
-				}
+				// Deliberately vague — never reveal whether the email or password was wrong.
+				loginError = data?.error === 'Email and password are required'
+					? 'Please enter your email and password.'
+					: 'Incorrect email or password. Please try again.';
 				return;
 				}
 
@@ -336,23 +333,31 @@
 
 <div class="login-wrap">
 	<section class="left">
-		<div class="flex items-center justify-center gap-4 mb-6">
-			<img src="/images/eftech.logo.png" alt="EFTECH" class="h-8 md:h-9" />
-			<img src="/images/myleave.logo.png" alt="MYLEAVE" class="h-8 md:h-9" />
-		</div>
+		<div class="card">
+			<div class="logos">
+				<img src="/images/eftech.logo.png" alt="EFTECH" class="logo-main" />
+				<img src="/images/myleave.logo.png" alt="MYLEAVE" class="logo-sub" />
+			</div>
 
-		{#if uiState === 'login'}
-			<h1 class="title">Hi, Welcome!</h1>
-			<form on:submit|preventDefault={handleLogin} class="form-layout">
-				<input type="email" name="email" bind:value={email} placeholder="Email" autocomplete="email" required />
-				<input type="password" name="password" bind:value={password} placeholder="Password" required />
-				{#if loginError}
-					<p class="error-msg">❌ {loginError}</p>
-				{/if}
-				<button type="submit" disabled={loginLoading}>
-					{#if loginLoading}Logging in...{:else}Login{/if}
-				</button>
-			</form>
+			{#if uiState === 'login'}
+				<h1 class="title">Hi, Welcome!</h1>
+				<p class="subtitle">Sign in to manage leave and employees</p>
+				<form on:submit|preventDefault={handleLogin} class="form-layout">
+					<label class="field">
+						<span>Email</span>
+						<input type="email" name="email" bind:value={email} placeholder="you@eftech.com.my" autocomplete="email" required />
+					</label>
+					<label class="field">
+						<span>Password</span>
+						<input type="password" name="password" bind:value={password} placeholder="Enter your password" autocomplete="current-password" required />
+					</label>
+					{#if loginError}
+						<p class="error-msg">{loginError}</p>
+					{/if}
+					<button type="submit" disabled={loginLoading}>
+						{#if loginLoading}<span class="spinner"></span>Signing in...{:else}Login{/if}
+					</button>
+				</form>
 			<div class="links">
 				<button class="link-btn" on:click={() => { uiState = 'forgot'; form = null; }}>
 					Forgot Password?
@@ -511,9 +516,20 @@
 			</a>
 			for registration or any problem occur.
 			</p>
+		</div>
 	</section>
 
-	<section class="right"></section>
+	<section class="right">
+		<div class="brand">
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+				<rect x="3" y="5" width="18" height="16" rx="3"/>
+				<path d="M16 3v4M8 3v4M3 11h18"/>
+				<path d="m9 16 2 2 4-4"/>
+			</svg>
+			<div class="brand-name">MyLeave</div>
+			<p class="brand-tag">Simple leave management for Eftech teams</p>
+		</div>
+	</section>
 </div>
 
 <style>
@@ -539,39 +555,54 @@
 		padding: 48px 32px;
 	}
 
-	.left .flex {
-		margin-top: 20px;
-		margin-bottom: 18px;
+	/* Soft card panel behind logo + form group */
+	.card {
+		width: min(560px, 100%);
+		background: #fff;
+		border: 1px solid #e2e8f0;
+		border-radius: 24px;
+		padding: 44px 48px;
+		box-shadow: 0 20px 50px rgba(15, 23, 42, 0.08);
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+	}
+
+	.logos {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 16px;
+		margin-bottom: 22px;
 	}
 
 	.left img {
 		object-fit: contain;
 	}
 
-	.left img.h-8 {
-		height: 48px;
+	.logo-main {
+		height: 44px;
 	}
 
-	.left img.h-6 {
-		height: 34px;
+	.logo-sub {
+		height: 36px;
 	}
 
 	.title {
-		margin: 10px 0 22px;
-		font-weight: 800;
+		margin: 4px 0 6px;
+		font-weight: 600;
 		text-align: center;
 		color: #0F9B8E;
-		font-size: 60px;
-		line-height: 1.1;
-		font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI";
+		font-size: 30px;
+		line-height: 1.2;
+		letter-spacing: -0.2px;
 	}
 
 	.subtitle {
-		font-size: 16px;
-		color: #4b5563;
+		font-size: 14px;
+		color: #64748b;
 		text-align: center;
-		margin-top: -1rem;
-		margin-bottom: 1.5rem;
+		margin: 0 0 26px;
 		max-width: 420px;
 	}
 
@@ -581,15 +612,33 @@
 		gap: 16px;
 	}
 
+	.field {
+		display: grid;
+		gap: 6px;
+	}
+
+	.field span {
+		font-size: 13px;
+		font-weight: 600;
+		color: #334155;
+	}
+
 	input {
-		height: 56px;
+		height: 52px;
 		padding: 0 16px 0 46px;
-		border-radius: 14px;
-		border: 1px solid var(--ring);
+		border-radius: 12px;
+		border: 1px solid #e2e8f0;
 		background: #fff;
-		box-shadow: 0 6px 18px rgba(0, 0, 0, 0.05);
+		box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
 		font-size: 16px;
 		color: var(--text);
+		transition: border-color 0.15s ease, box-shadow 0.15s ease;
+	}
+
+	input:focus {
+		outline: none;
+		border-color: var(--teal-d);
+		box-shadow: 0 0 0 3px rgba(20, 147, 131, 0.15);
 	}
 
 	input::placeholder {
@@ -615,17 +664,54 @@
 		cursor: pointer;
 		border-radius: 9999px;
 		font-weight: 700;
+		font-size: 16px;
 		letter-spacing: 0.3px;
 		color: #fff;
 		background: linear-gradient(180deg, var(--teal), var(--teal-d));
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 10px;
+		margin-top: 10px;
+		box-shadow: 0 6px 18px rgba(20, 147, 131, 0.25);
+		transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
 	}
 
-	button:hover {
-		filter: brightness(0.9);
+	button[type="submit"]:hover:not(:disabled) {
+		transform: translateY(-1px);
+		box-shadow: 0 10px 24px rgba(20, 147, 131, 0.32);
+		filter: brightness(1.03);
+	}
+
+	button[type="submit"]:active:not(:disabled) {
+		transform: translateY(0);
+		filter: brightness(0.95);
+		box-shadow: 0 4px 12px rgba(20, 147, 131, 0.28);
+	}
+
+	button[type="submit"]:disabled {
+		opacity: 0.7;
+		cursor: not-allowed;
+	}
+
+	.spinner {
+		width: 18px;
+		height: 18px;
+		border-radius: 50%;
+		border: 2.5px solid rgba(255, 255, 255, 0.4);
+		border-top-color: #fff;
+		animation: spin 0.7s linear infinite;
+		flex-shrink: 0;
+	}
+
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
 	}
 
 	.links {
-		margin-top: 1rem;
+		margin-top: 18px;
 		text-align: center;
 	}
 
@@ -657,6 +743,10 @@
 		margin-top: 4px; /* Kurangkan margin sikit */
 	}
 
+	.footer-note {
+		margin-top: 28px;
+	}
+
 	.right {
 		position: relative;
 		background: url('/images/bek7.jpg') center/cover no-repeat fixed;
@@ -666,7 +756,36 @@
 		content: "";
 		position: absolute;
 		inset: 0;
-		background: rgba(0, 0, 0, 0.08);
+		background: linear-gradient(180deg, rgba(0, 0, 0, 0.15), rgba(0, 0, 0, 0.5));
+	}
+
+	/* Brand reinforcement over the wave graphic */
+	.brand {
+		position: absolute;
+		z-index: 1;
+		left: 48px;
+		right: 48px;
+		bottom: 56px;
+		color: #fff;
+	}
+
+	.brand svg {
+		width: 44px;
+		height: 44px;
+		opacity: 0.95;
+		margin-bottom: 14px;
+	}
+
+	.brand-name {
+		font-size: 34px;
+		font-weight: 700;
+		letter-spacing: 0.5px;
+	}
+
+	.brand-tag {
+		margin: 6px 0 0;
+		font-size: 15px;
+		color: rgba(255, 255, 255, 0.85);
 	}
 
 	/* --- CSS BARU UNTUK KOTAK OTP --- */
@@ -699,7 +818,13 @@
 			display: none;
 		}
 		.title {
-			font-size: 44px;
+			font-size: 26px;
+		}
+	}
+
+	@media (max-width: 560px) {
+		.card {
+			padding: 32px 24px;
 		}
 	}
 	
