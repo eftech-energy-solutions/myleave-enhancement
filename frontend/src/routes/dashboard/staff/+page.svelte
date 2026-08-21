@@ -389,7 +389,17 @@ async function loadRecent() {
     d.setDate(d.getDate() - 3);
     return d;
   })();
-  
+
+  // Earliest selectable "Date from" per leave type (AL: 3 days, MC: 7 days backdate)
+  $: dateFromMin = (() => {
+    if (leaveType === 'AL' || leaveType === 'MC') {
+      const d = new Date(today);
+      d.setDate(d.getDate() - (leaveType === 'AL' ? 3 : 7));
+      return localISO(d);
+    }
+    return '';
+  })();
+
   let viewBase = atStartOfDay(new Date());
   function clampToWindowMonth(d) {
     // ⬇️ DIUBAHSUAI: Logik fallback ditambah untuk pastikan ia sentiasa ada nilai
@@ -1287,6 +1297,17 @@ async function loadApprovedUsedDays() {
                   return;
                 }
 
+                // Backdate guard: older than both AL (3d) and MC (7d) windows
+                const clickedISO = localISO(d.date);
+                if (clickedISO < todayISO && clickedISO < localISO(mcBackdateLimit)) {
+                  showToast(
+                    "Leave can only be backdated up to 3 days (Annual) or 7 days (Medical).",
+                    "warning",
+                    "Backdate Limit"
+                  );
+                  return;
+                }
+
                 openLeaveForm(d.date);
               }}
 
@@ -1390,7 +1411,8 @@ async function loadApprovedUsedDays() {
     <div class="dates">
       <label>
         <span>Date from</span>
-        <input type="date" name="dateFrom" bind:value={dateFrom} required  
+        <input type="date" name="dateFrom" bind:value={dateFrom} required
+          min={dateFromMin}
           on:change={onFromChange} />
       </label>
 
@@ -1400,11 +1422,7 @@ async function loadApprovedUsedDays() {
             type="date"
             name="dateUntil"
             bind:value={dateUntil}
-            min={
-              leaveType === 'MC'
-                ? (dateFrom || localISO(mcBackdateLimit))
-                : (dateFrom || todayISO)
-            }
+            min={dateFrom || dateFromMin}
             disabled={duration === 'Half' || endLocked}
             aria-disabled={duration === 'Half' || endLocked}
             readonly={endLocked}
@@ -1752,9 +1770,27 @@ max-width: 150px;         /* optional — so it wraps instead of going super lon
 .days{ display:grid; grid-template-columns:repeat(7,1fr); gap:2px; }
   .days button{
   height: 43px; /* ✅ kawal tinggi */
-  width: 50px;   
+  width: 50px;
   font-size: 13px;
   padding: 4px 4px;
+  }
+
+  /* Tactile click feedback for day buttons */
+  .days button{
+    cursor: pointer;
+    transition: background .12s ease, border-color .12s ease, transform .08s ease, box-shadow .12s ease;
+  }
+  .days button:hover:not(:disabled):not(.blocked):not(.applied-ph){
+    background: #e6f4f2;
+    border-color: #0F9B8E;
+  }
+  .days button:active:not(:disabled){
+    transform: scale(.9);
+    box-shadow: 0 0 0 3px rgba(15,155,142,.25);
+  }
+  .days button:focus-visible{
+    outline: 2px solid #0F9B8E;
+    outline-offset: 1px;
   }
 
   .days button.today {

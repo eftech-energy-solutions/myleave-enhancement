@@ -883,6 +883,24 @@ const canGoNextYear = () => {
   width: 52px;   
   font-size: 13px;  }
 
+  /* Tactile click feedback for day buttons */
+  .days button{
+    cursor: pointer;
+    transition: background .12s ease, border-color .12s ease, transform .08s ease, box-shadow .12s ease;
+  }
+  .days button:hover:not(:disabled):not(.blocked):not(.applied-ph){
+    background: #e6f4f2;
+    border-color: #0F9B8E;
+  }
+  .days button:active:not(:disabled){
+    transform: scale(.9);
+    box-shadow: 0 0 0 3px rgba(15,155,142,.25);
+  }
+  .days button:focus-visible{
+    outline: 2px solid #0F9B8E;
+    outline-offset: 1px;
+  }
+
   .calendar .month{ display:flex; align-items:center; justify-content:space-between; font-weight:700; margin-bottom:6px; gap:6px; }
   
   /* --- BARU: Style untuk Dropdown Bulan/Tahun --- */

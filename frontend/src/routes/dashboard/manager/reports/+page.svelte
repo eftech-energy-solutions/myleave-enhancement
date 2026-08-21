@@ -1589,6 +1589,24 @@ max-width: 150px;         /* optional — so it wraps instead of going super lon
   font-size: 13px;
   padding: 4px 4px;
 }
+
+/* Tactile click feedback for day buttons */
+.days button{
+  cursor: pointer;
+  transition: background .12s ease, border-color .12s ease, transform .08s ease, box-shadow .12s ease;
+}
+.days button:hover:not(:disabled):not(.blocked):not(.applied-ph){
+  background: #e6f4f2;
+  border-color: #0F9B8E;
+}
+.days button:active:not(:disabled){
+  transform: scale(.9);
+  box-shadow: 0 0 0 3px rgba(15,155,142,.25);
+}
+.days button:focus-visible{
+  outline: 2px solid #0F9B8E;
+  outline-offset: 1px;
+}
 /* Apply tabular-nums ONLY to text, NOT to layout container */
 .days button {
   font-feature-settings: "tnum" 1, "lnum" 1 !important;
