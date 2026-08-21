@@ -176,6 +176,70 @@ const leaveCodes = {
 
   const yearOf = (iso) => Number(String(iso).slice(0, 4));
 
+  // ===== DATE HELPERS (timezone-safe, same approach as dashboard) =====
+  const atStartOfDay = (d) => {
+    const x = new Date(d);
+    x.setHours(0, 0, 0, 0);
+    return x;
+  };
+  const localISO = (d) => {
+    const x = atStartOfDay(d);
+    const y = x.getFullYear();
+    const m = String(x.getMonth() + 1).padStart(2, "0");
+    const dd = String(x.getDate()).padStart(2, "0");
+    return `${y}-${m}-${dd}`;
+  };
+  const parseLocalISO = (iso) => {
+    if (!iso) return null;
+    const [y, m, d] = iso.split("-").map(Number);
+    return new Date(y, m - 1, d);
+  };
+  const addDaysISO = (iso, n) => {
+    const d = parseLocalISO(iso);
+    if (!d) return "";
+    d.setDate(d.getDate() + n);
+    return localISO(d);
+  };
+
+  // Earliest selectable "Date From" per leave type (AL: 3 days, MC: 7 days backdate)
+  $: dateFromMin = (() => {
+    if (leaveType === "AL" || leaveType === "MC") {
+      const d = atStartOfDay(new Date());
+      d.setDate(d.getDate() - (leaveType === "AL" ? 3 : 7));
+      return localISO(d);
+    }
+    return "";
+  })();
+
+  // Returns applied-for dates that clash with existing
+  // pending / approved / cancellation-pending applications.
+  function findOverlappingDates(fromISO, untilISO, excludeUuid = null) {
+    const start = parseLocalISO(fromISO);
+    const end = parseLocalISO(untilISO || fromISO);
+    if (!start || !end) return [];
+
+    const blocked = new Set();
+    leaves.forEach((l) => {
+      if (!["Pending", "Approved", "Cancellation Pending"].includes(l.status)) return;
+      if (excludeUuid && String(l.uuid) === String(excludeUuid)) return;
+
+      const s = parseLocalISO(String(l.dateFrom).slice(0, 10));
+      const e = parseLocalISO(String(l.dateTo).slice(0, 10));
+      if (!s || !e) return;
+
+      for (let d = new Date(s); d <= e; d.setDate(d.getDate() + 1)) {
+        blocked.add(localISO(d));
+      }
+    });
+
+    const clashes = [];
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const iso = localISO(d);
+      if (blocked.has(iso)) clashes.push(iso);
+    }
+    return clashes;
+  }
+
   // =========== LOAD LEAVES FROM BACKEND ============
   onMount(async () => {
     try {
@@ -291,10 +355,7 @@ const leaveCodes = {
 $: if (leaveType && dateFrom) {
   if (fixedDurations[leaveType]) {
     const days = fixedDurations[leaveType];
-    const start = new Date(dateFrom);
-    const end = new Date(start);
-    end.setDate(start.getDate() + (days - 1));
-    dateUntil = end.toISOString().slice(0, 10);
+    dateUntil = addDaysISO(dateFrom, days - 1);
   }
 
   totalDays = autoCalc(leaveType, dateFrom, dateUntil, duration);
@@ -350,10 +411,7 @@ function handleEdit(l) {
   // fixed leave auto-set end date
   if (fixedDurations[leaveType]) {
     const days = fixedDurations[leaveType];
-    const start = new Date(dateFrom);
-    const end = new Date(start);
-    end.setDate(start.getDate() + (days - 1));
-    dateUntil = end.toISOString().slice(0, 10);
+    dateUntil = addDaysISO(dateFrom, days - 1);
   } else {
     dateUntil = l.dateTo.slice(0, 10);
   }
@@ -547,6 +605,51 @@ async function submitLeave(event) {
     }
 
     // ===============================
+    // 1️⃣b BACKDATE VALIDATION (AL max 3 days, MC max 7 days)
+    // ===============================
+    const fromDate = parseLocalISO(dateFrom);
+    if (fromDate) {
+      const backdateDays = Math.floor(
+        (atStartOfDay(new Date()) - atStartOfDay(fromDate)) / 86400000
+      );
+
+      if (leaveType === "AL" && backdateDays > 3) {
+        showToast(
+          "Annual Leave can only be backdated up to 3 days.",
+          "warning",
+          "Invalid Date"
+        );
+        return;
+      }
+      if (leaveType === "MC" && backdateDays > 7) {
+        showToast(
+          "Medical Leave can only be backdated up to 7 days.",
+          "warning",
+          "Invalid Date"
+        );
+        return;
+      }
+    }
+
+    // ===============================
+    // 1️⃣c OVERLAP VALIDATION — no duplicate dates / inside an applied range
+    // ===============================
+    const overlapping = findOverlappingDates(
+      dateFrom,
+      duration === "Half" ? dateFrom : dateUntil,
+      isEdit ? editingUuid : null
+    );
+    if (overlapping.length > 0) {
+      const dates = overlapping.map((iso) => fmt(iso)).join(", ");
+      showToast(
+        `You have already applied leave on:\n${dates}`,
+        "warning",
+        "Overlapping Leave"
+      );
+      return;
+    }
+
+    // ===============================
     // 2️⃣ EDIT EXISTING LEAVE
     // ===============================
     if (isEdit && editingUuid) {
@@ -586,15 +689,37 @@ async function submitLeave(event) {
     // ===============================
     // 3️⃣ NEW LEAVE APPLICATION
     // ===============================
-    await fetch(
+    const fd = new FormData();
+    fd.append("type", leaveType);
+    fd.append("requestType", "new");
+    fd.append("duration", duration);
+    fd.append("dateFrom", dateFrom);
+    fd.append("dateUntil", payload.date_until);
+    fd.append("totalDays", String(totalDays));
+    fd.append("reason", reason);
+
+    if (attachmentFiles?.length > 0) {
+      fd.append("attachment", attachmentFiles[0]);
+    }
+
+    const res = await fetch(
       `${PUBLIC_VITE_API_BASE}/api/leave-requests`,
       {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+        body: fd
       }
     );
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      showToast(
+        data?.message || "Failed to submit leave application.",
+        "error",
+        "Submission Failed"
+      );
+      return;
+    }
 
     showToast(
       "Your leave application has been submitted successfully.",
@@ -669,6 +794,11 @@ function closeEditModal() {
   attachmentFiles = null;
 }
 
+function openAddModal() {
+  closeEditModal();
+  modal?.showModal();
+}
+
 
 function onFromChange() {
   if (!dateFrom) return;
@@ -680,10 +810,7 @@ function onFromChange() {
   // Fixed duration → auto compute end date
   else if (fixedDurations[leaveType]) {
     const days = fixedDurations[leaveType];
-    const start = new Date(dateFrom);
-    const end = new Date(start);
-    end.setDate(start.getDate() + (days - 1));
-    dateUntil = end.toISOString().slice(0, 10);
+    dateUntil = addDaysISO(dateFrom, days - 1);
   }
 
   // Auto-calc total
@@ -837,49 +964,72 @@ function closeDetail() {
     </div>
   </div>
 {/if}
-<div class="filter-bar">
+<div class="toprow">
+  <!-- Left: Filters -->
   <div class="filters">
-    <div class="filter">
-      <label>STATUS</label>
-      <select bind:value={selectedStatus} aria-label="Filter by status">
-        {#each statuses as s}
-          <option value={s}>{s}</option>
-        {/each}
-      </select>
+    <div class="filter-wrap">
+      <svg class="filter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M3 4h18l-7 8v6l-4 2v-8l-7-8z"/>
+      </svg>
+      <label class="filter-label" for="status-filter">Status</label>
+      <div class="filter-select">
+        <select id="status-filter" bind:value={selectedStatus} aria-label="Filter by status">
+          {#each statuses as s}
+            <option value={s}>{s}</option>
+          {/each}
+        </select>
+      </div>
     </div>
 
-   <div class="filter">
-  <label>LEAVE TYPE</label>
-  <select bind:value={selectedLeaveType}>
-    <option value="All">All</option>
-
-    {#each leaveTypes.slice(1) as t}
-      <option value={t}>
-        {leaveTypeShortName[t] || t}
-      </option>
-    {/each}
-  </select>
-</div>
-
-
-    <div class="filter">
-      <label>YEAR</label>
-      <select bind:value={selectedYear} aria-label="Filter by year">
-        {#each years as y}
-          <option value={y}>{y}</option>
-        {/each}
-      </select>
+    <div class="filter-wrap">
+      <svg class="filter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M3 4h18l-7 8v6l-4 2v-8l-7-8z"/>
+      </svg>
+      <label class="filter-label" for="type-filter">Leave Type</label>
+      <div class="filter-select">
+        <select id="type-filter" bind:value={selectedLeaveType} aria-label="Filter by leave type">
+          <option value="All">All</option>
+          {#each leaveTypes.slice(1) as t}
+            <option value={t}>{leaveTypeShortName[t] || t}</option>
+          {/each}
+        </select>
+      </div>
     </div>
 
-    <div class="filter">
-      <label>MONTH</label>
-      <select bind:value={selectedMonth} aria-label="Filter by month">
-        {#each months as m}
-          <option value={m}>{m}</option>
-        {/each}
-      </select>
+    <div class="filter-wrap">
+      <svg class="filter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M3 4h18l-7 8v6l-4 2v-8l-7-8z"/>
+      </svg>
+      <label class="filter-label" for="year-filter">Year</label>
+      <div class="filter-select">
+        <select id="year-filter" bind:value={selectedYear} aria-label="Filter by year">
+          {#each years as y}
+            <option value={y}>{y}</option>
+          {/each}
+        </select>
+      </div>
+    </div>
+
+    <div class="filter-wrap">
+      <svg class="filter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M3 4h18l-7 8v6l-4 2v-8l-7-8z"/>
+      </svg>
+      <label class="filter-label" for="month-filter">Month</label>
+      <div class="filter-select">
+        <select id="month-filter" bind:value={selectedMonth} aria-label="Filter by month">
+          {#each months as m}
+            <option value={m}>{m}</option>
+          {/each}
+        </select>
+      </div>
     </div>
   </div>
+
+  <!-- Right: Primary action -->
+  <button class="btn-primary add-leave-btn" on:click={openAddModal}>
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"/></svg>
+    Add New Leave Application
+  </button>
 </div>
 <dialog bind:this={modal} class="leave-modal">
 
@@ -918,6 +1068,7 @@ function closeDetail() {
     <input 
       type="date" 
       bind:value={dateFrom} 
+      min={dateFromMin}
       on:change={onFromChange}
     />
   </label>
@@ -928,6 +1079,7 @@ function closeDetail() {
     <input 
       type="date" 
       bind:value={dateUntil}
+      min={dateFrom || dateFromMin}
       on:change={onUntilChange}
       disabled={duration === "Half"}
       readonly={duration === "Half"}
@@ -986,7 +1138,12 @@ function closeDetail() {
 </dialog>
 
 <!-- ===== TABLE ===== -->
-<table class="leave-table">
+<div class="table-card">
+  {#if filteredLeaves.length === 0}
+    <div class="no-data">No leave applications found.</div>
+  {:else}
+    <div class="table-wrapper">
+      <table class="leave-table">
   <thead>
     <tr>
       <th style="width:56px;">No.</th>
@@ -1002,7 +1159,7 @@ function closeDetail() {
   </thead>
   <tbody>
     {#each filteredLeaves as l, i}
-      <tr class="clickable-row" on:click={() => openDetail(l)}>
+      <tr>
         <td>{i + 1}</td>
         <td>{l.id}</td>
         <td>{l.name}</td>
@@ -1026,18 +1183,24 @@ function closeDetail() {
         <td class="center">
   <div class="action-wrapper">
 
-    <!-- SLOT: FILE ICON -->
-<div class="slot">
-  {#if l.attachment_path && l.status !== 'Pending'}
-  <a
-  href={`${PUBLIC_VITE_API_BASE}${l.attachment_path?.startsWith('/') ? '' : '/'}${l.attachment_path}`}
-  target="_blank"
-  rel="noopener noreferrer"
-  class="icon-btn file-btn {l.status === 'Cancelled' ? 'disabled-file' : ''}"
-  title={l.status === 'Cancelled' ? 'Attachment disabled' : 'View Attachment'}
->
+    <!-- View details -->
+    <button class="icon-btn view-details-btn" title="View Details" on:click={() => openDetail(l)}>
+      <svg viewBox="0 0 24 24">
+        <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/>
+      </svg>
+    </button>
+
+    <!-- Attachment -->
+    {#if l.attachment_path && l.status !== 'Pending'}
+    <a
+    href={`${PUBLIC_VITE_API_BASE}${l.attachment_path?.startsWith('/') ? '' : '/'}${l.attachment_path}`}
+    target="_blank"
+    rel="noopener noreferrer"
+    class="icon-btn file-btn {l.status === 'Cancelled' ? 'disabled-file' : ''}"
+    title={l.status === 'Cancelled' ? 'Attachment disabled' : 'View Attachment'}
+  >
     <svg viewBox="0 0 26 26">
-      <path 
+      <path
         fill="currentColor"
         d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zM14 8V3.5L19.5 9H15a1 1 0 0 1-1-1z"
       />
@@ -1045,30 +1208,23 @@ function closeDetail() {
   </a>
 {/if}
 
-</div>
+    <!-- Edit (Pending only) -->
+    {#if l.status === 'Pending'}
+      <button class="icon-btn pencil-btn" title="Edit" on:click={() => handleEdit(l)}>
+        <svg viewBox="0 0 24 24">
+          <path d="M3 17.25V21h3.75L17.8 9.94l-3.75-3.75L3 17.25zM20.7 7a1 1 0 0 0 0-1.4l-2.3-2.3a1 1 0 0 0-1.4 0L15 4.6l3.7 3.7 2-1.3z"/>
+        </svg>
+      </button>
+    {/if}
 
-    
-    <!-- FIXED SLOT: Pencil (Pending only) -->
-    <div class="slot">
-      {#if l.status === 'Pending'}
-        <button class="icon-btn pencil-btn" title="Edit" on:click={() => handleEdit(l)}>
-          <svg viewBox="0 0 24 24">
-            <path d="M3 17.25V21h3.75L17.8 9.94l-3.75-3.75L3 17.25zM20.7 7a1 1 0 0 0 0-1.4l-2.3-2.3a1 1 0 0 0-1.4 0L15 4.6l3.7 3.7 2-1.3z"/>
-          </svg>
-        </button>
-      {/if}
-    </div>
-
-    <!-- FIXED SLOT: Trash (Pending + Approved) -->
-    <div class="slot">
-      {#if l.status === 'Pending' || l.status === 'Approved'}
-        <button class="icon-btn delete" on:click={() => requestCancellation(l)}>
-          <svg viewBox="0 0 24 24">
-            <path d="M6 7h12v12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7zm3-4h6l1 1h4v2H4V4h4l1-1z"/>
-          </svg>
-        </button>
-      {/if}
-    </div>
+    <!-- Cancel/Delete (Pending + Approved) -->
+    {#if l.status === 'Pending' || l.status === 'Approved'}
+      <button class="icon-btn delete" on:click={() => requestCancellation(l)}>
+        <svg viewBox="0 0 24 24">
+          <path d="M6 7h12v12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7zm3-4h6l1 1h4v2H4V4h4l1-1z"/>
+        </svg>
+      </button>
+    {/if}
 
   </div>
 </td>
@@ -1077,6 +1233,9 @@ function closeDetail() {
     {/each}
   </tbody>
 </table>
+    </div>
+  {/if}
+</div>
 
 {#if toast.show}
   <div class="toast-stack">
@@ -1118,62 +1277,105 @@ function closeDetail() {
 {/if}
 
 <style>
-  /* ===== FILTER BAR ===== */
-  .filter-bar {
+  /* ===== TOP ROW: filters left, action right ===== */
+  .toprow {
     display: flex;
-    justify-content: flex-end; /* push filters to the right */
-    padding-right: 20px;  
-    margin-bottom: 1rem;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
   }
   .filters {
     display: flex;
-    gap: 1.25rem;
-    align-items: end;
+    gap: 14px;
+    flex-wrap: wrap;
+    align-items: center;
   }
-  .filter label {
-    display: block;
-    font-size: 12px;
-    font-weight: 700;
-    color: var(--ink, #1F2937); /* label text */
-    margin-bottom: 4px;
+  .filter-wrap { display: flex; align-items: center; gap: 6px; }
+  .filter-label { margin: 0 6px; font-weight: 600; font-size: 14px; color: var(--ink, #1F2937); }
+  .filter-icon { width: 16px; height: 16px; color: var(--muted, #6B7280); opacity: 0.9; }
+  .filter-select { min-width: 210px; }
+  .filter-select select {
+    appearance: none; -webkit-appearance: none;
+    background: #fff url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b7280' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 10px center;
+    border: 1px solid var(--line, #e5e7eb);
+    border-radius: 10px;
+    padding: .5rem 2rem .5rem .8rem;
+    font-size: 14px; font-weight: 600; color: var(--ink, #1F2937);
+    cursor: pointer; width: 100%;
   }
-  .filter select {
-    padding: 6px 10px;
-    border-radius: 9999px;
-    border: 1px solid #d1d5db;
-    font-size: 14px;
-    background: #fff;
+  .filter-select select:focus {
+    outline: none;
+    border-color: #0F9B8E;
+    box-shadow: 0 0 0 3px rgba(15,155,142,.15);
   }
 
-  /* ===== TABLE ===== */
-  table.leave-table {
-    width: 97%;
-    margin: 0 auto;
-    border-collapse: collapse;
-    background: #f9fafb;
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: #0F9B8E;
+    color: #fff;
+    border: none;
     border-radius: 10px;
-    overflow: hidden;
+    padding: .6rem 1.15rem;
+    font-weight: 600;
     font-size: 14px;
+    cursor: pointer;
+    box-shadow: 0 2px 10px rgba(15,23,42,.08);
+    white-space: nowrap;
   }
-  thead {
-    background: #f1f5f9;
-    text-align: left;
-    font-weight: 700;
-    color: #0f172a;
+  .btn-primary:hover { background: #0C8075; }
+  .add-leave-btn svg { width: 18px; height: 18px; fill: #fff; flex: none; }
+
+  /* ===== TABLE CARD (matches Admin Activity Log) ===== */
+  .table-card {
+    background: #fff;
+    border-radius: 12px;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 2px 10px rgba(15,23,42,.06);
+    overflow: hidden;
   }
-  th, td {
-    padding: 10px 12px;
+  .table-wrapper { overflow-x: auto; }
+  table.leave-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .leave-table thead {
+    background: #f9fafb;
     border-bottom: 1px solid #e5e7eb;
+  }
+  .leave-table th {
+    padding: 14px 16px;
+    text-align: left;
+    font-size: 12px;
+    font-weight: 600;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
     vertical-align: middle;
   }
-  tbody tr:hover {
-    background: #f3f4f6;
+  .leave-table td {
+    padding: 14px 16px;
+    font-size: 14px;
+    color: #111827;
+    vertical-align: middle;
+    border-bottom: 1px solid #f3f4f6;
+  }
+  .leave-table tbody tr:hover { background: #f9fafb; }
+  .no-data {
+    padding: 48px;
+    text-align: center;
+    color: #6b7280;
+    font-size: 16px;
   }
   .center {
     text-align: center;
   }
   .actions-col {
-    width: 80px;
+    width: 140px;
     text-align: center;
   }
 
@@ -1224,21 +1426,15 @@ function closeDetail() {
   }
 
   .file-btn svg {
-  width: 10px;
-  height: 10px;
+  width: 18px;
+  height: 18px;
   color: #217859; /* SAME GREEN AS TRASH */
-  margin-left: 80px;
-  margin-top: 0.7px;
 }
 
-.disabled-file {
+  .disabled-file {
   opacity: 0.35 !important;
   cursor: not-allowed !important;
   pointer-events: none !important;
-}
-
-.pencil-btn{
-  margin-left: 14px;
 }
 
   /* ===== MODAL ===== */
@@ -1283,14 +1479,8 @@ function closeDetail() {
 .action-wrapper {
   display: flex;
   justify-content: center;
-  gap: 4px;
+  gap: 2px;
   align-items: center;
-}
-
-.slot {
-  width: 28px;               /* kunci lebar setiap slot */
-  display: flex;
-  justify-content: center;
 }
 
 .icon-btn {
@@ -1557,12 +1747,12 @@ function closeDetail() {
   animation: fadeOut 0.25s ease forwards;
 }
 
-/* ===== CLICKABLE ROW ===== */
-.clickable-row {
-  cursor: pointer;
+/* ===== VIEW DETAILS BUTTON ===== */
+.view-details-btn svg {
+  fill: #0F9B8E;
 }
-.clickable-row:hover {
-  background: #e8f5f4 !important;
+.view-details-btn:hover {
+  background: #f0fdfa;
 }
 
 /* ===== DETAIL MODAL ===== */
@@ -1639,11 +1829,12 @@ function closeDetail() {
 
   /* ===== Responsive (keep filters usable) ===== */
   @media (max-width: 860px) {
-    .filter-bar { justify-content: center; padding-right: 0; }
-    .filters { flex-wrap: wrap; gap: .75rem; }
-    .filter select { font-size: 13px; }
-    table.leave-table { font-size: 13px; width: 100%; display: block; overflow-x: auto; }
-    th, td { padding: 8px 10px; white-space: nowrap; }
+    .toprow { flex-direction: column; align-items: stretch; }
+    .add-leave-btn { justify-content: center; }
+    .filters { gap: .75rem; }
+    .filter-select { min-width: 150px; }
+    .leave-table { font-size: 13px; }
+    .leave-table th, .leave-table td { padding: 8px 10px; white-space: nowrap; }
     .toast-item { min-width: 0; width: calc(100vw - 32px); max-width: none; }
   }
 </style>

@@ -382,6 +382,13 @@ async function loadRecent() {
     d.setDate(d.getDate() - 7);
     return d;
   })();
+
+  // ✅ AL boleh backdate max 3 hari
+  const alBackdateLimit = (() => {
+    const d = new Date(today);
+    d.setDate(d.getDate() - 3);
+    return d;
+  })();
   
   let viewBase = atStartOfDay(new Date());
   function clampToWindowMonth(d) {
@@ -801,6 +808,16 @@ async function submitLeave(e) {
 if (leaveType === 'MC' && from < mcBackdateLimit) {
   showToast(
     "Medical Leave can only be backdated up to 7 days.",
+    "warning",
+    "Invalid Date"
+  );
+  return;
+}
+
+// ❌ AL → max 3 hari je
+if (leaveType === 'AL' && from < alBackdateLimit) {
+  showToast(
+    "Annual Leave can only be backdated up to 3 days.",
     "warning",
     "Invalid Date"
   );
