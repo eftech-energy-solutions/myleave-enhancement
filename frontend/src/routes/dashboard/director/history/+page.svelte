@@ -24,7 +24,8 @@
   let rows = [];
   let showModal = false;
   let selected = null;
-  let showAll = false;
+  let page = 1;
+  const PAGE_SIZE = 10;
 
   const months = [
     "January","February","March","April","May","June",
@@ -139,7 +140,7 @@ function makeEmployeeRecord(item) {
 }
 
 
-  function closeModal(){ showModal = false; selected = null; showAll = false; }
+  function closeModal(){ showModal = false; selected = null; page = 1; }
   function handleKey(e){ if(e.key === 'Escape') closeModal(); }
 
   $: allCombined = rows.flatMap(r => r.employees.map(e => ({ ...e, _month: r.month })));
@@ -155,15 +156,9 @@ function makeEmployeeRecord(item) {
     if(found){ selected = found; resetFiltersForMonthView(); }
   }
 
-  function onMonthFilterChange(value){
-    if (!selected) return;
-    if (value === 'All') return selectAllMonths();
-    if (months.includes(value)) jumpToMonth(value);
-  }
-
   function resetFiltersForMonthView(){
     monthFilter = selected?.month === 'All' ? 'All' : selected?.month || 'All';
-    showAll = false;
+    page = 1;
   }
 
   function fmt(iso){
@@ -214,6 +209,20 @@ $: filtered = (() => {
 })();
 
   $: total = filtered.length;
+  $: totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  $: pageStart = (page - 1) * PAGE_SIZE + 1;
+  $: pageEnd = Math.min(page * PAGE_SIZE, total);
+  $: paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  // Reset to the first page whenever filters or the selected month change
+  $: {
+    statusFilter;
+    leaveTypeFilter;
+    q;
+    monthFilter;
+    selected;
+    page = 1;
+  }
 </script>
 
 <svelte:window on:keydown={handleKey}/>
@@ -249,7 +258,6 @@ $: filtered = (() => {
              <button
                 class="tab"
                 class:active={selected?.month === t.value}
-                style="--tab-bg: var(--primary);"
                 title={t.value}
                 on:click={() => jumpToMonth(t.value)}
               >
@@ -294,29 +302,9 @@ $: filtered = (() => {
               <span>Name / ID</span>
               <input type="text" placeholder="Search…" bind:value={q} />
             </label>
-
-            <label class="control">
-              <span>Month</span>
-              <select on:change={(e)=>onMonthFilterChange(e.target.value)} bind:value={monthFilter}>
-                <option>All</option>
-                {#each months as m}<option>{m}</option>{/each}
-              </select>
-            </label>
           </div>
 
           {#if selected && total > 0}
-            <div class="table-meta">
-              {#if selected.month === 'All' && monthFilter === 'All'}Showing: <b>All months</b>. {/if}
-              {#if selected.month === 'All' && monthFilter !== 'All'}Month: <b>{monthFilter}</b>. {/if}
-              {#if statusFilter}Status: <b>{statusFilter}</b>. {/if}
-              {#if q}Search: <b>{q}</b>. {/if}
-              {#if !showAll && total > 10}
-                Showing first 10 of {total}. <button class="linkbtn" on:click={() => showAll = true}>Show all</button>
-              {:else if showAll && total > 10}
-                Showing all {total}. <button class="linkbtn" on:click={() => showAll = false}>Show less</button>
-              {/if}
-            </div>
-
             <table class="table">
               <thead>
                 <tr>
@@ -332,9 +320,9 @@ $: filtered = (() => {
                 </tr>
               </thead>
               <tbody>
-                {#each (showAll ? filtered : filtered.slice(0, 10)) as emp, i}
+                {#each paged as emp, i}
                   <tr>
-                    <td>{i + 1}</td>
+                    <td>{(page - 1) * PAGE_SIZE + i + 1}</td>
                     {#if selected.month === 'All'}<td>{emp._month}</td>{/if}
                     <td>{emp.id}</td>
                     <td>{emp.name}</td>
@@ -350,6 +338,19 @@ $: filtered = (() => {
                 {/each}
               </tbody>
             </table>
+
+            <div class="pagination">
+              <span class="page-info">Showing {pageStart}–{pageEnd} of {total}</span>
+              {#if totalPages > 1}
+                <div class="page-btns">
+                  <button class="pagebtn" disabled={page === 1} on:click={() => (page -= 1)}>Prev</button>
+                  {#each Array(totalPages) as _, p}
+                    <button class="pagebtn" class:on={page === p + 1} on:click={() => (page = p + 1)}>{p + 1}</button>
+                  {/each}
+                  <button class="pagebtn" disabled={page === totalPages} on:click={() => (page += 1)}>Next</button>
+                </div>
+              {/if}
+            </div>
           {:else}
             <div class="empty">
             No results found.
@@ -368,7 +369,7 @@ $: filtered = (() => {
 <style>
   :root{
     --primary:#0F9B8E; --ink:#0c4a6e;
-    --pop-out:14px; --tab-h:30px; --tab-gap:6px; --chip:18px; --chip-font:11px; --tab-radius:10px;
+    --pop-out:14px; --tab-h:26px; --tab-gap:4px; --chip:18px; --chip-font:11px; --tab-radius:10px;
   }
   :global(html, body) {
     margin: 0;
@@ -421,12 +422,14 @@ $: filtered = (() => {
   }
   .month-card h2 {
     margin: 0 0 0.5rem;
-    color: #0c4a6e;
+    display: inline-block;
+    background: #0F9B8E;
+    color: #fff;
     font-family:'Outfit', sans-serif;
     font-weight: 900;
     text-transform: uppercase;
-
-
+    padding: 6px 14px;
+    border-radius: 10px;
   }
   .month-card p {
     margin: 0 0 1rem;
@@ -442,44 +445,55 @@ $: filtered = (() => {
   }
   /* Button styles (for modal) */
   .btn{
-    background:#e0f2fe; border:1px solid #e0f2fe;
-    border-radius:8px; padding:6px 14px;
-    font-weight:700; cursor:pointer; font-size:13px;
+    background:#fff; border:1px solid #e5e7eb;
+    border-radius:10px; padding:8px 16px;
+    font-weight:600; cursor:pointer; font-size:14px; color:#1F2937;
   }
-  .btn:hover{ background:#f3f4f6; }
+  .btn:hover{ border-color:#0F9B8E; color:#0F9B8E; }
 
   /* ===== Modal ===== */
   .modal{ position:fixed; inset:0; z-index:50; display:grid; place-items:center; }
-  .backdrop{ position:absolute; inset:0; background:rgba(0,0,0,.35); }
+  .backdrop{ position:absolute; inset:0; background:rgba(0,0,0,.5); backdrop-filter:blur(3px); }
   .dialog{ position:relative; width:min(1100px, 94vw); max-height:82vh; background:#fff; border-radius:14px; box-shadow:0 10px 30px rgba(0,0,0,.2); display:flex; flex-direction:column; overflow:hidden; }
   .dialog-head{ display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-bottom:1px solid #eee; }
   .dialog-head h3{ margin:0; font-size:18px; color:#000; }
   .iconbtn{ background:transparent; border:none; font-size:18px; cursor:pointer; line-height:1; color:#476577; }
   .dialog-body{ display:grid; grid-template-columns:76px 1fr; gap:0; min-height:0; }
 
-  /* Vertical numbered tabs */
-  .rail{ display:flex; flex-direction:column; gap:var(--tab-gap); padding:10px 8px; border-right:1px solid #eef3f4; background:#f9fcfc; overflow-y:auto; overflow-x:visible; position:relative; }
+  /* Vertical month tabs — selected = solid teal, unselected = light outline */
+  .rail{ display:flex; flex-direction:column; gap:var(--tab-gap); padding:10px 8px; border-right:1px solid #eef3f4; background:#f9fcfc; overflow-y:auto; overflow-x:hidden; position:relative; }
   .tab{ position:relative; width:60px; height:var(--tab-h); border:none; background:transparent; cursor:pointer; display:flex; align-items:center; padding-left:16px; }
-  .tab::before{ content:""; position:absolute; top:0; bottom:0; left:10px; right:0; background:var(--tab-bg); border-radius:var(--tab-radius); box-shadow:0 2px 4px rgba(0,0,0,.06); transition:right .18s ease, border-radius .18s ease, box-shadow .18s ease; }
-  .tab-chip{ position:relative; z-index:1; min-width:var(--chip); height:var(--chip); padding:0 8px; border-radius:10px; background:#0F9B8E; color:#fff; font-weight:900; font-size:var(--chip-font); display:grid; place-items:center; }
-  .tab.active::before{ right:calc(-1 * var(--pop-out)); border-top-right-radius:calc(var(--tab-radius) + 6px); border-bottom-right-radius:calc(var(--tab-radius) + 6px); box-shadow:0 6px 14px rgba(0,0,0,.14); }
+  .tab::before{ content:""; position:absolute; top:0; bottom:0; left:10px; right:0; background:transparent; border-radius:var(--tab-radius); box-shadow:none; transition:right .18s ease, border-radius .18s ease, background .18s ease, box-shadow .18s ease; }
+  .tab:hover::before{ background:#e6f4f2; }
+  .tab-chip{ position:relative; z-index:1; min-width:var(--chip); height:var(--chip); padding:0 8px; border-radius:10px; background:#e6f4f2; color:#0C8075; font-weight:700; font-size:var(--chip-font); display:grid; place-items:center; transition:background .18s ease, color .18s ease; }
+  .tab.active::before{ right:-8px; background:var(--primary); border-top-right-radius:calc(var(--tab-radius) + 6px); border-bottom-right-radius:calc(var(--tab-radius) + 6px); box-shadow:0 6px 14px rgba(15,155,142,.35); }
+  .tab.active .tab-chip{ background:transparent; color:#fff; font-weight:800; }
   .tab:focus-visible{ outline:2px solid #0ea5a5; outline-offset:2px; }
 
   /* Right side content */
   .table-wrap{ overflow:auto; padding:10px 16px 12px 16px; }
-  .controls{ display:flex; align-items:end; gap:10px; margin-bottom:8px; }
+  .controls{ display:flex; align-items:end; gap:10px; padding:10px 12px; background:#f8fafc; border:1px solid #e5e7eb; border-radius:10px; margin-bottom:12px; }
   .controls .spacer{ flex:1; }
   .control{ display:flex; flex-direction:column; gap:4px; }
-  .control span{ font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:#486474; font-weight:800; }
-  .control select, .control input{ padding:6px 10px; border-radius:6px; border:1px solid #e3eef0; background:#fff; color:#0c4a6e; font-size:13px; min-width:150px; }
+  .control span{ font-size:12px; text-transform:none; letter-spacing:0; color:#64748b; font-weight:500; }
+  .control select, .control input{ padding:7px 10px; border-radius:8px; border:1px solid #e5e7eb; background:#fff; color:#1F2937; font-size:13px; min-width:150px; }
+  .control select:focus, .control input:focus{ outline:none; border-color:#0F9B8E; box-shadow:0 0 0 3px rgba(15,155,142,.15); }
   .control input{ min-width:200px; }
 
   .table{ width:100%; border-collapse:separate; border-spacing:0; font-size:14px; }
-  .table thead th{ position:sticky; top:0; background:#f6fbfb; text-align:left; padding:10px 12px; font-weight:700; color:#285a6d; border-bottom:1px solid #e5f2f1; }
+  .table thead th{ position:sticky; top:0; z-index:1; background:#f6fbfb; text-align:left; padding:10px 12px; font-weight:700; color:#285a6d; border-bottom:1px solid #e5f2f1; }
   .table tbody td{ padding:10px 12px; border-bottom:1px solid #f0f4f7; color:#1b3342; vertical-align:middle; }
-  .table tbody tr:hover td{ background:#fcfefe; }
-  .table-meta{ font-size:12px; color:#4a6978; margin:6px 0 8px; }
-  .linkbtn{ border:none; background:transparent; text-decoration:underline; cursor:pointer; font-weight:700; color:#0c4a6e; }
+  .table tbody tr:nth-child(even) td{ background:#f8fbfb; }
+  .table tbody tr:hover td{ background:#ecf7f5; }
+
+  /* Pagination */
+  .pagination{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 2px 2px; flex-wrap:wrap; }
+  .page-info{ font-size:12px; color:#64748b; }
+  .page-btns{ display:flex; gap:4px; flex-wrap:wrap; }
+  .pagebtn{ min-width:30px; height:28px; padding:0 8px; border:1px solid #e5e7eb; background:#fff; border-radius:8px; font-size:12.5px; font-weight:600; color:#334155; cursor:pointer; }
+  .pagebtn:hover:not(:disabled):not(.on){ border-color:#0F9B8E; color:#0F9B8E; }
+  .pagebtn.on{ background:#0F9B8E; border-color:#0F9B8E; color:#fff; }
+  .pagebtn:disabled{ opacity:.45; cursor:not-allowed; }
 
   .table th.center,
   .table td.center {
