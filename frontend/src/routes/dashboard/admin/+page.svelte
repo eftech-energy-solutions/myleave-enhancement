@@ -55,8 +55,8 @@ function showToast(message, type = "success", title = "", duration = 3000) {
 }
 
   const palette = [
-    "#FFD9CC", "#C6DEF1", "#F2C6DE",
-    "#C9E4DE", "#DBCDF0", "#E2F0CB"
+    "#0F9B8E", "#D97706", "#475569",
+    "#14B8A6", "#F59E0B", "#94A3B8"
   ];
 
   onMount(async () => {
@@ -634,7 +634,7 @@ const canGoNextYear = () => {
         <div class="mini">
           <div class="mini-val">{totalEmployees}</div>
           <div class="mini-label">
-            <span class="dot" style="background:#49bdb3"></span> Total Employees
+            <span class="dot" style="background:#0F9B8E"></span> Total Employees
           </div>
         </div>
         {#each dataByDept as d (d.name)}
@@ -863,9 +863,9 @@ const canGoNextYear = () => {
   /* --- Global & Layout --- */
   :root{ --ring:#e5e7eb; --shadow:0 4px 12px rgba(0,0,0,.06); }
   .main { padding: 18px; }
-  .grid{ margin-top:-35px; display:grid; gap:10px; grid-template-columns:repeat(12, minmax(0,1fr)); }
+  .grid{ margin-top:0; display:grid; gap:10px; grid-template-columns:repeat(12, minmax(0,1fr)); }
   .card{ background:#fff; border:1px solid var(--ring); border-radius:12px; padding:8px; box-shadow:var(--shadow); }
-  h3{ margin:0 0 8px 0; }
+  h3{ margin:0 0 8px 0; font-size:var(--fs-section-heading, 16px); font-weight:600; color:var(--ink, #1F2937); }
 
   /* --- Employees Overview Card --- */
   .overview-wide { max-width: 100%; margin: 0; }
@@ -932,7 +932,7 @@ const canGoNextYear = () => {
   .weekdays{ display:grid; grid-template-columns:repeat(7,1fr); gap:4px; font-size:11.5px; color:#6b7280; margin-bottom:4px; }
   .days{ display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
   .days button{ border:1px solid var(--ring); border-radius:8px; background:#fff; cursor:pointer; font-size:13px; }
-  .days button.today { border: 2px solid #49bdb3; font-weight: 700; color: #111827; background: #ffff; }
+  .days button.today { border: 2px solid #0F9B8E; font-weight: 700; color: #111827; background: #ffff; }
   .days button.muted{ opacity:.5; }
   .days button:disabled{ background:#f3f4f6; color:#9ca3af; cursor:not-allowed; }
   .days button.holiday { background: #71c0f5; border-color: #71c0f5; color: #fff; }
@@ -940,7 +940,7 @@ const canGoNextYear = () => {
   .days button.out { background: #f9fafb; color: #9ca3af; border-color: #e5e7eb; cursor: not-allowed; opacity: .75; }
   .legend.small{ display:flex; justify-content:center; gap:14px; margin-top:8px; font-size:11.5px; color:#6b7280; }
   .swatch{ display:inline-block; width:14px; height:9px; border-radius:3px; margin-right:6px; vertical-align:middle; }
-  .sw-today{ background:#fff; border:1px solid #49bdb3; }
+  .sw-today{ background:#fff; border:1px solid #0F9B8E; }
   .sw-blue{ background:#71c0f5; border:1px solid #71c0f5; }
 
   /* --- Chart Styles --- */
@@ -978,9 +978,9 @@ const canGoNextYear = () => {
 
   .leave-form label{ display:grid; gap:6px; margin:8px 0; }
   .leave-form input[readonly], .leave-form textarea[readonly]{ background:#f3f4f6; color:#6b7280; cursor:not-allowed; }
-  .leave-form input[required]:invalid { border-color: #ef4444; }
+  .leave-form input[required]:invalid { border-color: #DC2626; }
   .row-actions{ display:flex; gap:8px; align-items:center; margin-top:8px; }
-  .submit-btn{ background:#49bdb3; color:#fff; border:none; border-radius:8px; padding:9px 12px; cursor:pointer; font-weight:700; }
+  .submit-btn{ background:#0F9B8E; color:#fff; border:none; border-radius:10px; padding:9px 14px; cursor:pointer; font-weight:600; font-size:14px; }
   .submit-btn:hover{ opacity:.9; }
   .danger-btn{ background:#dc2626; color:#fff; border:1px solid #fecaca; border-radius:8px; padding:9px 12px; cursor:pointer; font-weight:700; }
   .danger-btn:hover{ background:#b91c1c; }
@@ -1069,14 +1069,14 @@ const canGoNextYear = () => {
 }
 
 .toast-item.error {
-  border-color: #ef4444;
+  border-color: #DC2626;
 }
 .toast-item.error .toast-icon {
-  background: #ef4444;
+  background: #DC2626;
 }
 
 .toast-item.info {
-  border-color: #3b82f6;
+  border-color: #0F9B8E;
 }
 .toast-item.info .toast-icon {
   background: #3b82f6;

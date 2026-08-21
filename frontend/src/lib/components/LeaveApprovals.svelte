@@ -27,8 +27,6 @@
   let pendingLeave = [];
   let pendingCancel = [];
 
-  $: pendingCount = pendingLeave.length + pendingCancel.length;
-
   // =======================
   // DEPARTMENT FILTER
   // =======================
@@ -313,35 +311,33 @@
 <svelte:window on:keydown={handleKey} />
 
 <style>
-  :root { --primary:#49bdb3; --ink:#0c4a6e; --muted:#64748b; --line:#e5e7eb; --soft:#f8fafc; }
+  :root { --primary:#0F9B8E; --ink:#0c4a6e; --muted:#64748b; --line:#e5e7eb; --soft:#f8fafc; }
 
   /* ===== Layout ===== */
   .main{ padding:1.5rem; }
-  .page-head{ display:flex; justify-content:space-between; align-items:center; gap:12px; margin-top:-14px; margin-bottom:18px; flex-wrap:wrap; }
-  .pending-chip{ display:inline-flex; align-items:center; gap:8px; background:#fff; border-radius:9999px; padding:.5rem 1rem; font-weight:800; font-size:14px; color:#0c4a6e; box-shadow:0 8px 20px rgba(0,0,0,.15); white-space:nowrap; }
-  .pending-chip .dot{ min-width:22px; height:22px; display:inline-grid; place-items:center; background:#dc2626; color:#fff; border-radius:9999px; font-size:12px; padding:0 6px; }
-  .pending-chip.zero .dot{ background:#16a34a; }
+  .page-head{ display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:18px; flex-wrap:wrap; }
 
   /* ===== Sections ===== */
-  .sub-ttl{ margin:0 0 12px; font-weight:800; font-size:15px; letter-spacing:.2px; color:#fff; text-shadow:0 1px 6px rgba(0,0,0,.3); }
+  .sub-ttl{ margin:0 0 12px; font-weight:600; font-size:var(--fs-section-heading, 16px); letter-spacing:.2px; color:var(--ink, #1F2937); }
 
   /* ===== Department filter ===== */
-  .dept-toolbar{ display:flex; align-items:center; gap:10px; margin:-6px 0 18px; }
-  .filter-icon{ width:20px; height:20px; color:#fff; filter:drop-shadow(0 1px 4px rgba(0,0,0,.25)); flex-shrink:0; }
-  .filter-label{ font-size:13px; font-weight:700; color:#fff; text-shadow:0 1px 6px rgba(0,0,0,.3); white-space:nowrap; }
+  .dept-toolbar{ display:flex; align-items:center; gap:10px; margin:0 0 18px; }
+  .filter-icon{ width:16px; height:16px; color:var(--muted, #6B7280); flex-shrink:0; }
+  .filter-label{ font-size:14px; font-weight:600; color:var(--ink, #1F2937); white-space:nowrap; }
   .filter-select select{
     appearance:none; -webkit-appearance:none;
-    background:#fff url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%230c4a6e' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 10px center;
-    border:none; border-radius:10px; padding:.5rem 2rem .5rem .8rem;
-    font-size:13px; font-weight:600; color:#0c4a6e; cursor:pointer;
-    box-shadow:0 6px 16px rgba(0,0,0,.15); min-width:210px;
+    background:#fff url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b7280' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 10px center;
+    border:1px solid var(--line,#e5e7eb); border-radius:10px; padding:.5rem 2rem .5rem .8rem;
+    font-size:14px; font-weight:600; color:var(--ink,#1F2937); cursor:pointer;
+    min-width:210px;
   }
+  .filter-select select:focus{ outline:none; border-color:#0F9B8E; box-shadow:0 0 0 3px rgba(15,155,142,.15); }
 
   /* ===== Cards grid ===== */
   .cards-grid{ display:grid; gap:14px; grid-template-columns:repeat(auto-fill, minmax(340px, 1fr)); }
 
   /* ===== Pending card ===== */
-  .pending-card{ background:#fff; border:1px solid var(--line); border-radius:14px; padding:14px 16px; box-shadow:0 8px 20px rgba(0,0,0,.08); display:flex; flex-direction:column; }
+  .pending-card{ background:#fff; border:1px solid var(--line,#e5e7eb); border-radius:12px; padding:14px 16px; box-shadow:0 2px 10px rgba(15,23,42,.06); display:flex; flex-direction:column; }
   .pending-card .row1{ display:flex; justify-content:space-between; align-items:flex-start; gap:8px; }
   .pending-card .name{ font-weight:800; color:#000; font-size:16px; }
   .pending-card .sub{ font-size:12px; color:#64748b; margin-top:2px; }
@@ -363,7 +359,7 @@
   .btn-approve, .btn-reject, .btn-details{ border:none; border-radius:8px; padding:.55rem .9rem; font-weight:700; cursor:pointer; min-width:50px; line-height:1; font-size:12px; }
   .btn-approve{ background:#16a34a; color:#fff; }
   .btn-reject{ background:#dc2626; color:#fff; }
-  .btn-details{ background:#e0f2fe; color:#0c4a6e; }
+  .btn-details{ background:#f1f5f9; color:#334155; }
   .btn-approve:hover, .btn-reject:hover, .btn-details:hover{ filter:brightness(.97); }
   .btn-approve:disabled, .btn-reject:disabled{ opacity:.6; cursor:not-allowed; }
 
@@ -377,22 +373,22 @@
   /* ===== Empty / loading states ===== */
   .empty-state{ background:#fff; border:1px dashed #cbd5e1; border-radius:14px; padding:36px 20px; text-align:center; color:#64748b; }
   .empty-state strong{ display:block; font-size:16px; color:#0c4a6e; margin-bottom:4px; }
-  .loading{ color:rgba(255,255,255,.95); text-align:center; padding:30px 0; font-weight:600; }
+  .loading{ color:var(--muted, #6B7280); text-align:center; padding:30px 0; font-weight:600; }
 
   /* ===== Modals ===== */
   .modal-wrap{ position:fixed; inset:0; display:grid; place-items:center; background:rgba(0,0,0,.35); z-index:80; animation:fadeIn .15s ease; }
   @keyframes fadeIn { from{opacity:0} to{opacity:1} }
   .modal{ width:min(560px, 96vw); background:#fff; border-radius:18px; box-shadow:0 14px 40px rgba(0,0,0,.25); overflow:hidden; }
   .modal-hd{ padding:14px 18px; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; position:relative; }
-  .modal-ttl{ font-weight:700; font-size:20px; color:#49bdb3; width:100%; text-align:center; }
+  .modal-ttl{ font-weight:700; font-size:20px; color:#0F9B8E; width:100%; text-align:center; }
   .modal-x{ border:none; background:transparent; font-size:22px; cursor:pointer; color:#475569; position:absolute; right:18px; }
   .modal-bd{ padding:22px; max-height:72vh; overflow:auto; }
   .muted{ font-size:13px; color:#64748b; }
   .form-ft{ display:flex; justify-content:flex-end; gap:10px; padding-top:10px; }
-  .btn-ghost{ background:#fff; color:#0c4a6e; border:1px solid var(--line); border-radius:10px; padding:.7rem 1rem; font-weight:700; cursor:pointer; }
+  .btn-ghost{ background:#fff; color:var(--ink,#1F2937); border:1px solid var(--line,#e5e7eb); border-radius:10px; padding:.7rem 1rem; font-weight:600; cursor:pointer; }
   .btn-ghost:disabled{ opacity:.6; cursor:not-allowed; }
-  .btn-confirm-approve{ background:#16a34a; color:#fff; border:none; border-radius:10px; padding:.7rem 1.2rem; font-weight:700; cursor:pointer; }
-  .btn-confirm-reject{ background:#dc2626; color:#fff; border:none; border-radius:10px; padding:.7rem 1.2rem; font-weight:700; cursor:pointer; }
+  .btn-confirm-approve{ background:var(--success,#16A34A); color:#fff; border:none; border-radius:10px; padding:.7rem 1.2rem; font-weight:600; cursor:pointer; }
+  .btn-confirm-reject{ background:var(--danger,#DC2626); color:#fff; border:none; border-radius:10px; padding:.7rem 1.2rem; font-weight:600; cursor:pointer; }
   .btn-confirm-approve:hover, .btn-confirm-reject:hover{ filter:brightness(.96); }
   .btn-confirm-approve:disabled, .btn-confirm-reject:disabled{ opacity:.6; cursor:not-allowed; }
 
@@ -415,10 +411,10 @@
   .toast-body p{ margin:0; font-size:13px; color:#4b5563; }
   .toast-close{ background:transparent; border:none; font-size:18px; cursor:pointer; color:#9ca3af; margin-left:10px; }
   .toast-close:hover{ color:#111827; }
-  .toast-item.success{ border-color:#22c55e; }
-  .toast-item.success .toast-icon{ background:#22c55e; }
-  .toast-item.error{ border-color:#ef4444; }
-  .toast-item.error .toast-icon{ background:#ef4444; }
+  .toast-item.success{ border-color:var(--success, #16A34A); }
+  .toast-item.success .toast-icon{ background:var(--success, #16A34A); }
+  .toast-item.error{ border-color:#DC2626; }
+  .toast-item.error .toast-icon{ background:#DC2626; }
   .toast-item.info{ border-color:#3b82f6; }
   .toast-item.info .toast-icon{ background:#3b82f6; }
   .toast-item.warning{ border-color:#f59e0b; }
@@ -450,11 +446,6 @@
           {#each deptOptions as d}<option value={d}>{d}</option>{/each}
         </select>
       </div>
-    </div>
-
-    <div class="pending-chip" class:zero={pendingCount === 0}>
-      {pendingCount} Pending
-      <span class="dot">{pendingCount}</span>
     </div>
   </div>
 

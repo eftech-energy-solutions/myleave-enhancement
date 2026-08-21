@@ -1,15 +1,34 @@
 .dash-main{
   padding:0;
-  background: url('/images/bg.png') no-repeat center center fixed;
-  background-size: cover;
+  background: var(--canvas, #F5F7FA);
 }
 
-
+/* ===== Design tokens (see docs/UI_refinement.md) ===== */
 :root{
-  --bg1:#1fb3b2;
-  --bg2:#107aa0;
-  --surface:#ffffff;
-  --muted:#6b7280;
+  /* Palette */
+  --canvas:#F5F7FA;          /* page background */
+  --surface:#ffffff;         /* cards */
+  --brand:#0F9B8E;           /* brand teal: header band, primary buttons, active nav */
+  --brand-dark:#0C8075;      /* hover state for brand teal */
+  --success:#16A34A;         /* approve / success */
+  --danger:#DC2626;          /* reject / failed / destructive */
+  --ink:#1F2937;             /* headings / primary text */
+  --muted:#6B7280;           /* meta / caption text */
+  --chart-amber:#D97706;     /* chart accent 2 */
+  --chart-slate:#475569;     /* chart accent 3 */
+  --chart-slate-light:#94A3B8;
+
+  /* Type scale */
+  --fs-page-title:24px;      /* weight 600 */
+  --fs-section-heading:16px; /* weight 600 */
+  --fs-body:14px;            /* weight 400 */
+  --fs-meta:12.5px;          /* muted captions */
+  --fs-stat:28px;            /* weight 700 */
+  --fs-button:14px;          /* weight 500 */
+
+  /* Legacy aliases */
+  --bg1:#0F9B8E;
+  --bg2:#0C8075;
   --ring:#e5e7eb;
   --shadow: 0 6px 20px rgba(0,0,0,.08);
   --radius: 18px;
@@ -20,8 +39,8 @@ html,body{height:100%}
 body{
   margin:0;
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
-  color:#0f172a;
-  background:#f5f7fb;
+  color:var(--ink, #1F2937);
+  background:var(--canvas, #F5F7FA);
 }
 
 a{color:inherit; text-decoration:none}
@@ -60,10 +79,10 @@ ul{margin:0; padding:0; list-style:none}
 .nav a:hover{ background:#f3f4f6; }
 .nav a.active{
   background:#eaf6f7;
-  border-left:4px solid #1fb3b2;
+  border-left:4px solid #0F9B8E;
   padding-left:8px;
 }
-.aside .signout{ color:#e34040; }
+.aside .signout{ color:#DC2626; }
 .aside .signout:hover{ background:#feecec; }
 
 .ico{ font-size:20px; width:20px; display:inline-grid; place-items:center; }
@@ -121,7 +140,7 @@ ul{margin:0; padding:0; list-style:none}
   height:var(--size); width:var(--size);
   border-radius:50%;
   background:
-    conic-gradient(#0ea5e9 calc(var(--spent)*1%), #e5e7eb 0);
+    conic-gradient(var(--brand, #0F9B8E) calc(var(--spent)*1%), #e5e7eb 0);
   display:grid; place-items:center; margin:auto;
 }
 .donut:after{
@@ -207,7 +226,7 @@ canvas {
 }
 
 .days button.today {
-  background: #49bdb3; /* blue highlight for today */
+  background: var(--brand, #0F9B8E); /* brand highlight for today */
   color: #fff;
   font-weight: 600;
 }
@@ -232,7 +251,7 @@ canvas {
   gap: 1rem;
 }
 .leave-form .title {
-  color: #49bdb3; /* green heading */
+  color: var(--brand, #0F9B8E); /* brand heading */
   font-size: 1.5rem;
   font-weight: 700;
   margin-bottom: .5rem;
@@ -260,16 +279,16 @@ canvas {
   flex: 1;
 }
 .submit-btn {
-  background: #49bdb3;
+  background: var(--brand, #0F9B8E);
   color: #fff;
   border: none;
-  border-radius: 6px;
+  border-radius: 10px;
   padding: .6rem;
   font-weight: 600;
   cursor: pointer;
 }
 .submit-btn:hover {
-  background: #40B1A7;
+  background: var(--brand-dark, #0C8075);
 }
 .close-btn {
   background: transparent;   /* no background */
@@ -288,7 +307,7 @@ canvas {
   grid-template-columns: 220px 1fr;
   min-height: 100dvh;
   gap: 0;
-  background: url('/images/bg.png') center/cover no-repeat; /* 👈 bg here */
+  background: var(--canvas, #F5F7FA);
 }
 
 
@@ -301,7 +320,7 @@ canvas {
   grid-template-columns: 220px 1fr;
   min-height:100dvh;
   gap:0;
-  background: url('/images/bg.png') center/cover no-repeat;
+  background: var(--canvas, #F5F7FA);
 }
 .dash-main{ padding:0; background: transparent; }
 .aside{ background:#fff; border-right:none; }

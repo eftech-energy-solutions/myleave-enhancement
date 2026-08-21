@@ -257,15 +257,15 @@ employees = deptFiltered;
 
 <style>
   :global(html, body){ height:100%; margin:0; }
-  :root { --primary:#49bdb3; --ink:#0c4a6e ; --muted:#64748b; --line:#e5e7eb; --soft:#f8fafc; }
-  :global(body){ font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans"; background:url('/images/bg.png') no-repeat center center fixed; background-size:cover; overflow-y:auto; }
+  :root { --primary:#0F9B8E; --ink:#0c4a6e ; --muted:#64748b; --line:#e5e7eb; --soft:#f8fafc; }
+  :global(body){ font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans"; background: var(--canvas, #F5F7FA); overflow-y:auto; }
 
   /* ===== Layout ===== */
   .main{ padding:1.5rem; }
 
   /* ===== Employees grid & card ===== */
-  .employees-grid{ display:grid; gap:1rem; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); margin-top: -35px;}
-  .emp-box{ background:#fff; border-radius:12px; padding:1rem; color:#111; box-shadow:0 1px 3px rgba(0,0,0,.08); display:flex; flex-direction:column; min-height:240px; }
+  .employees-grid{ display:grid; gap:1rem; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+  .emp-box{ background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:1rem; color:#111827; box-shadow:0 2px 10px rgba(15,23,42,.06); display:flex; flex-direction:column; min-height:240px; }
   .emp-top{ text-align:center; }
   .emp-box h3{ margin:0; font-size:15px; color:#217859; }
   .emp-box p{ margin:2px 0; font-size:12px; color:#334155; }
@@ -286,14 +286,14 @@ employees = deptFiltered;
   @keyframes fadeIn { from{opacity:0} to{opacity:1} }
   .modal{ width:min(900px, 96vw); background:#fff; border-radius:18px; box-shadow:0 14px 40px rgba(0,0,0,.25); overflow:hidden; }
   .modal-hd{ padding:14px 18px; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; }
-  .modal-ttl{ font-weight:700; font-size:22px; color:#49bdb3; }
+  .modal-ttl{ font-weight:700; font-size:22px; color:#0F9B8E; }
   .modal-x{ border:none; background:transparent; font-size:22px; cursor:pointer; color:#475569; }
   .modal-bd{ padding:0; max-height:72vh; overflow:auto; }
 
   .details-layout{ padding:22px; }
   .details-grid-form{ display:grid; grid-template-columns: 1fr 220px; gap:20px; }
   .photo-card{ align-self:flex-start; justify-self:end; width:180px; height:180px; border-radius:20px; background:linear-gradient(180deg,#fff,#f3f4f6); border:1px dashed #d1d5db; display:grid; place-items:center; position:relative; box-shadow:0 8px 20px rgba(0,0,0,.06); }
-  .photo-card .cam{ width:48px; height:48px; border-radius:9999px; background:#49bdb3; display:grid; place-items:center; color:#fff; font-size:20px; box-shadow:0 6px 14px rgba(73,189,179,.35); }
+  .photo-card .cam{ width:48px; height:48px; border-radius:9999px; background:#0F9B8E; display:grid; place-items:center; color:#fff; font-size:20px; box-shadow:0 6px 14px rgba(15,155,142,.35); }
   .photo-card .cam svg { width: 24px; height: 24px; }
   .photo-preview{ position:absolute; inset:0; overflow:hidden; border-radius:20px; }
   .photo-preview img{ width:100%; height:100%; object-fit:cover; display:block; }
@@ -304,7 +304,7 @@ employees = deptFiltered;
   .row.single{ grid-template-columns:1fr; }
   label{ font-size:12px; color:#374151; font-weight:700; margin:0 0 6px; display:block; }
   .ctl{ display:flex; align-items:center; background:#fff; border:1px solid var(--line); border-radius:12px; padding:10px 12px; box-shadow: inset 0 1px 0 rgba(0,0,0,.02); }
-  .ctl:focus-within{ border-color:#49bdb3; box-shadow:0 0 0 3px rgba(73,189,179,.15); }
+  .ctl:focus-within{ border-color:#0F9B8E; box-shadow:0 0 0 3px rgba(15,155,142,.15); }
   .ctl input, .ctl select, .ctl textarea{ border:none; outline:none; width:100%; font-size:14px; color:#111827; background:transparent; }
   .ctl textarea{ min-height:90px; resize:vertical; }
   .ctl.disabled{ background:#f8fafc; }
@@ -397,14 +397,14 @@ employees = deptFiltered;
 }
 
 .toast-item.error {
-  border-color: #ef4444;
+  border-color: #DC2626;
 }
 .toast-item.error .toast-icon {
-  background: #ef4444;
+  background: #DC2626;
 }
 
 .toast-item.info {
-  border-color: #3b82f6;
+  border-color: #0F9B8E;
 }
 .toast-item.info .toast-icon {
   background: #3b82f6;

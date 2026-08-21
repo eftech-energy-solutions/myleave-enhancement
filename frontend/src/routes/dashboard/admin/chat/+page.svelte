@@ -400,7 +400,7 @@
     place-items: center;
     overflow: hidden;
     border-radius: 50%;
-    background: linear-gradient(135deg, #49bdb3, #0c8295);
+    background: linear-gradient(135deg, #0F9B8E, #0c8295);
     color: white;
     font-weight: 800;
   }

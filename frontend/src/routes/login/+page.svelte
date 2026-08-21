@@ -469,7 +469,7 @@
 			</div>
 
 		{:else if uiState === 'success'}
-			<h1 class="title" style="color:#49bdb3;">Email Sent!</h1>
+			<h1 class="title" style="color:#0F9B8E;">Email Sent!</h1>
 			<p class="subtitle" style="max-width:450px;">
 				{#if form?.emailMasked}
 					An OTP has been sent to <b>{form.emailMasked}</b>.<br />The code is valid for 10 minutes only.
@@ -560,7 +560,7 @@
 		margin: 10px 0 22px;
 		font-weight: 800;
 		text-align: center;
-		color: #49bdb3;
+		color: #0F9B8E;
 		font-size: 60px;
 		line-height: 1.1;
 		font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI";
@@ -653,7 +653,7 @@
 	}
 
 	.error-msg {
-		color: #ef4444;
+		color: #DC2626;
 		margin-top: 4px; /* Kurangkan margin sikit */
 	}
 

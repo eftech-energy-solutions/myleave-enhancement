@@ -367,12 +367,12 @@ $: filtered = (() => {
 
 <style>
   :root{
-    --primary:#49bdb3; --ink:#0c4a6e;
+    --primary:#0F9B8E; --ink:#0c4a6e;
     --pop-out:14px; --tab-h:30px; --tab-gap:6px; --chip:18px; --chip-font:11px; --tab-radius:10px;
   }
   :global(html, body) {
     margin: 0;
-    background: #0c4a6e;
+    background: var(--canvas, #F5F7FA);
     font-family: system-ui, sans-serif;
   }
 
@@ -392,8 +392,7 @@ $: filtered = (() => {
   .header-logo {
     font-family:'Bungee', cursive;
     font-size: 24px;
-    color: #fff;
-    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+    color: var(--ink, #1F2937);
   }
 
   /* ===== New Month Cards ===== */
@@ -401,18 +400,18 @@ $: filtered = (() => {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
     gap: 1rem;
-    margin-top: -33px;
+    margin-top: 0;
   }
 
   .month-card {
     background: #fff;
     border-radius: 12px;
     padding: 1.5rem;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e5e7eb; box-shadow: 0 2px 10px rgba(15,23,42,.06);
     cursor: pointer;
     transition: transform 0.2s, box-shadow 0.2s;
     text-align: center;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+    box-shadow: 0 2px 10px rgba(15,23,42,.06);
     height: 175px;
 
   }
@@ -426,9 +425,7 @@ $: filtered = (() => {
     font-family:'Outfit', sans-serif;
     font-weight: 900;
     text-transform: uppercase;
-    background: rgba(73, 189, 179, 0.15);
-    padding: 8px 0;
-    border-radius: 8px;
+
 
   }
   .month-card p {
@@ -440,7 +437,7 @@ $: filtered = (() => {
   .month-card .count {
     font-size: 2.5rem;
     font-weight: bold;
-    color: #49bdb3;
+    color: #0F9B8E;
     margin-top: -10px;
   }
   /* Button styles (for modal) */
@@ -464,7 +461,7 @@ $: filtered = (() => {
   .rail{ display:flex; flex-direction:column; gap:var(--tab-gap); padding:10px 8px; border-right:1px solid #eef3f4; background:#f9fcfc; overflow-y:auto; overflow-x:visible; position:relative; }
   .tab{ position:relative; width:60px; height:var(--tab-h); border:none; background:transparent; cursor:pointer; display:flex; align-items:center; padding-left:16px; }
   .tab::before{ content:""; position:absolute; top:0; bottom:0; left:10px; right:0; background:var(--tab-bg); border-radius:var(--tab-radius); box-shadow:0 2px 4px rgba(0,0,0,.06); transition:right .18s ease, border-radius .18s ease, box-shadow .18s ease; }
-  .tab-chip{ position:relative; z-index:1; min-width:var(--chip); height:var(--chip); padding:0 8px; border-radius:10px; background:#49bdb3; color:#fff; font-weight:900; font-size:var(--chip-font); display:grid; place-items:center; }
+  .tab-chip{ position:relative; z-index:1; min-width:var(--chip); height:var(--chip); padding:0 8px; border-radius:10px; background:#0F9B8E; color:#fff; font-weight:900; font-size:var(--chip-font); display:grid; place-items:center; }
   .tab.active::before{ right:calc(-1 * var(--pop-out)); border-top-right-radius:calc(var(--tab-radius) + 6px); border-bottom-right-radius:calc(var(--tab-radius) + 6px); box-shadow:0 6px 14px rgba(0,0,0,.14); }
   .tab:focus-visible{ outline:2px solid #0ea5a5; outline-offset:2px; }
 

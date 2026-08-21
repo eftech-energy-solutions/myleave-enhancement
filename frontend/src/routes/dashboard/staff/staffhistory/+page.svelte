@@ -1134,7 +1134,7 @@ function closeDetail() {
     display: block;
     font-size: 12px;
     font-weight: 700;
-    color: white; /* as requested: white label text */
+    color: var(--ink, #1F2937); /* label text */
     margin-bottom: 4px;
   }
   .filter select {
@@ -1260,7 +1260,7 @@ function closeDetail() {
   }
   .modal-dialog h3 { 
     margin: 0 0 0.5rem; 
-    color: #49bdb3;
+    color: #0F9B8E;
     font-size: 26px;
   }
   .modal-dialog p { margin: 0 0 1.5rem; color: #4b5563; }
@@ -1278,7 +1278,7 @@ function closeDetail() {
     font-size: 14px;
   }
   .btn-secondary { background: #e5e7eb; color: #1f2937; }
-  .btn-danger { background: #ef4444; color: white; }
+  .btn-danger { background: #DC2626; color: white; }
 
 .action-wrapper {
   display: flex;
@@ -1350,7 +1350,7 @@ function closeDetail() {
     padding: 8px 10px;
   }
   .leave-form input[required]:invalid, .leave-form textarea[required]:invalid {
-    border-color: #ef4444;
+    border-color: #DC2626;
   }
   
   /* --- Keep radios inline/left without changing their markup position --- */
@@ -1370,7 +1370,7 @@ function closeDetail() {
     font-weight: 400; /* label weight normal */
   }
   .leave-form .duration input[type="radio"] {
-    accent-color: #3FADA4; /* slightly darker than #49bdb3 */
+    accent-color: #3FADA4; /* slightly darker than #0F9B8E */
     width: 16px;
     height: 16px;
     margin: 0;
@@ -1389,13 +1389,13 @@ function closeDetail() {
   .help.warn { color:#b45309; }
   
   .submit-btn {
-    background: #3FADA4;
+    background: var(--brand, #0F9B8E);
     color: #fff;
     border: none;
-    border-radius: 8px;
+    border-radius: 10px;
     padding: 10px 14px;
     cursor: pointer;
-    font-weight: 700;
+    font-weight: 600;
     font-size: 14px;
     margin-top: 8px;
   }
@@ -1511,14 +1511,14 @@ function closeDetail() {
 }
 
 .toast-item.error {
-  border-color: #ef4444;
+  border-color: #DC2626;
 }
 .toast-item.error .toast-icon {
-  background: #ef4444;
+  background: #DC2626;
 }
 
 .toast-item.info {
-  border-color: #3b82f6;
+  border-color: #0F9B8E;
 }
 .toast-item.info .toast-icon {
   background: #3b82f6;
@@ -1592,7 +1592,7 @@ function closeDetail() {
 }
 .detail-title {
   margin: 0 0 1rem;
-  color: #49bdb3;
+  color: #0F9B8E;
   font-size: 22px;
   font-weight: 700;
 }

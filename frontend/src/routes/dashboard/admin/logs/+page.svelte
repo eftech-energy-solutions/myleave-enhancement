@@ -118,19 +118,18 @@ async function fetchLogs() {
   
   // Helper functions
   function getActionColor(action) {
-    if (action.includes('Login')) return 'text-blue-600 bg-blue-50';
-    if (action.includes('Approved')) return 'text-green-600 bg-green-50';
-    if (action.includes('Rejected')) return 'text-red-600 bg-red-50';
-    if (action.includes('Deleted')) return 'text-orange-600 bg-orange-50';
-    if (action.includes('Failed')) return 'text-red-600 bg-red-50';
-    if (action.includes('Added') || action.includes('Updated')) return 'text-purple-600 bg-purple-50';
-    return 'text-gray-600 bg-gray-50';
+    if (action.includes('Login')) return 'act-login';
+    if (action.includes('Approved')) return 'act-approved';
+    if (action.includes('Rejected') || action.includes('Failed')) return 'act-danger';
+    if (action.includes('Deleted')) return 'act-warning';
+    if (action.includes('Added') || action.includes('Updated')) return 'act-info';
+    return 'act-neutral';
   }
   
   function getStatusBadge(status) {
     return status === 'success' 
-      ? 'px-2 py-1 text-xs rounded-full bg-green-100 text-green-700'
-      : 'px-2 py-1 text-xs rounded-full bg-red-100 text-red-700';
+      ? 'status-pill status-success'
+      : 'status-pill status-failed';
   }
   
   // Reactive statement to refetch when filters change
@@ -166,7 +165,7 @@ async function fetchLogs() {
 
     <!-- Statistics -->
     <div class="stats-grid">
-      <div class="stat-card stat-blue">
+      <div class="stat-card stat-neutral">
         <div class="stat-label">Total Logs</div>
         <div class="stat-value">{statistics.total_logs || 0}</div>
       </div>
@@ -178,7 +177,7 @@ async function fetchLogs() {
         <div class="stat-label">Failed Actions</div>
         <div class="stat-value">{statistics.failed_actions || 0}</div>
       </div>
-      <div class="stat-card stat-purple">
+      <div class="stat-card stat-teal">
         <div class="stat-label">Active Manager</div>
         <div class="stat-value">{statistics.active_admins || 0}</div>
       </div>
@@ -398,14 +397,14 @@ async function fetchLogs() {
   padding: 0;
   max-width: 96%;
   margin: 0 auto;
-  margin-top:-15px;
 }
 
 /* Header Card */
 .header-card {
   background: #fff;
   border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0,0,0,.08);
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 2px 10px rgba(15,23,42,.06);
   padding: 24px;
   margin-bottom: 24px;
 }
@@ -426,7 +425,7 @@ async function fetchLogs() {
 .icon-wrapper {
   width: 48px;
   height: 48px;
-  background: #49bdb3;
+  background: #0F9B8E;
   border-radius: 12px;
   display: flex;
   align-items: center;
@@ -457,17 +456,18 @@ async function fetchLogs() {
   align-items: center;
   gap: 8px;
   padding: 10px 20px;
-  background: #49bdb3;
+  background: #0F9B8E;
   color: #fff;
   border: none;
-  border-radius: 8px;
+  border-radius: 10px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .export-btn:hover {
-  background: #3da89e;
+  background: #0C8075;
 }
 
 .btn-icon {
@@ -487,10 +487,10 @@ async function fetchLogs() {
   border-radius: 12px;
 }
 
-.stat-blue { background: #eff6ff; }
+.stat-neutral { background: #f1f5f9; }
 .stat-green { background: #f0fdf4; }
 .stat-red { background: #fef2f2; }
-.stat-purple { background: #faf5ff; }
+.stat-teal { background: #f0fdfa; }
 
 .stat-label {
   font-size: 13px;
@@ -498,26 +498,27 @@ async function fetchLogs() {
   margin-bottom: 8px;
 }
 
-.stat-blue .stat-label { color: #1e40af; }
+.stat-neutral .stat-label { color: #475569; }
 .stat-green .stat-label { color: #166534; }
 .stat-red .stat-label { color: #991b1b; }
-.stat-purple .stat-label { color: #6b21a8; }
+.stat-teal .stat-label { color: #0f766e; }
 
 .stat-value {
-  font-size: 28px;
-  font-weight: 800;
+  font-size: var(--fs-stat, 28px);
+  font-weight: 700;
 }
 
-.stat-blue .stat-value { color: #1e3a8a; }
-.stat-green .stat-value { color: #14532d; }
-.stat-red .stat-value { color: #7f1d1d; }
-.stat-purple .stat-value { color: #581c87; }
+.stat-neutral .stat-value { color: var(--ink, #1F2937); }
+.stat-green .stat-value { color: var(--success, #16A34A); }
+.stat-red .stat-value { color: var(--danger, #DC2626); }
+.stat-teal .stat-value { color: var(--brand, #0F9B8E); }
 
 /* Filters */
 .filters-card {
   background: #fff;
   border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0,0,0,.08);
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 2px 10px rgba(15,23,42,.06);
   padding: 24px;
   margin-bottom: 24px;
 }
@@ -552,22 +553,24 @@ async function fetchLogs() {
 
 .search-input:focus {
   outline: none;
-  border-color: #49bdb3;
-  box-shadow: 0 0 0 3px rgba(73,189,179,0.1);
+  border-color: #0F9B8E;
+  box-shadow: 0 0 0 3px rgba(15,155,142,0.1);
 }
 
 .filter-select, .date-input {
-  padding: 10px 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
+  padding: .5rem 2rem .5rem .8rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
   font-size: 14px;
+  font-weight: 600;
+  color: #1F2937;
   background: #fff;
 }
 
 .filter-select:focus, .date-input:focus {
   outline: none;
-  border-color: #49bdb3;
-  box-shadow: 0 0 0 3px rgba(73,189,179,0.1);
+  border-color: #0F9B8E;
+  box-shadow: 0 0 0 3px rgba(15,155,142,.15);
 }
 .filter-select {
   width: 100%;
@@ -575,6 +578,9 @@ async function fetchLogs() {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  appearance: none;
+  -webkit-appearance: none;
+  background: #fff url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b7280' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 10px center;
 }
 
 
@@ -587,7 +593,8 @@ async function fetchLogs() {
 .table-card {
   background: #fff;
   border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0,0,0,.08);
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 2px 10px rgba(15,23,42,.06);
   overflow: hidden;
 }
 
@@ -680,6 +687,26 @@ async function fetchLogs() {
   height: 28px;
 }
 
+/* Action tag pills: light tint bg + dark text of the same hue */
+.action-badge.act-login    { background: #eff6ff; color: #1d4ed8; }
+.action-badge.act-approved { background: #f0fdf4; color: #166534; }
+.action-badge.act-danger   { background: #fef2f2; color: var(--danger, #DC2626); }
+.action-badge.act-warning  { background: #fffbeb; color: #b45309; }
+.action-badge.act-info     { background: #f0fdfa; color: #0f766e; }
+.action-badge.act-neutral  { background: #f1f5f9; color: #475569; }
+
+/* Status pills */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.status-pill.status-success { background: #f0fdf4; color: var(--success, #16A34A); }
+.status-pill.status-failed  { background: #fef2f2; color: var(--danger, #DC2626); }
+
 .details-text {
   line-height: 1.6;
   color: #374151;
@@ -704,7 +731,7 @@ async function fetchLogs() {
   padding: 8px;
   background: transparent;
   border: none;
-  color: #3b82f6;
+  color: #0F9B8E;
   cursor: pointer;
   border-radius: 6px;
   transition: all 0.2s;
@@ -714,7 +741,7 @@ async function fetchLogs() {
 }
 
 .view-btn:hover {
-  background: #eff6ff;
+  background: #f0fdfa;
 }
 
 /* Modal */

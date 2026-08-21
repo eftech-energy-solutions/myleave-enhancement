@@ -871,11 +871,11 @@ async function saveProfile(e) {
     margin-top: auto;
   }
   .main {
-    background: linear-gradient(180deg, #49bdb3 0%, #0c4a6e 100%);
+    background: var(--canvas, #F5F7FA);
     overflow-y: auto;
   }
   .container-inner {
-    padding: 16px;
+    padding: 24px 24px 32px;
   }
 
   /* Sidebar Navigation */
@@ -921,7 +921,7 @@ async function saveProfile(e) {
   }
   .nav a.active {
     background: #eaf6f7;
-    color: #1fb3b2;
+    color: #0F9B8E;
   }
   .nav-badge {
   margin-left: auto;
@@ -953,7 +953,7 @@ async function saveProfile(e) {
     color: #9ca3af;
   }
   .sub-links a.active .text::before {
-    color: #1fb3b2;
+    color: #0F9B8E;
   }
 
   /* Icons */
@@ -970,7 +970,7 @@ async function saveProfile(e) {
   }
   .nav a.active .ico svg,
   .nav-group.active .ico svg {
-    fill: #1fb3b2;
+    fill: #0F9B8E;
   }
 
   /* Sign Out Button */
@@ -980,7 +980,7 @@ async function saveProfile(e) {
     gap: 12px;
     padding: 10px 12px;
     border-radius: 10px;
-    color: #e34040;
+    color: #DC2626;
     font-weight: 600;
     text-decoration: none;
   }
@@ -988,36 +988,29 @@ async function saveProfile(e) {
     background: #feecec;
   }
   .signout .ico svg {
-    fill: #e34040;
+    fill: #DC2626;
   }
 
-  /* Header */
+  /* Header — teal header band */
   .topbar {
     display: flex;
     align-items: flex-end;
     justify-content: space-between;
     gap: 10px;
     padding: 12px 16px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    background: linear-gradient(135deg, var(--brand, #0F9B8E), var(--brand-dark, #0C8075));
   }
   .title-wrap {
     display: flex;
     flex-direction: column;
     gap: 2px;
     color: #fff;
-    background: rgba(4, 32, 51, 0.35);
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    border-radius: 16px;
-    padding: 10px 20px;
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.18);
   }
   .page-desc {
     margin: 2px 0 0;
-    font-size: 13.5px;
+    font-size: var(--fs-meta, 12.5px);
     line-height: 1.35;
-    color: rgba(255, 255, 255, 0.88);
+    color: rgba(255, 255, 255, 0.75);
   }
   .hello {
   max-width: 980px;       /* kekalkan limit ruang */
@@ -1025,18 +1018,18 @@ async function saveProfile(e) {
   word-break: break-word;
   line-height: 1.3;
 
-  font-size: 18px;
+  font-size: var(--fs-body, 14px);
   font-weight: 400;
-  opacity: 0.95;
+  opacity: 0.85;
   margin: 0;
   color: #fff;
 }
 
   .page-title {
     margin: 0;
-    font-size: 55px;
-    line-height: 1.1;
-    font-weight: 700;
+    font-size: var(--fs-page-title, 24px);
+    line-height: 1.2;
+    font-weight: 600;
     color: #fff;
   }
   .logo img {
@@ -1149,7 +1142,7 @@ async function saveProfile(e) {
   .modal-ttl {
     font-size: 18px;
     font-weight: 700;
-    color: #49bdb3;
+    color: #0F9B8E;
   }
   .modal-x {
     border: none;
@@ -1173,7 +1166,7 @@ async function saveProfile(e) {
   }
   .tabs button.selected {
     background: #fff;
-    border-bottom: 2px solid #49bdb3;
+    border-bottom: 2px solid #0F9B8E;
     color: #000;
   }
 
@@ -1219,19 +1212,20 @@ async function saveProfile(e) {
   }
   .btn-ghost {
     background: #fff;
-    color: #000e;
-    border: 1px solid #d1d5db;
-    border-radius: 8px;
+    color: var(--ink, #1F2937);
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
     padding: 0.6rem 1rem;
     font-weight: 600;
   }
   .btn-primary {
-    background: #49bdb3;
+    background: #0F9B8E;
     color: #fff;
     border: none;
-    border-radius: 8px;
-    padding: 0.6rem 1rem;
-    font-weight: 700;
+    border-radius: 10px;
+    padding: 0.65rem 1.25rem;
+    font-weight: 600;
+    font-size: 14px;
   }
   .btn-primary:hover {
     filter: brightness(0.95);
@@ -1252,8 +1246,8 @@ async function saveProfile(e) {
     box-sizing: border-box;
   }
   .input-lg:focus {
-    border-color: #49bdb3;
-    box-shadow: 0 0 0 3px rgba(73, 189, 179, 0.15);
+    border-color: #0F9B8E;
+    box-shadow: 0 0 0 3px rgba(15, 155, 142, 0.15);
   }
 
   .input-wrap-lg {
@@ -1286,7 +1280,7 @@ async function saveProfile(e) {
   /* Messages */
   .form-error {
     background: #feecec;
-    color: #e34040;
+    color: #DC2626;
     padding: 10px 14px;
     border-radius: 8px;
     font-weight: 600;
@@ -1383,14 +1377,14 @@ async function saveProfile(e) {
 }
 
 .toast-item.error {
-  border-color: #ef4444;
+  border-color: #DC2626;
 }
 .toast-item.error .toast-icon {
-  background: #ef4444;
+  background: #DC2626;
 }
 
 .toast-item.info {
-  border-color: #3b82f6;
+  border-color: #0F9B8E;
 }
 .toast-item.info .toast-icon {
   background: #3b82f6;
@@ -1498,7 +1492,7 @@ async function saveProfile(e) {
   }
 
   .page-title {
-    font-size: 28px;
+    font-size: 20px;
   }
 
   .hello {

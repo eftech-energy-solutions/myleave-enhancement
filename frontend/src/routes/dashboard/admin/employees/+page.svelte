@@ -684,21 +684,23 @@ async function deleteEmployee() {
 
 <style>
   :global(html, body){ height:100%; margin:0; }
-  :root { --primary:#49bdb3; --ink:#0c4a6e ; --muted:#64748b; --line:#e5e7eb; --soft:#f8fafc; }
-  :global(body){ font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans"; background:url('/images/bg.png') no-repeat center center fixed; background-size:cover; overflow-y:auto; }
+  :root { --primary:#0F9B8E; --ink:#0c4a6e ; --muted:#64748b; --line:#e5e7eb; --soft:#f8fafc; }
+  :global(body){ font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans"; background: var(--canvas, #F5F7FA); overflow-y:auto; }
 
   /* Primary action: Add New Employee */
-  .add-employee-btn{ display:inline-flex; align-items:center; gap:8px; padding:.6rem 1.15rem; border-radius:9999px; font-size:14px; box-shadow:0 6px 14px rgba(0,0,0,.18); white-space:nowrap; }
+  .add-employee-btn{ display:inline-flex; align-items:center; gap:8px; padding:.6rem 1.15rem; border-radius:10px; font-size:14px; box-shadow:0 2px 10px rgba(15,23,42,.08); white-space:nowrap; }
   .add-employee-btn svg{ width:18px; height:18px; fill:#fff; flex:none; }
 
   /* ===== Layout ===== */
   .main{ padding:1.5rem; }
-  .toprow{ display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; margin-top: -35px; }
+  .toprow{ display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
   .rightcol{ display:flex; align-items:center; gap:6px; }
 
   /* ===== Employees grid & card ===== */
   .employees-grid{ display:grid; gap:1rem; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));}
-  .emp-box{ background:#fff; border-radius:12px; padding:1rem; color:#111; box-shadow:0 1px 3px rgba(0,0,0,.08); display:flex; flex-direction:column; min-height:240px; }
+  .empty-state{ background:#fff; border:1px dashed #cbd5e1; border-radius:12px; padding:36px 20px; text-align:center; color:#64748b; grid-column:1/-1; }
+  .empty-state strong{ display:block; font-size:16px; color:var(--ink,#1F2937); margin-bottom:4px; }
+  .emp-box{ background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:1rem; color:#111827; box-shadow:0 2px 10px rgba(15,23,42,.06); display:flex; flex-direction:column; min-height:240px; }
   .emp-top{ text-align:center; }
   .emp-box h3{ margin:0; font-size:15px; color:#217859; }
   .emp-box p{ margin:2px 0; font-size:12px; color:#334155; }
@@ -719,7 +721,7 @@ async function deleteEmployee() {
   @keyframes fadeIn { from{opacity:0} to{opacity:1} }
   .modal{ width:min(900px, 96vw); background:#fff; border-radius:18px; box-shadow:0 14px 40px rgba(0,0,0,.25); overflow:hidden; }
   .modal-hd{ padding:14px 18px; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; }
-  .modal-ttl{ font-weight:700; font-size:22px; color:#49bdb3; }
+  .modal-ttl{ font-weight:700; font-size:22px; color:#0F9B8E; }
   .modal-x{ border:none; background:transparent; font-size:22px; cursor:pointer; color:#475569; }
   .modal-bd{ padding:0; max-height:72vh; overflow:auto; }
 
@@ -728,7 +730,7 @@ async function deleteEmployee() {
   .add-grid, .details-grid-form{ display:grid; grid-template-columns: 1fr 220px; gap:20px; }
   .photo-card{ align-self:flex-start; justify-self:end; width:180px; height:180px; border-radius:20px; background:linear-gradient(180deg,#fff,#f3f4f6); border:1px dashed #d1d5db; display:grid; place-items:center; position:relative; box-shadow:0 8px 20px rgba(0,0,0,.06); }
   .photo-card input{ position:absolute; inset:0; opacity:0; cursor:pointer; }
-  .photo-card .cam{ width:48px; height:48px; border-radius:9999px; background:#49bdb3; display:grid; place-items:center; color:#fff; font-size:20px; box-shadow:0 6px 14px rgba(73,189,179,.35); }
+  .photo-card .cam{ width:48px; height:48px; border-radius:9999px; background:#0F9B8E; display:grid; place-items:center; color:#fff; font-size:20px; box-shadow:0 6px 14px rgba(15,155,142,.35); }
   .photo-card .cam svg { width: 24px; height: 24px; } /* Smaller camera icon */
   .photo-preview{ position:absolute; inset:0; overflow:hidden; border-radius:20px; }
   .photo-preview img{ width:100%; height:100%; object-fit:cover; display:block; }
@@ -739,16 +741,16 @@ async function deleteEmployee() {
   .row.single{ grid-template-columns:1fr; }
   label{ font-size:12px; color:#374151; font-weight:700; margin:0 0 6px; display:block; }
   .ctl{ display:flex; align-items:center; background:#fff; border:1px solid var(--line); border-radius:12px; padding:10px 12px; box-shadow: inset 0 1px 0 rgba(0,0,0,.02); }
-  .ctl:focus-within{ border-color:#49bdb3; box-shadow:0 0 0 3px rgba(73,189,179,.15); }
+  .ctl:focus-within{ border-color:#0F9B8E; box-shadow:0 0 0 3px rgba(15,155,142,.15); }
   .ctl input, .ctl select, .ctl textarea{ border:none; outline:none; width:100%; font-size:14px; color:#111827; background:transparent; }
   .ctl textarea{ min-height:90px; resize:vertical; }
   .ctl.disabled{ background:#f8fafc; }
   .ctl :disabled{ color:#6b7280; }
   .form-ft{ display:flex; justify-content:flex-end; gap:10px; padding-top:10px; margin-top:8px; }
-  .btn-ghost{ background:#fff; color:#0c4a6e; border:1px solid var(--line); border-radius:12px; padding:.7rem 1rem; font-weight:700; cursor:pointer; }
-  .btn-primary{ background:#49bdb3; color:#fff; border:none; border-radius:10px; padding:.8rem 1.4rem; font-weight:700; cursor:pointer; }
+  .btn-ghost{ background:#fff; color:var(--ink,#1F2937); border:1px solid var(--line,#e5e7eb); border-radius:10px; padding:.7rem 1rem; font-weight:600; cursor:pointer; }
+  .btn-primary{ background:#0F9B8E; color:#fff; border:none; border-radius:10px; padding:.8rem 1.4rem; font-weight:600; font-size:14px; cursor:pointer; }
   .btn-primary:hover{ filter:brightness(.96); }
-  .btn-danger { background:#dc2626; color:#fff; border:none; border-radius:10px; padding:.8rem 1.4rem; font-weight:700; cursor:pointer; }
+  .btn-danger { background:#DC2626; color:#fff; border:none; border-radius:10px; padding:.8rem 1.4rem; font-weight:600; font-size:14px; cursor:pointer; }
   .btn-danger:hover { filter:brightness(.96); }
 
   
@@ -759,10 +761,17 @@ async function deleteEmployee() {
 
   /* ===== Filters (topbar right) ===== */
   .filter-wrap { display:flex; align-items:center; gap:6px; }
-  .filter-label { margin: 0 6px; font-weight: 600; font-size: 14px; color: #fff; }
-  .filter-icon { width: 16px; height: 16px; color: #fff; opacity: 0.9; }
-  .filter-select { padding:4px 8px; min-width:180px; border-radius: 9999px; } /* Pill shape */
-  .filter-select select { font-size:13px; padding:4px 6px; height:28px; }
+  .filter-label { margin: 0 6px; font-weight: 600; font-size: 14px; color: var(--ink, #1F2937); }
+  .filter-icon { width: 16px; height: 16px; color: var(--muted, #6B7280); opacity: 0.9; }
+  .filter-select { min-width:210px; }
+  .filter-select select {
+    appearance:none; -webkit-appearance:none;
+    background:#fff url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b7280' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 10px center;
+    border:1px solid var(--line,#e5e7eb); border-radius:10px; padding:.5rem 2rem .5rem .8rem;
+    font-size:14px; font-weight:600; color:var(--ink,#1F2937); cursor:pointer;
+    width:100%;
+  }
+  .filter-select select:focus{ outline:none; border-color:#0F9B8E; box-shadow:0 0 0 3px rgba(15,155,142,.15); }
 
   /* ===== Confirmation Modal specific styles ===== */
   .modal.confirm-modal { width: min(450px, 94vw); }
@@ -859,14 +868,14 @@ async function deleteEmployee() {
 }
 
 .toast-item.error {
-  border-color: #ef4444;
+  border-color: #DC2626;
 }
 .toast-item.error .toast-icon {
-  background: #ef4444;
+  background: #DC2626;
 }
 
 .toast-item.info {
-  border-color: #3b82f6;
+  border-color: #0F9B8E;
 }
 .toast-item.info .toast-icon {
   background: #3b82f6;
@@ -925,7 +934,7 @@ async function deleteEmployee() {
         <path d="M3 4h18l-7 8v6l-4 2v-8l-7-8z"/>
       </svg>
       <label class="filter-label" for="dept-filter">Department</label>
-      <div class="ctl filter-select">
+      <div class="filter-select">
         <select id="dept-filter" bind:value={deptFilter} aria-label="Filter by department">
           {#each deptOptions as d}<option value={d}>{d}</option>{/each}
         </select>
@@ -975,6 +984,12 @@ async function deleteEmployee() {
         </div>
       </div>
     {/each}
+    {#if filteredEmployees.length === 0}
+      <div class="empty-state">
+        <strong>No employees for {deptFilter}</strong>
+        Try selecting a different department.
+      </div>
+    {/if}
   </div>
 </div>
 
@@ -1303,7 +1318,7 @@ async function deleteEmployee() {
     <div class="modal confirm-modal">
       <div class="modal-hd">
         <div style="width: 22px;" aria-hidden="true"></div>
-        <div class="modal-ttl" style="color: #49bdb3;">Confirm Deletion</div>
+        <div class="modal-ttl" style="color: #0F9B8E;">Confirm Deletion</div>
         <button class="modal-x" on:click={() => showDeleteConfirm = false}>✕</button>
       </div>
       <div class="modal-bd" style="padding: 22px; text-align: center;">

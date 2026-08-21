@@ -985,7 +985,7 @@ async function submitLeave(e) {
       </div>
         <div
           class="donut fancy"
-          style="--size:110px; --spent:{pct(d.spent,d.total)}; --spent-color: var(--spentRed); --rest-color: var(--restBlue);"
+          style="--size:110px; --spent:{pct(d.spent,d.total)}; --spent-color: var(--spentTeal); --rest-color: var(--restSlate);"
         ></div>
         <div class="legend-row">
           <div class="legend-item"><span class="chip spent"></span><span>Spent Leave</span></div>
@@ -1315,7 +1315,7 @@ async function submitLeave(e) {
   .main { padding: 18px; }
 
   .sw-blue{ background:#71c0f5; border:1px solid #71c0f5; }
-  .sw-today{ background:#fff; border:1px solid #49bdb3; }
+  .sw-today{ background:#fff; border:1px solid #0F9B8E; }
   .sw-applied {
   background: #fef08a;   /* yellow */
   border: 1px solid #facc15;
@@ -1325,9 +1325,9 @@ async function submitLeave(e) {
   }
   .swatch{ display:inline-block; width:14px; height:9px; border-radius:3px; margin-right:6px; vertical-align:middle; }
 
-  .grid{ margin-top:-35px; display:grid; gap:10px; grid-template-columns:repeat(12, minmax(0,1fr)); }
+  .grid{ margin-top:0; display:grid; gap:10px; grid-template-columns:repeat(12, minmax(0,1fr)); }
 
-  :global(:root){ --spentRed:#ef4444; --restBlue:#3b82f6; --ring:#e5e7eb; --shadow:0 2px 12px rgba(0,0,0,.06); }
+  :global(:root){ --spentTeal:#0F9B8E; --restSlate:#94A3B8; --ring:#e5e7eb; --shadow:0 2px 12px rgba(0,0,0,.06); }
   .card{ border:1px solid var(--ring); border-radius:12px; padding:8px; background:#fff; box-shadow:var(--shadow); overflow: visible; }
   .text-red-600 { color: #dc2626; }
 
@@ -1356,20 +1356,20 @@ async function submitLeave(e) {
 
   /* ✅ GUNA animated-spent */
   background: conic-gradient(
-    var(--spent-color, #ef4444) calc(var(--animated-spent) * 1%),
-    var(--rest-color, #3b82f6) 0
+    var(--spent-color, #0F9B8E) calc(var(--animated-spent) * 1%),
+    var(--rest-color, #94A3B8) 0
   );
 }
 
   .donut.fancy::after{
     content:""; height:66%; width:66%; background:#fff; border-radius:9999px; box-shadow:inset 0 0 0 1px var(--ring);
   }
-  .donut-title{ font-size:14px; font-weight:700; color:#374151; margin:0 0 6px; }
+  .donut-title{ font-size:var(--fs-section-heading, 16px); font-weight:600; color:var(--ink, #1F2937); margin:0 0 6px; }
   .legend-row{ display:flex; gap:18px; justify-content:center; align-items:center; margin:6px 0 2px; font-size:12px; color:#6b7280;  }
   .legend-item{ display:flex; align-items:center; gap:8px;  }
   .chip{ display:inline-block; width:24px; height:8px; border-radius:4px; }
-  .chip.spent{ background: var(--spentRed); }
-  .chip.unspent{ background: var(--restBlue); }
+  .chip.spent{ background: var(--spentTeal); }
+  .chip.unspent{ background: var(--restSlate); }
   .total-line{ text-align:center; font-size:12px; color:#6b7280; margin-top:4px; }
   .total-line.bold {font-weight: 700;}
 
@@ -1592,7 +1592,7 @@ max-width: 150px;         /* optional — so it wraps instead of going super lon
 }
 
   .days button.today {
-    border: 2px solid #49bdb3; font-weight: 700; color: #111827; background: #ffff;
+    border: 2px solid #0F9B8E; font-weight: 700; color: #111827; background: #ffff;
   }
   .days button.muted{ opacity:.5; }
   .days button:disabled{ background:#f3f4f6; color:#9ca3af; cursor:not-allowed; }
@@ -1662,7 +1662,7 @@ max-width: 150px;         /* optional — so it wraps instead of going super lon
     padding: 8px 10px;
   }
   .leave-form input[required]:invalid, .leave-form textarea[required]:invalid {
-    border-color: #ef4444;
+    border-color: #DC2626;
   }
   
   .leave-form .duration { display:flex; flex-direction:column; gap:.5rem; align-items:flex-start; }
@@ -1677,13 +1677,13 @@ max-width: 150px;         /* optional — so it wraps instead of going super lon
   .help.warn { color:#b45309; }
 
   .submit-btn {
-    background: #3FADA4;
+    background: var(--brand, #0F9B8E);
     color: #fff;
     border: none;
-    border-radius: 8px;
+    border-radius: 10px;
     padding: 10px 14px;
     cursor: pointer;
-    font-weight: 700;
+    font-weight: 600;
     font-size: 14px;
     margin-top: 8px;
   }
@@ -1791,14 +1791,14 @@ max-width: 150px;         /* optional — so it wraps instead of going super lon
 }
 
 .toast-item.error {
-  border-color: #ef4444;
+  border-color: #DC2626;
 }
 .toast-item.error .toast-icon {
-  background: #ef4444;
+  background: #DC2626;
 }
 
 .toast-item.info {
-  border-color: #3b82f6;
+  border-color: #0F9B8E;
 }
 .toast-item.info .toast-icon {
   background: #3b82f6;
