@@ -5,6 +5,7 @@
   import { tick } from "svelte";
   import Chart from "chart.js/auto";
   import { apiFetch } from '$lib/api';
+  import { CHART_COLORS, CHART_COLORS_WITH_CARRY, CHART_COLORS_BASIC } from '$lib/config';
   import { PUBLIC_VITE_API_BASE } from '$env/static/public';
   const BASE_ANNUAL = 14;
 
@@ -388,8 +389,8 @@ donuts.forEach(d => {
     : ['Spent Leave', 'Balance Leave'];
 
   const colors = hasCarry
-    ? ['#0F9B8E', '#475569', '#D97706']
-    : ['#0F9B8E', '#475569'];
+    ? CHART_COLORS_WITH_CARRY
+    : CHART_COLORS_BASIC;
 
   const values = hasCarry ? [1,1,1] : [1,1];
 
@@ -499,12 +500,12 @@ donuts.forEach(d => {
           <!-- TAKEN + REMAINING -->
           <div class="legend-row-top">
             <div class="legend-item">
-              <span class="chip" style="background:#0F9B8E"></span>
+              <span class="chip" style="background:{CHART_COLORS.spent}"></span>
               <span>Spent Leave</span>
             </div>
 
             <div class="legend-item">
-              <span class="chip" style="background:#475569"></span>
+              <span class="chip" style="background:{CHART_COLORS.balance}"></span>
               <span>Balance Leave</span>
             </div>
           </div>
@@ -513,7 +514,7 @@ donuts.forEach(d => {
           {#if d.key === "annual"}
             <div class="legend-row-bottom">
               <div class="legend-item">
-                <span class="chip" style="background:#D97706"></span>
+                <span class="chip" style="background:{CHART_COLORS.carry}"></span>
                 <span>Carry-forward Leave</span>
               </div>
             </div>

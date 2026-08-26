@@ -14,8 +14,14 @@
   --danger:#DC2626;          /* reject / failed / destructive */
   --ink:#1F2937;             /* headings / primary text */
   --muted:#6B7280;           /* meta / caption text */
-  --chart-amber:#D97706;     /* chart accent 2 */
-  --chart-slate:#475569;     /* chart accent 3 */
+
+  /* Chart donut colors */
+  --chart-spent:#DC2626;     /* Spent Leave — red */
+  --chart-balance:#3b82f6;   /* Balance Leave — blue */
+  --chart-carry:#D97706;     /* Carry-forward Leave — amber */
+  --chart-unpaid:#94A3B8;    /* Unpaid Leave — light slate */
+  --chart-amber:#D97706;     /* chart accent 2 (legacy alias) */
+  --chart-slate:#475569;     /* chart accent 3 (legacy alias) */
   --chart-slate-light:#94A3B8;
 
   /* Type scale */
@@ -140,7 +146,7 @@ ul{margin:0; padding:0; list-style:none}
   height:var(--size); width:var(--size);
   border-radius:50%;
   background:
-    conic-gradient(var(--brand, #0F9B8E) calc(var(--spent)*1%), #e5e7eb 0);
+    conic-gradient(var(--chart-spent, #DC2626) calc(var(--spent)*1%), #e5e7eb 0);
   display:grid; place-items:center; margin:auto;
 }
 .donut:after{

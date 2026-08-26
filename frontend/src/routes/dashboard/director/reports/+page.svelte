@@ -1327,7 +1327,7 @@ async function submitLeave(e) {
 
   .grid{ margin-top:0; display:grid; gap:10px; grid-template-columns:repeat(12, minmax(0,1fr)); }
 
-  :global(:root){ --spentTeal:#0F9B8E; --restSlate:#94A3B8; --ring:#e5e7eb; --shadow:0 2px 12px rgba(0,0,0,.06); }
+  :global(:root){ --spentTeal:#DC2626; --restSlate:#3b82f6; --ring:#e5e7eb; --shadow:0 2px 12px rgba(0,0,0,.06); }
   .card{ border:1px solid var(--ring); border-radius:12px; padding:8px; background:#fff; box-shadow:var(--shadow); overflow: visible; }
   .text-red-600 { color: #dc2626; }
 
@@ -1356,8 +1356,8 @@ async function submitLeave(e) {
 
   /* ✅ GUNA animated-spent */
   background: conic-gradient(
-    var(--spent-color, #0F9B8E) calc(var(--animated-spent) * 1%),
-    var(--rest-color, #94A3B8) 0
+    var(--spent-color, #DC2626) calc(var(--animated-spent) * 1%),
+    var(--rest-color, #3b82f6) 0
   );
 }
 

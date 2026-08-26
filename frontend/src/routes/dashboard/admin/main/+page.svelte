@@ -6,6 +6,7 @@
   import { tick } from "svelte";
   import Chart from "chart.js/auto";
   import { apiFetch } from '$lib/api';
+  import { CHART_COLORS, CHART_COLORS_ADMIN, CHART_COLORS_BASIC } from '$lib/config';
   import { PUBLIC_VITE_API_BASE } from '$env/static/public';
   const BASE_ANNUAL = 14;
 
@@ -443,13 +444,8 @@ staffLeaveData = {
         : ['Spent Leave', 'Balance Leave'];
 
       const colors = hasCarry
-        ? [
-            '#DC2626',
-            '#3b82f6',
-            '#10b981',
-            '#f59e0b'
-          ]
-        : ['#0F9B8E', '#475569'];
+        ? CHART_COLORS_ADMIN
+        : CHART_COLORS_BASIC;
 
       const values = hasCarry ? [1, 1, 1, 1] : [1, 1];
 
@@ -559,12 +555,12 @@ staffLeaveData = {
         <div class="legend-custom">
           <div class="legend-row-top">
             <div class="legend-item">
-              <span class="chip" style="background:#0F9B8E"></span>
+              <span class="chip" style="background:{CHART_COLORS.spent}"></span>
               <span>Spent Leave</span>
             </div>
 
             <div class="legend-item">
-              <span class="chip" style="background:#475569"></span>
+              <span class="chip" style="background:{CHART_COLORS.balance}"></span>
               <span>Balance Leave</span>
             </div>
           </div>
@@ -572,12 +568,12 @@ staffLeaveData = {
           {#if d.key === "annual"}
             <div class="legend-row-bottom">
             <div class="legend-item">
-              <span class="chip" style="background:#D97706"></span>
+              <span class="chip" style="background:{CHART_COLORS.adminCarry}"></span>
               <span>Carry-forward Leave</span>
             </div>
 
             <div class="legend-item">
-              <span class="chip" style="background:#94A3B8"></span>
+              <span class="chip" style="background:{CHART_COLORS.adminUnpaid}"></span>
               <span>Unpaid Leave</span>
             </div>
           </div>
