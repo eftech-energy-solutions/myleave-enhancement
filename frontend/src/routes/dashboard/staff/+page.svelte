@@ -647,8 +647,137 @@ async function loadRecent() {
 
   let attachmentFiles; // FileList
   let fileInputEl;     // <input type="file">
+  let reason = '';      // Track reason for draft persistence
   $: showAttachmentReminder =
     (leaveType === 'MC') && (!attachmentFiles || attachmentFiles.length === 0);
+
+  // ===== Draft Management =====
+  const DRAFT_KEY = 'leave_draft';
+  let hasDraft = false;
+  let draftInfo = null;
+
+  function saveDraft() {
+    const draft = {
+      leaveType,
+      duration,
+      dateFrom,
+      dateUntil,
+      totalDays,
+      reason,
+      savedAt: new Date().toISOString()
+    };
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+    hasDraft = true;
+    draftInfo = draft;
+  }
+
+  function loadDraft() {
+    try {
+      const saved = localStorage.getItem(DRAFT_KEY);
+      if (saved) {
+        const draft = JSON.parse(saved);
+        // Only restore if draft is less than 24 hours old
+        const savedAt = new Date(draft.savedAt);
+        const now = new Date();
+        const hoursSince = (now - savedAt) / (1000 * 60 * 60);
+        
+        if (hoursSince < 24) {
+          leaveType = draft.leaveType || 'AL';
+          duration = draft.duration || 'Full';
+          dateFrom = draft.dateFrom || '';
+          dateUntil = draft.dateUntil || '';
+          totalDays = draft.totalDays || 1;
+          reason = draft.reason || '';
+          hasDraft = true;
+          draftInfo = draft;
+          return true;
+        } else {
+          // Draft too old, clear it
+          clearDraft();
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load draft:', e);
+      clearDraft();
+    }
+    return false;
+  }
+
+  function clearDraft() {
+    localStorage.removeItem(DRAFT_KEY);
+    hasDraft = false;
+    draftInfo = null;
+  }
+
+  function formatDraftTime(isoString) {
+    if (!isoString) return '';
+    const date = new Date(isoString);
+    return date.toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  }
+
+  // Auto-save draft when form values change (debounced)
+  let draftSaveTimeout;
+  $: if (dateFrom || leaveType !== 'AL' || reason) {
+    clearTimeout(draftSaveTimeout);
+    draftSaveTimeout = setTimeout(() => {
+      if (dateFrom) saveDraft();
+    }, 1000);
+  }
+
+  // ===== Attachment Validation =====
+  const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+  const ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+  const ALLOWED_EXTENSIONS = '.pdf,.jpg,.jpeg,.png';
+  let attachmentError = '';
+  let attachmentPreview = null;
+
+  function validateAttachment(file) {
+    attachmentError = '';
+    attachmentPreview = null;
+
+    if (!file) return true;
+
+    // Check file type
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      attachmentError = `Invalid file type. Please upload PDF, JPG, or PNG (found: ${file.name.split('.').pop().toUpperCase()})`;
+      return false;
+    }
+
+    // Check file size
+    if (file.size > MAX_FILE_SIZE) {
+      const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+      attachmentError = `File too large (${sizeMB}MB). Maximum size is 5MB.`;
+      return false;
+    }
+
+    // Create preview for images
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        attachmentPreview = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    } else {
+      attachmentPreview = 'pdf';
+    }
+
+    return true;
+  }
+
+  function handleAttachmentChange(e) {
+    const file = e.target.files?.[0];
+    if (file && !validateAttachment(file)) {
+      // Clear the invalid file
+      attachmentFiles = undefined;
+      if (fileInputEl) fileInputEl.value = '';
+    }
+    fileInputEl?.setCustomValidity(attachmentError || '');
+  }
 
     // 🔄 Reset backdated MC dates when switching to other leave types
 // $: if (
@@ -743,51 +872,23 @@ async function loadRecent() {
   }
 
   async function openLeaveForm(date) {
-  // Leave type limits
-  const limit = {
-    AL: Number(user.leave_entitlement_annual_original ?? 14),
-    MC: Number(user.leave_entitlement_medical_original ?? 14),
-    HOSP: 60,
-    MAT: 98,
-    PAT: 7,
-    COMP_A: 3,
-    COMP_B: 1,
-    MAR: 3,
-    UNPAID: Infinity 
-  }[leaveType];
-
-  // Current usage including pending
-const totalUsed = {
-  AL: totalALUsed,
-  MC: totalMCUsed,
-  HOSP: totalHOSPUsed,
-
-  // FIXED LEAVE → start as 0 used
-  MAT: totalMCUsed,   // OR 0 → lagi selamat 
-  PAT: 0,
-  COMP_A: 0,
-  COMP_B: 0,
-  MAR: 0,
+  // Check for existing draft first
+  const draftLoaded = loadDraft();
   
-  UNPAID: 0
-}[leaveType];
-
-
-  // ❌ If max reached, block
-  // if (totalUsed >= limit) {
-  //   alert(`${getLeaveFullName(leaveType)} limit (${limit} days) has been reached.`);
-  //   return;
-  // }
-
-  // ✅ Open form normally
-  const iso = localISO(date);
-
-  leaveType = leaveType || 'AL'; // keep selected type
-  duration  = 'Full';
-  dateFrom  = iso;
-  dateUntil = iso;
-  totalDays = 1;
+  // If no draft loaded, use defaults with the clicked date
+  if (!draftLoaded) {
+    const iso = localISO(date);
+    leaveType = leaveType || 'AL'; // keep selected type
+    duration  = 'Full';
+    dateFrom  = iso;
+    dateUntil = iso;
+    totalDays = 1;
+    reason = '';
+  }
+  
   attachmentFiles = undefined;
+  attachmentError = '';
+  attachmentPreview = null;
 
   if (!modal?.open) modal.showModal();
   await tick();
@@ -946,6 +1047,13 @@ if (
   fd.set("dateUntil", dateUntil);
   fd.set("totalDays", String(totalDays));
 
+  // Validate attachment before submission
+  const file = attachmentFiles?.[0];
+  if (file && !validateAttachment(file)) {
+    showToast(attachmentError, "error", "Invalid Attachment");
+    return;
+  }
+
   try {
    const res = await fetch(
   `${PUBLIC_VITE_API_BASE}/api/leave-requests`,
@@ -991,6 +1099,8 @@ if (
     await loadAppliedLeave();
     buildMonth(viewBase);
 
+    // Clear draft after successful submission
+    clearDraft();
     modal?.close();
 
   } catch (err) {
@@ -1373,6 +1483,14 @@ async function loadApprovedUsedDays() {
     <button type="button" class="close-btn" on:click={() => modal.close()} aria-label="Close">✕</button>
     <h2 id="leave-title" class="title">Leave Application Form</h2>
 
+    {#if hasDraft && draftInfo?.savedAt}
+      <div class="draft-banner">
+        <span class="draft-icon">📋</span>
+        <span class="draft-text">Draft saved {formatDraftTime(draftInfo.savedAt)}</span>
+        <button type="button" class="draft-clear-btn" on:click={clearDraft}>Clear</button>
+      </div>
+    {/if}
+
     <label>
       <span>Type</span>
       <select name="type" bind:value={leaveType} required>
@@ -1438,18 +1556,46 @@ async function loadApprovedUsedDays() {
       <input type="number" name="totalDays" bind:value={totalDays} min="0.5" step="0.5" required readonly />
     </label>
 
-    <label><span>Reason</span><textarea name="reason" rows="3" required></textarea></label>
+    <label class="reason-label">
+      <span>Reason</span>
+      <textarea 
+        name="reason" 
+        rows="3" 
+        required
+        maxlength="500"
+        bind:value={reason}
+        placeholder="Please provide a reason for your leave request..."
+      ></textarea>
+      <span class="char-count">{reason.length}/500</span>
+    </label>
 
     <label>
-      <span>Attachment</span>
+      <span>Attachment {leaveType === 'MC' ? '(Required)' : '(Optional)'}</span>
       <input
         type="file"
         name="attachment"
+        accept={ALLOWED_EXTENSIONS}
         bind:this={fileInputEl}
         bind:files={attachmentFiles}
         required={leaveType === 'MC'}
-        on:change={() => fileInputEl?.setCustomValidity('')}
+        on:change={handleAttachmentChange}
       />
+      <small class="help">Accepted: PDF, JPG, PNG (Max 5MB)</small>
+      
+      {#if attachmentError}
+        <small class="help error">{attachmentError}</small>
+      {/if}
+
+      {#if attachmentPreview && attachmentPreview !== 'pdf'}
+        <div class="attachment-preview">
+          <img src={attachmentPreview} alt="Attachment preview" />
+        </div>
+      {:else if attachmentPreview === 'pdf'}
+        <div class="attachment-preview pdf-preview">
+          <span>📄 PDF Selected</span>
+        </div>
+      {/if}
+
       {#if showAttachmentReminder}
         <small class="help warn">Reminder: please attach your medical certificate.</small>
       {/if}
@@ -2030,6 +2176,99 @@ max-width: 150px;         /* optional — so it wraps instead of going super lon
 }
 .total-line.bold {
   font-weight: 700;
+}
+
+/* =========================
+   DRAFT BANNER
+========================= */
+.draft-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.draft-icon {
+  font-size: 14px;
+}
+
+.draft-text {
+  flex: 1;
+  color: #92400e;
+}
+
+.draft-clear-btn {
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #92400e;
+  background: #fde68a;
+  border: 1px solid #fcd34d;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.draft-clear-btn:hover {
+  background: #fcd34d;
+}
+
+/* =========================
+   REASON & CHARACTER COUNT
+========================= */
+.reason-label {
+  position: relative;
+}
+
+.char-count {
+  position: absolute;
+  bottom: 8px;
+  right: 10px;
+  font-size: 11px;
+  font-weight: 400;
+  color: #6b7280;
+  pointer-events: none;
+}
+
+.reason-label textarea {
+  padding-bottom: 24px;
+}
+
+/* =========================
+   ATTACHMENT VALIDATION
+========================= */
+.help.error {
+  color: #dc2626;
+}
+
+.attachment-preview {
+  margin-top: 8px;
+  padding: 8px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.attachment-preview img {
+  max-width: 100%;
+  max-height: 120px;
+  border-radius: 4px;
+  object-fit: contain;
+}
+
+.pdf-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px;
+  color: #6b7280;
+  font-size: 13px;
 }
 
 /* =========================
