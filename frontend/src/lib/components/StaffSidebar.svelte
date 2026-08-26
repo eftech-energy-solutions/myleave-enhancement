@@ -319,7 +319,7 @@ $: pageTitle =
   $page.url.pathname === roleBase
     ? 'My Dashboard'
     : $page.url.pathname.startsWith('/dashboard/staff/staffhistory')
-    ? 'Leave Applications'
+    ? 'Leave History'
     : $page.url.pathname.startsWith('/dashboard/staff/chat')
     ? 'Chat'
     : 'My Dashboard';
@@ -361,7 +361,7 @@ $: pageDesc =
             <!-- Filled Calendar Icon -->
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zM9 14H7v-2h2v2zm4 0h-2v-2h2v2zm4 0h-2v-2h2v2zM5 8V6h14v2H5z"></path></svg>
           </span>
-          <span class="text">Leave Applications</span>
+          <span class="text">Leave History</span>
         </a>
         <a
             href="/dashboard/staff/chat"
