@@ -805,6 +805,10 @@
             <span class="v">{detailItem.leave_entitlement_annual ?? "-"} day(s)</span>
           </div>
           <div>
+            <span class="k">Remaining Medical</span>
+            <span class="v">{detailItem.leave_entitlement_medical ?? "-"} day(s)</span>
+          </div>
+          <div>
             <span class="k">From</span>
             <span class="v">{fmt(detailItem.date_from)}</span>
           </div>

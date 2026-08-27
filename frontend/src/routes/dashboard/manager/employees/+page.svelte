@@ -133,6 +133,8 @@ function showToast(message, type = "success", title = "", duration = 3000) {
           gender: e.gender,
           annualLeave: e.leave_entitlement_annual_original,
           medicalLeave: e.leave_entitlement_medical_original,
+          remainingAnnual: e.leave_entitlement_annual,
+          remainingMedical: e.leave_entitlement_medical,
           notes: e.notes,
         };
       });
@@ -352,6 +354,14 @@ console.log(
         "",
       medicalLeave:
         profile.medicalLeave ||
+        leave.leave_entitlement_medical ||
+        "",
+      remainingAnnual:
+        profile.remainingAnnual ||
+        leave.leave_entitlement_annual ||
+        "",
+      remainingMedical:
+        profile.remainingMedical ||
         leave.leave_entitlement_medical ||
         "",
       notes: profile.notes || leave.notes || "",
@@ -719,6 +729,22 @@ console.log(
                   <label>Medical Leave</label>
                   <div class="ctl pill disabled">
                     <input type="number" value={selectedEmp.medicalLeave} disabled />
+                  </div>
+                </div>
+              </div>
+
+              <!-- REMAINING ANNUAL + MEDICAL LEAVE -->
+              <div class="row two" style="margin-top:8px;">
+                <div>
+                  <label>Remaining Annual Leave</label>
+                  <div class="ctl pill disabled">
+                    <input type="number" value={selectedEmp.remainingAnnual ?? "-"} disabled style="color: #16a34a; font-weight:600;" />
+                  </div>
+                </div>
+                <div>
+                  <label>Remaining Medical Leave</label>
+                  <div class="ctl pill disabled">
+                    <input type="number" value={selectedEmp.remainingMedical ?? "-"} disabled style="color: #16a34a; font-weight:600;" />
                   </div>
                 </div>
               </div>

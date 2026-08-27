@@ -170,6 +170,8 @@ function showToast(message, type = "success", title = "", duration = 3000) {
           gender: emp.gender,
           annualLeave: emp.leave_entitlement_annual_original,
           medicalLeave: emp.leave_entitlement_medical_original,
+          remainingAnnual: emp.leave_entitlement_annual,
+          remainingMedical: emp.leave_entitlement_medical,
           notes: emp.notes
         };
 
@@ -254,6 +256,8 @@ function showToast(message, type = "success", title = "", duration = 3000) {
     gender: "Male",
     annualLeave: "",
     medicalLeave: "",
+    remainingAnnual: "",
+    remainingMedical: "",
     department: [],
     notes: ""
   };
@@ -1255,6 +1259,36 @@ async function deleteEmployee() {
       min="0"
       bind:value={detailsForm.medicalLeave}
       readonly
+    />
+  </div>
+</div>
+</div>
+
+<!-- REMAINING ANNUAL + MEDICAL LEAVE -->
+<div class="row two" style="margin-top:8px;">
+<div>
+  <label>Remaining Annual Leave</label>
+  <div class="ctl pill">
+    <input
+      type="number"
+      step="0.5"
+      min="0"
+      value={detailsForm.remainingAnnual ?? "-"}
+      readonly
+      style="color: #16a34a; font-weight:600;"
+    />
+  </div>
+</div>
+<div>
+  <label>Remaining Medical Leave</label>
+  <div class="ctl pill">
+    <input
+      type="number"
+      step="0.5"
+      min="0"
+      value={detailsForm.remainingMedical ?? "-"}
+      readonly
+      style="color: #16a34a; font-weight:600;"
     />
   </div>
 </div>

@@ -1608,7 +1608,8 @@ router.get("/history/all", async (req, res) => {
         lr.requester_role,
         lr.leave_type, lr.status, lr.total_days,
         lr.date_from, lr.date_until, lr.created_at,
-        p.photourl, p.position
+        p.photourl, p.position,
+        p.leave_entitlement_annual, p.leave_entitlement_medical
       FROM leave_requests lr
       LEFT JOIN profiles p ON p.staff_id = lr.staff_id
     `;

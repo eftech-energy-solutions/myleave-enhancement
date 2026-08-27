@@ -6,6 +6,9 @@
 
   const fmt2 = (v) => (v ? fmt(v) : "-");
 
+  $: isMedical = (item?.leave_type || item?.leaveType || "").toUpperCase() === "MC";
+  $: isAnnual = (item?.leave_type || item?.leaveType || "").toUpperCase() === "AL";
+
   function attachmentUrl(path) {
     if (!path) return "";
     return `${PUBLIC_VITE_API_BASE}${path.startsWith("/") ? "" : "/"}${path}`;
@@ -66,6 +69,10 @@
           <div class="field">
             <span class="field-label">Remaining Annual</span>
             <span class="field-value">{item.leave_entitlement_annual ?? "-"} day(s)</span>
+          </div>
+          <div class="field">
+            <span class="field-label">Remaining Medical</span>
+            <span class="field-value">{item.leave_entitlement_medical ?? "-"} day(s)</span>
           </div>
           {#if item.requester_role}
             <div class="field">
