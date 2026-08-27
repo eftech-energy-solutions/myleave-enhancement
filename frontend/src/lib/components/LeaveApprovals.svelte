@@ -26,8 +26,14 @@
 
   let pendingLeave = [];
   let pendingCancel = [];
+  let visibleLeave = [];
+  let visibleCancel = [];
 
   let deptFilter = "All";
+
+  let adminDeptFilter = "All";
+  let nameSearch = "";
+  let allRecords = [];
 
   $: parsedDepts = (meDept || "")
     .split(",")
@@ -40,22 +46,68 @@
     a.localeCompare(b, "en", { sensitivity: "base" })
   )];
 
+  $: adminDeptOptions = ["All", ...Array.from(new Set(
+    allRecords.flatMap(r => deptList(r.profile_department || r.department))
+  )).sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" }))];
+
   const deptList = (v) =>
     String(v || "").split(",").map((d) => d.trim());
 
-  $: visibleLeave =
-    deptFilter === "All"
-      ? pendingLeave
-      : pendingLeave.filter((i) =>
-          deptList(i.profile_department || i.department).includes(deptFilter)
-        );
+  $: {
+    let list = pendingLeave;
 
-  $: visibleCancel =
-    deptFilter === "All"
-      ? pendingCancel
-      : pendingCancel.filter((i) =>
+    if (role === "admin") {
+      if (adminDeptFilter !== "All") {
+        list = list.filter((i) =>
+          deptList(i.profile_department || i.department).includes(adminDeptFilter)
+        );
+      }
+      if (nameSearch.trim()) {
+        const q = nameSearch.trim().toLowerCase();
+        list = list.filter((i) => {
+          const name = (i.profile_name || i.staff_name || "").toLowerCase();
+          const id = (i.staff_id || "").toLowerCase();
+          return name.includes(q) || id.includes(q);
+        });
+      }
+    } else {
+      if (deptFilter !== "All") {
+        list = list.filter((i) =>
           deptList(i.profile_department || i.department).includes(deptFilter)
         );
+      }
+    }
+
+    visibleLeave = list;
+  }
+
+  $: {
+    let list = pendingCancel;
+
+    if (role === "admin") {
+      if (adminDeptFilter !== "All") {
+        list = list.filter((i) =>
+          deptList(i.profile_department || i.department).includes(adminDeptFilter)
+        );
+      }
+      if (nameSearch.trim()) {
+        const q = nameSearch.trim().toLowerCase();
+        list = list.filter((i) => {
+          const name = (i.profile_name || i.staff_name || "").toLowerCase();
+          const id = (i.staff_id || "").toLowerCase();
+          return name.includes(q) || id.includes(q);
+        });
+      }
+    } else {
+      if (deptFilter !== "All") {
+        list = list.filter((i) =>
+          deptList(i.profile_department || i.department).includes(deptFilter)
+        );
+      }
+    }
+
+    visibleCancel = list;
+  }
 
   let leaveDetailsOpen = {};
 
@@ -136,6 +188,10 @@
 
       const all = await res.json();
       let view = all;
+
+      if (role === "admin") {
+        allRecords = all;
+      }
 
       if (role === "manager" && me?.role === "Manager") {
         view = all.filter((r) => {
@@ -426,7 +482,38 @@
 
 <div class="main">
   <div class="page-head">
-    {#if hasMultipleDepts}
+    {#if role === "admin"}
+    <div class="dept-toolbar" style="flex-wrap:wrap; gap:10px;">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <svg class="filter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 4h18l-7 8v6l-4 2v-8l-7-8z"/>
+        </svg>
+        <label class="filter-label" for="admin-dept-filter">Department</label>
+        <div class="filter-select">
+          <select id="admin-dept-filter" bind:value={adminDeptFilter} aria-label="Filter by department">
+            {#each adminDeptOptions as d}<option value={d}>{d}</option>{/each}
+          </select>
+        </div>
+      </div>
+
+      <div style="display:flex; align-items:center; gap:10px;">
+        <svg class="filter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        <label class="filter-label" for="admin-name-search">Name or ID</label>
+        <input
+          id="admin-name-search"
+          type="text"
+          placeholder="Search by name or staff ID…"
+          bind:value={nameSearch}
+          aria-label="Search by name or staff ID"
+          style="border:1px solid var(--line,#e5e7eb); border-radius:10px; padding:.5rem .8rem; font-size:14px; min-width:220px; outline:none;"
+          on:focus={(e) => e.target.style.borderColor = '#0F9B8E'}
+          on:blur={(e) => e.target.style.borderColor = 'var(--line,#e5e7eb)'}
+        />
+      </div>
+    </div>
+    {:else if hasMultipleDepts}
     <!-- Department filter -->
     <div class="dept-toolbar">
       <svg class="filter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -627,8 +714,12 @@
       {#if visibleLeave.length === 0 && visibleCancel.length === 0}
         {#if pendingLeave.length > 0 || pendingCancel.length > 0}
           <div class="empty-state">
-            <strong>No requests for {deptFilter}</strong>
-            Try selecting a different department.
+            <strong>No matching requests</strong>
+            {#if role === "admin" && (adminDeptFilter !== "All" || nameSearch.trim())}
+              Try adjusting the department filter or search term.
+            {:else}
+              Try selecting a different department.
+            {/if}
           </div>
         {:else}
           <div class="empty-state">

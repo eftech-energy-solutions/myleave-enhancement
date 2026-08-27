@@ -589,7 +589,7 @@ async function saveProfile(e) {
           <p class="page-desc">View and manage your own past and upcoming leave applications.</p>
         {:else if $page.url.pathname.startsWith('/dashboard/director/history')}
           <h1 class="page-title">Leave History</h1>
-          <p class="page-desc">Browse approved leave records for all managers.</p>
+          <p class="page-desc">Browse leave records for all managers.</p>
         {:else if $page.url.pathname.startsWith('/dashboard/director/employees')}
           <h1 class="page-title">Employees</h1>
           <p class="page-desc">Employee directory with quick access to staff profiles.</p>
