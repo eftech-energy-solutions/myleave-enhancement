@@ -55,16 +55,16 @@
             <span class="field-value">{item.total_days ?? item.totalDays ?? "-"} day(s)</span>
           </div>
           <div class="field">
+            <span class="field-label">Requested On</span>
+            <span class="field-value">{fmt2(item.created_at || item.createdAt)}</span>
+          </div>
+          <div class="field">
             <span class="field-label">From</span>
             <span class="field-value">{fmt2(item.date_from || item.dateFrom)}</span>
           </div>
           <div class="field">
             <span class="field-label">To</span>
             <span class="field-value">{fmt2(item.date_until || item.dateTo)}</span>
-          </div>
-          <div class="field">
-            <span class="field-label">Requested On</span>
-            <span class="field-value">{fmt2(item.created_at || item.createdAt)}</span>
           </div>
           <div class="field">
             <span class="field-label">Remaining Annual</span>

@@ -583,13 +583,13 @@
                 </div>
 
                 <div class="right-links">
-                  <button
+                  <!-- <button
                     type="button"
                     class="link"
                     on:click={() => leaveDetailsOpen[item.leave_id] = !leaveDetailsOpen[item.leave_id]}
                   >
                     {leaveDetailsOpen[item.leave_id] ? "Hide Details" : "Leave Details"}
-                  </button>
+                  </button> -->
 
                   <button class="btn-details" on:click={() => openDetails(item)}>Details</button>
                 </div>
@@ -809,16 +809,16 @@
             <span class="v">{detailItem.leave_entitlement_medical ?? "-"} day(s)</span>
           </div>
           <div>
+            <span class="k">Requested On</span>
+            <span class="v">{fmt(detailItem.created_at)}</span>
+          </div>
+          <div>
             <span class="k">From</span>
             <span class="v">{fmt(detailItem.date_from)}</span>
           </div>
           <div>
             <span class="k">To</span>
             <span class="v">{fmt(detailItem.date_until)}</span>
-          </div>
-          <div>
-            <span class="k">Requested On</span>
-            <span class="v">{fmt(detailItem.created_at)}</span>
           </div>
           <div>
             <span class="k">Role</span>
