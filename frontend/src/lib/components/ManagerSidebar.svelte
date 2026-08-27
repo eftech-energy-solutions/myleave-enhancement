@@ -476,7 +476,7 @@ async function saveProfile(e) {
         <div class="sub-links">
           <a
             href="/dashboard/manager"
-            class:active={$page.url.pathname.startsWith('/dashboard/manager')}
+            class:active={$page.url.pathname === '/dashboard/manager' || $page.url.pathname.startsWith('/dashboard/manager/main')}
           >
             <span class="text">Main</span>
           </a>
@@ -590,7 +590,7 @@ async function saveProfile(e) {
           <h1 class="page-title">My Leave History</h1>
           <p class="page-desc">View and manage your own past and upcoming leave applications.</p>
         {:else if $page.url.pathname.startsWith('/dashboard/manager/history')}
-          <h1 class="page-title">Approved Leave History</h1>
+          <h1 class="page-title">Leave History</h1>
           <p class="page-desc">Browse approved leave records for your staff.</p>
         {:else if $page.url.pathname.startsWith('/dashboard/manager/employees/all')}
           <h1 class="page-title">Employees</h1>

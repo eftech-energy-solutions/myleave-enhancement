@@ -559,9 +559,11 @@ donuts.forEach(d => {
         {/each}
       </div>
 
-      <a class="numbers-link" href="/dashboard/manager/employees">
-        View employees
+         <div class='recent-footer'>
+      <a class='view-more' href="/dashboard/manager/employees">
+        View employees →
       </a>
+      </div>
     </div>
   </div> <!-- END GRID -->
 </main>
@@ -680,4 +682,21 @@ donuts.forEach(d => {
     .donut-container { margin-left: 0; transform: none; }
     .numbers-link { margin-left: 0; margin-top: 12px; display: block; text-align: center; }
   }
+
+  .recent-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: auto;
+  padding-top: 8px;
+}
+
+.view-more {
+  font-size: 13px;
+  font-weight: 600;
+  color: #2563eb;          /* blue */
+  cursor: pointer;
+}
+.view-more:hover {
+  color: #1d4ed8;
+}
 </style>

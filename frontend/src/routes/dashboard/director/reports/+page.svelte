@@ -1463,14 +1463,19 @@ max-width: 150px;         /* optional — so it wraps instead of going super lon
 .recent-footer {
   display: flex;
   justify-content: flex-end;
-  margin-top: 8px;
+  margin-top: auto;
+  padding-top: 8px;
 }
 .recent-empty {
   text-align: center;
-  padding: 20px;
+  padding: 40px 20px;
   color: #9ca3af;
   font-size: 13px;
   font-style: italic;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 
@@ -1639,8 +1644,8 @@ max-width: 150px;         /* optional — so it wraps instead of going super lon
   cursor: not-allowed !important;
 }
 
-  .recent-wrap{ display:grid; gap: 6px;  }
-  .recent-card { height: 390px;}
+  .recent-wrap{ display:flex; flex-direction:column; gap: 6px; flex:1; min-height:0; }
+  .recent-card { height: 390px; display: flex; flex-direction: column; }
   .recent-item{ border:1px solid var(--ring); border-radius:12px; padding:10px; display:grid; gap:6px; background:#f9fafb; }
   .recent-item .when{ font-weight:700; color:#111827; font-size: 13.5px;}
   .recent-item .cols{ display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; font-size:11px; }

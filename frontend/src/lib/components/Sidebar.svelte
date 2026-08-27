@@ -587,7 +587,7 @@ $: pageTitle =
   $page.url.pathname === roleBase
     ? 'Dashboard'
     : $page.url.pathname.startsWith('/dashboard/admin/history')
-    ? 'Approved Leave History'
+    ? 'Leave History'
     : $page.url.pathname.startsWith('/dashboard/admin/employees')
     ? 'Employees'
     : $page.url.pathname.startsWith('/dashboard/admin/leave-approvals')

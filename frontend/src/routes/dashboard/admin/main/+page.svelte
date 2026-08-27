@@ -610,10 +610,13 @@ staffLeaveData = {
           </div>
         {/each}
       </div>
-
-      <a class="numbers-link" href="/dashboard/admin/employees">
+      
+      <div class='recent-footer'>
+      <a class="view-more" href="/dashboard/admin/employees">
         View employees
       </a>
+      </div>
+
     </div>
   </div>
 </main>
@@ -714,20 +717,26 @@ staffLeaveData = {
   /* 🌟 Fixed: Added missing colon to separate css rule definitions */
   .dot{ width:10px; height:10px; border-radius: 999px; display:inline-block; }
   
-  .numbers-link{
-    margin-top:12px;
-    align-self:center;
-    transform: translateX(250px);
-    font-weight:600;
-    color:#2563eb;
-    text-decoration:none;
-  }
-  .numbers-link:hover{ text-decoration:underline; }
-
   @media (max-width: 860px) {
     .main { padding: 10px; }
     .grid { grid-template-columns: 1fr !important; }
     .grid > [style] { grid-column: unset !important; }
     .donut-card { height: auto; min-height: 160px; }
   }
+  .recent-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: auto;
+  padding-top: 8px;
+}
+
+.view-more {
+  font-size: 13px;
+  font-weight: 600;
+  color: #2563eb;          /* blue */
+  cursor: pointer;
+}
+.view-more:hover {
+  color: #1d4ed8;
+}
 </style>
