@@ -15,10 +15,23 @@
   import { onMount } from 'svelte';
   import { afterNavigate } from '$app/navigation';
   import { PUBLIC_VITE_API_BASE } from '$env/static/public';
+  import LeaveApprovals from '$lib/components/LeaveApprovals.svelte';
 
   // --- SIDEBAR TOGGLE ---
   let sidebarOpen = false;
   afterNavigate(() => { sidebarOpen = false; });
+
+  // --- PENDING APPROVAL PANEL ---
+  let approvalPanelOpen = false;
+
+  function closePanel() {
+    approvalPanelOpen = false;
+    loadPendingCount();
+  }
+
+  function handlePanelKeydown(e) {
+    if (e.key === 'Escape' && approvalPanelOpen) closePanel();
+  }
 
   // --- COLLAPSIBLE NAV GROUPS ---
   let dashOpen = false;
@@ -128,49 +141,46 @@ onMount(async () => {
 
     const all = await res.json();
 
+    const userRole = (safeUser.role || '').trim().toLowerCase();
     const userDept = (safeUser.department || '').trim().toLowerCase();
+    const myId = String(safeUser.staffId || safeUser.id || '').trim();
 
   const view =
-  safeUser?.role === 'Manager'
+  userRole === 'manager'
     ? all.filter(r => {
-        const dept =
+        const dept = (
           r.profile_department ||
           r.staff_department ||
           r.department ||
-          '';
+          ''
+        ).trim().toLowerCase();
+
+        const targetRole = (r.requester_role || '').trim().toLowerCase();
+
+        // Hide my own requests
+        const recordId = String(r.staff_id || '').trim();
+        if (myId && recordId === myId) return false;
+
+        const isPending = r.status === 'pending' || r.status === 'cancellation_pending';
+        if (!isPending) return false;
 
         // 🔥 MANAGER DIRECTOR → SEMUA DEPARTMENT
         if (userDept === 'director') {
-          return (
-            (
-              // ✅ Staff bawah Director sahaja
-              (r.requester_role === 'Staff' &&
-              dept.trim().toLowerCase() === 'director')
-
-              ||
-
-              // ✅ Semua Manager (any department)
-              r.requester_role === 'Manager'
-            )
-            &&
-            // ✅ Status pending sahaja
-            (r.status === 'pending' ||
-            r.status === 'cancellation_pending')
-          );
+          return targetRole === 'manager' || dept === 'director';
         }
 
+        // 👤 MANAGER BIASA → DEPT SENDIRI (supports comma-separated)
+        const managerDepts = userDept.split(',').map(d => d.trim());
+        const employeeDepts = dept.split(',').map(d => d.trim());
 
-        // 👤 MANAGER BIASA → DEPT SENDIRI
         return (
-          r.requester_role !== 'Manager' &&
-          dept.trim().toLowerCase() === userDept &&
-          (r.status === 'pending' ||
-           r.status === 'cancellation_pending')
+          targetRole !== 'manager' &&
+          employeeDepts.some(d => managerDepts.includes(d))
         );
       })
     : [];
 
-    pendingCount = view.length; // ✅ SATU-SATU TEMPAT SAHAJA
+    pendingCount = view.length;
   } catch (e) {
     console.error('Failed to load pending count', e);
   }
@@ -539,26 +549,6 @@ async function saveProfile(e) {
           </div>
                 {/if}
 
-        <a
-          href="/dashboard/manager/leave-approvals"
-          class="nav-approvals"
-          class:active={$page.url.pathname.startsWith('/dashboard/manager/leave-approvals')}
-        >
-          <span class="ico">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-              <path
-                d="M22 5.18L10.59 16.6l-4.24-4.24 1.41-1.41 2.83 2.83 10-10L22 5.18zm-2.21 5.04c.13.57.21 1.17.21 1.78 0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8c1.58 0 3.04.46 4.28 1.25l1.44-1.44C16.1 2.67 14.13 2 12 2 6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10c0-1.19-.22-2.33-.6-3.39l-1.61 1.61z"
-              ></path>
-            </svg>
-          </span>
-           <span class="text">Leave Approvals</span>
-            {#if pendingCount > 0}
-              <span class="nav-badge">
-                {pendingCount > 9 ? '9+' : pendingCount}
-              </span>
-            {/if}
-        </a>
-
       </nav>
     </div>
 
@@ -606,11 +596,8 @@ async function saveProfile(e) {
           <h1 class="page-title">Employees</h1>
           <p class="page-desc">View all employees across the organisation.</p>
         {:else if $page.url.pathname.startsWith('/dashboard/manager/employees')}
-          <h1 class="page-title">Employees</h1>
-          <p class="page-desc">Directory of your department's employees with quick profile access.</p>
-        {:else if $page.url.pathname.startsWith('/dashboard/manager/leave-approvals')}
-          <h1 class="page-title">Leave Approvals</h1>
-          <p class="page-desc">Review and act on pending leave and cancellation requests from your team.</p>
+          <h1 class="page-title">Employees & Leave Approvals</h1>
+          <p class="page-desc">View employees and review pending leave requests from your team.</p>
         {:else}
           <h1 class="page-title">Dashboard</h1>
           <p class="page-desc">Your team's leave overview and the public holiday calendar.</p>
@@ -659,6 +646,38 @@ async function saveProfile(e) {
     </div>
   </main>
 </div>
+
+<!-- Pending Approval Slide Panel -->
+{#if pendingCount > 0 && $page.url.pathname.startsWith('/dashboard/manager/employees')}
+  <button 
+    class="pending-tab" 
+    class:panel-open={approvalPanelOpen}
+    on:click={() => approvalPanelOpen = !approvalPanelOpen}
+    aria-label="Pending approvals"
+  >
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+    </svg>
+    <span class="tab-text">Pending Approval</span>
+    <span class="tab-badge">{pendingCount}</span>
+  </button>
+{/if}
+
+{#if approvalPanelOpen}
+  <!-- svelte-ignore a11y-click-events-have-key-events -->
+  <div class="approval-overlay" on:click={closePanel}></div>
+  <div class="approval-panel" class:open={approvalPanelOpen}>
+    <div class="panel-header">
+      <h3>Pending Approvals</h3>
+      <button class="panel-close" on:click={closePanel}>✕</button>
+    </div>
+    <div class="panel-body">
+      <LeaveApprovals role="manager" />
+    </div>
+  </div>
+{/if}
+
+<svelte:window on:keydown={handlePanelKeydown} />
 
 {#if profileModalOpen}
   <div
@@ -1504,6 +1523,153 @@ async function saveProfile(e) {
   .avatar-img {
     height: 44px;
     width: 44px;
+  }
+}
+
+/* ===== Pending Approval Slide Panel ===== */
+.pending-tab {
+  position: fixed;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 100;
+  background: #0F9B8E;
+  color: #fff;
+  border: none;
+  border-radius: 8px 0 0 8px;
+  padding: 12px 10px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  box-shadow: -2px 0 12px rgba(0,0,0,.15);
+  transition: right 0.3s ease, background 0.2s;
+}
+
+.pending-tab:hover {
+  background: #0d8a7e;
+}
+
+.pending-tab.panel-open {
+  right: 420px;
+}
+
+.pending-tab svg {
+  width: 20px;
+  height: 20px;
+}
+
+.tab-text {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.tab-badge {
+  background: #dc2626;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+}
+
+.approval-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.3);
+  z-index: 101;
+  animation: fadeIn 0.2s ease;
+}
+
+.approval-panel {
+  position: fixed;
+  right: -420px;
+  top: 0;
+  bottom: 0;
+  width: 420px;
+  max-width: 90vw;
+  background: #fff;
+  z-index: 102;
+  box-shadow: -4px 0 24px rgba(0,0,0,.2);
+  transition: right 0.3s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.approval-panel.open {
+  right: 0;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.panel-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.panel-close {
+  border: none;
+  background: transparent;
+  font-size: 20px;
+  cursor: pointer;
+  color: #6b7280;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.panel-close:hover {
+  background: #e5e7eb;
+  color: #111827;
+}
+
+.panel-body {
+  flex: 1;
+  overflow-y: auto;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (max-width: 860px) {
+  .pending-tab {
+    top: auto;
+    bottom: 20px;
+    right: 0;
+    transform: none;
+    border-radius: 8px 0 0 8px;
+  }
+  
+  .pending-tab.panel-open {
+    right: 0;
+    bottom: 20px;
+  }
+  
+  .approval-panel {
+    width: 100vw;
+    max-width: 100vw;
+    right: -100vw;
+  }
+  
+  .approval-panel.open {
+    right: 0;
   }
 }
   

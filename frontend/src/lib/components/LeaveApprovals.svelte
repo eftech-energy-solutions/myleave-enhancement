@@ -27,27 +27,18 @@
   let pendingLeave = [];
   let pendingCancel = [];
 
-  // =======================
-  // DEPARTMENT FILTER
-  // =======================
-  const DEPTS = [
-    "Operations Support",
-    "Technical Data",
-    "Operations",
-    "Sales & Technical Excellence",
-    "Director",
-    "Business Development",
-    "Technical Data - Consultant"
-  ];
-
   let deptFilter = "All";
 
-  const deptOptions = [
-    "All",
-    ...Array.from(new Set(DEPTS)).sort((a, b) =>
-      a.localeCompare(b, "en", { sensitivity: "base" })
-    )
-  ];
+  $: parsedDepts = (meDept || "")
+    .split(",")
+    .map(d => d.trim())
+    .filter(Boolean);
+
+  $: hasMultipleDepts = parsedDepts.length > 1;
+
+  $: deptOptions = ["All", ...Array.from(new Set(parsedDepts)).sort((a, b) =>
+    a.localeCompare(b, "en", { sensitivity: "base" })
+  )];
 
   const deptList = (v) =>
     String(v || "").split(",").map((d) => d.trim());
@@ -435,6 +426,7 @@
 
 <div class="main">
   <div class="page-head">
+    {#if hasMultipleDepts}
     <!-- Department filter -->
     <div class="dept-toolbar">
       <svg class="filter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -447,6 +439,7 @@
         </select>
       </div>
     </div>
+    {/if}
   </div>
 
   {#if loading}
