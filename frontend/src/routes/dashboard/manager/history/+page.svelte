@@ -8,6 +8,7 @@
   import MonthGroup from "$lib/components/history/MonthGroup.svelte";
   import EmptyState from "$lib/components/history/EmptyState.svelte";
   import ExportPanel from "$lib/components/history/ExportPanel.svelte";
+  import LeaveDetailModal from "$lib/components/history/LeaveDetailModal.svelte";
   import { makeEmployeeRecord, MONTHS } from "$lib/components/history/utils.js";
   import { exportCSV } from "$lib/components/history/exportCSV.js";
   import { exportPDF } from "$lib/components/history/exportPDF.js";
@@ -27,6 +28,7 @@
   let searchQuery = "";
 
   let showExportPanel = false;
+  let detailItem = null;
 
   async function loadHistory() {
     const res = await fetch(
@@ -327,7 +329,7 @@
     {#if filteredRecords.length === 0}
       <EmptyState on:clear={handleClearFilters} />
     {:else}
-      <LeaveTable records={flatRecords} showMonthColumn={monthFilter === "All"} />
+      <LeaveTable records={flatRecords} showMonthColumn={monthFilter === "All"} on:detail={(e) => (detailItem = e.detail)} />
     {/if}
   {:else}
     {#if filteredRecords.length === 0}
@@ -341,6 +343,7 @@
             expanded={expandedMonth === group.month}
             empty={group.records.length === 0}
             emptyOpacity={group.records.length === 0 && !hasActiveFilters}
+            on:detail={(e) => (detailItem = e.detail)}
           />
         {/each}
       </div>
@@ -355,6 +358,8 @@
   on:generate={handleExport}
   on:close={() => (showExportPanel = false)}
 />
+
+<LeaveDetailModal bind:item={detailItem} />
 
 <style>
   .page {

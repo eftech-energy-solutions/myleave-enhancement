@@ -1,10 +1,13 @@
 <script>
+  import { createEventDispatcher } from "svelte";
   import { dateRange, getLeaveFullName } from "./utils.js";
 
   export let records = [];
   export let showMonthColumn = false;
   export let pageSize = 20;
   export let compact = false;
+
+  const dispatch = createEventDispatcher();
 
   let sortCol = "dateFrom";
   let sortDir = "desc";
@@ -98,6 +101,7 @@
           <th class="sortable center" on:click={() => toggleSort("totalDays")}>Days {sortIcon("totalDays")}</th>
           <th class="sortable" on:click={() => toggleSort("leaveType")}>Type {sortIcon("leaveType")}</th>
           <th class="sortable" on:click={() => toggleSort("status")}>Status {sortIcon("status")}</th>
+          <th class="actions-col">Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -118,6 +122,9 @@
             <td>{getLeaveFullName(row.leaveType)}</td>
             <td>
               <span class="status-badge {statusClass(row.status)}">{row.status}</span>
+            </td>
+            <td class="actions-cell">
+              <button class="btn-view" on:click={() => dispatch("detail", row._raw || row)}>View</button>
             </td>
           </tr>
         {/each}
@@ -325,5 +332,35 @@
   .compact .leave-table tbody td {
     padding: 0.5rem 0.6rem;
     font-size: 0.82rem;
+  }
+
+  .actions-col {
+    text-align: center;
+    white-space: nowrap;
+    font-weight: 700;
+    color: #285a6d;
+    background: #f6fbfb;
+  }
+
+  .actions-cell {
+    text-align: center;
+  }
+
+  .btn-view {
+    background: #f1f5f9;
+    color: #334155;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 0.3rem 0.7rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+
+  .btn-view:hover {
+    background: #e2e8f0;
+    border-color: #cbd5e1;
   }
 </style>

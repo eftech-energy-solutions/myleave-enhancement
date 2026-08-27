@@ -1,4 +1,5 @@
 <script>
+  import { createEventDispatcher } from "svelte";
   import LeaveTable from "./LeaveTable.svelte";
 
   export let month = "";
@@ -6,6 +7,8 @@
   export let expanded = false;
   export let empty = false;
   export let emptyOpacity = false;
+
+  const dispatch = createEventDispatcher();
 
   function toggle() {
     if (empty) return;
@@ -43,7 +46,7 @@
 
   {#if expanded && !empty}
     <div class="month-body">
-      <LeaveTable {records} compact={true} />
+      <LeaveTable {records} compact={true} on:detail />
     </div>
   {/if}
 </div>

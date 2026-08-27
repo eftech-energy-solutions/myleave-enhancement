@@ -42,7 +42,8 @@ export function makeEmployeeRecord(item) {
     status: formatted,
     dateFrom: item.date_from,
     dateTo: item.date_until,
-    createdAt: item.created_at
+    createdAt: item.created_at,
+    _raw: item
   };
 }
 
