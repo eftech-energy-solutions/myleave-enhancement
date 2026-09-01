@@ -617,8 +617,11 @@ async function saveProfile(e) {
           <h1 class="page-title">Employees</h1>
           <p class="page-desc">View all employees across the organisation.</p>
         {:else if $page.url.pathname.startsWith('/dashboard/manager/employees')}
-          <h1 class="page-title">Employees & Leave Approvals</h1>
+          <h1 class="page-title">Employees &amp; Leave Approvals</h1>
           <p class="page-desc">View employees and review pending leave requests from your team.</p>
+        {:else if $page.url.pathname.startsWith('/dashboard/manager/profile')}
+          <h1 class="page-title">My Profile</h1>
+          <p class="page-desc">Your personal details and available leave balance.</p>
         {:else}
           <h1 class="page-title">Dashboard</h1>
           <p class="page-desc">Your team's leave overview and the public holiday calendar.</p>
@@ -654,8 +657,19 @@ async function saveProfile(e) {
 
         {#if profileMenuOpen}
           <div class="menu" role="menu">
+            <a class="menu-btn" href="/dashboard/manager/profile">
+              <svg class="menu-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                <circle cx="12" cy="7" r="4"/>
+              </svg>
+              <span>My Profile</span>
+            </a>
             <button class="menu-btn" type="button" on:click={openProfileModal}>
-              Update Profile
+              <svg class="menu-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+              </svg>
+              <span>Update Profile</span>
             </button>
           </div>
         {/if}
@@ -1150,7 +1164,9 @@ async function saveProfile(e) {
     z-index: 30;
   }
   .menu-btn {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 8px;
     width: 100%;
     padding: 10px 12px;
     border: none;
@@ -1161,6 +1177,8 @@ async function saveProfile(e) {
     text-align: left;
     cursor: pointer;
   }
+  .menu-btn .menu-ico { width: 16px; height: 16px; color: #0F9B8E; flex: none; }
+  a.menu-btn { text-decoration: none; }
   .menu-btn:hover {
     background: #f3f4f6;
   }

@@ -79,6 +79,7 @@ function getLeaveShortName(code) {
   // =======================
   // EMPLOYEE VARIABLES
   // =======================
+  let currentUserId = null;
   let employees = [];
   let detailsById = {};
   let toast = {
@@ -179,8 +180,10 @@ function showToast(message, type = "success", title = "", duration = 3000) {
         return profile;
       });
 
-      // Directory shows every employee
-      employees = fullProfileList;
+      // Directory shows every employee except the currently logged-in user
+      employees = fullProfileList.filter(
+        (e) => String(e.id) !== String(currentUserId)
+      );
     } catch (err) {
       console.error("⚠️ Error in loadEmployees():", err);
     }
@@ -191,6 +194,13 @@ function showToast(message, type = "success", title = "", duration = 3000) {
   // =======================
   onMount(async () => {
   try {
+    const userRes = await fetch(
+      `${PUBLIC_VITE_API_BASE}/api/me/photo`,
+      { credentials: "include" }
+    );
+    const userData = await userRes.json();
+    currentUserId = userData?.staff_id ?? userData?.staffId ?? null;
+
     await loadEmployees();
     // tak perlu filter lagi kat sini
   } catch (err) {
