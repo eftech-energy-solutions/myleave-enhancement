@@ -1037,6 +1037,8 @@ async function saveProfile(e) {
     flex-direction: column;
     gap: 2px;
     color: #fff;
+    flex: 1 1 auto;
+    min-width: 0;
   }
   .page-desc {
     margin: 2px 0 0;
@@ -1046,8 +1048,9 @@ async function saveProfile(e) {
   }
   .hello {
   max-width: 980px;       /* kekalkan limit ruang */
-  white-space: normal;    /* ❗ benarkan wrap */
-  word-break: break-word;
+  white-space: nowrap;    /* jangan bungkus */
+  overflow: hidden;
+  text-overflow: ellipsis;
   line-height: 1.3;
 
   font-size: var(--fs-body, 14px);
@@ -1063,6 +1066,9 @@ async function saveProfile(e) {
     line-height: 1.2;
     font-weight: 600;
     color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .logo img {
     height: 38px;
@@ -1076,6 +1082,7 @@ async function saveProfile(e) {
     display: flex;
     align-items: center;
     gap: 10px;
+    flex-shrink: 0;
   }
   .icon-btn {
     border: none;
@@ -1492,6 +1499,10 @@ async function saveProfile(e) {
     inset: 0;
     background: rgba(0,0,0,.4);
     z-index: 40;
+  }
+
+  .page-desc {
+    display: none;
   }
 
   .container {

@@ -1166,6 +1166,8 @@ $: pageDesc =
     flex-direction: column;
     gap: 2px;
     color: #fff;
+    flex: 1 1 auto;
+    min-width: 0;
   }
   .page-desc {
     margin: 2px 0 0;
@@ -1175,8 +1177,9 @@ $: pageDesc =
   }
   .hello {
   max-width: 980px;       /* kekalkan limit ruang */
-  white-space: normal;    /* ❗ benarkan wrap */
-  word-break: break-word;
+  white-space: nowrap;    /* jangan bungkus */
+  overflow: hidden;
+  text-overflow: ellipsis;
   line-height: 1.3;
 
   font-size: var(--fs-body, 14px);
@@ -1186,7 +1189,7 @@ $: pageDesc =
   color: #fff;
 }
 
-  .page-title{ margin:0; font-size:var(--fs-page-title, 24px); line-height:1.2; font-weight:600; color:#fff; }
+  .page-title{ margin:0; font-size:var(--fs-page-title, 24px); line-height:1.2; font-weight:600; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
   .nav-badge {
   margin-left: auto;
@@ -1207,7 +1210,7 @@ $: pageDesc =
 
 
   /* Profile Dropdown (Tidak berubah) */
-  .profile{ position:relative; display:flex; align-items:center; gap:10px; }
+  .profile{ position:relative; display:flex; align-items:center; gap:10px; flex-shrink:0; }
   .icon-btn{ border:none; background:transparent; cursor:pointer; font-size:18px; line-height:1; padding:6px; border-radius:8px; color:#fff; }
   .icon-btn:hover{ background:rgba(255,255,255,.12); }
   .caret{ font-size:16px; }
@@ -1836,6 +1839,10 @@ $: pageDesc =
   .layout.sidebar-open .aside {
     transform: translateX(0);
     box-shadow: 4px 0 24px rgba(0,0,0,.15);
+  }
+
+  .page-desc {
+    display: none;
   }
 
   .page-title {

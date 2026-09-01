@@ -874,4 +874,29 @@ async function fetchLogs() {
     grid-column: span 1;
   }
 }
+
+@media (max-width: 560px) {
+  .logs-container {
+    max-width: 100%;
+  }
+
+  .header-card {
+    padding: 16px;
+  }
+
+  .header-content {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+  }
+
+  .header-left {
+    gap: 12px;
+  }
+  
+  .export-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
 </style>

@@ -693,6 +693,8 @@ $: pageDesc =
     flex-direction: column;
     gap: 2px;
     color: #fff;
+    flex: 1 1 auto;
+    min-width: 0;
   }
   .page-desc {
     margin: 2px 0 0;
@@ -702,8 +704,9 @@ $: pageDesc =
   }
   .hello {
   max-width: 980px;       /* kekalkan limit ruang */
-  white-space: normal;    /* ❗ benarkan wrap */
-  word-break: break-word;
+  white-space: nowrap;    /* jangan bungkus */
+  overflow: hidden;
+  text-overflow: ellipsis;
   line-height: 1.3;
 
   font-size: var(--fs-body, 14px);
@@ -719,6 +722,9 @@ $: pageDesc =
     line-height: 1.2;
     font-weight: 600;
     color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .logo img {
@@ -733,6 +739,7 @@ $: pageDesc =
     display: flex;
     align-items: center;
     gap: 10px;
+    flex-shrink: 0;
   }
   .icon-btn {
     border: none;
@@ -1036,6 +1043,10 @@ $: pageDesc =
 
   .page-title {
     font-size: 20px;
+  }
+
+  .page-desc {
+    display: none;
   }
 
   .hello {
