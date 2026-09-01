@@ -647,87 +647,9 @@ async function loadRecent() {
 
   let attachmentFiles; // FileList
   let fileInputEl;     // <input type="file">
-  let reason = '';      // Track reason for draft persistence
+  let reason = '';
   $: showAttachmentReminder =
     (leaveType === 'MC') && (!attachmentFiles || attachmentFiles.length === 0);
-
-  // ===== Draft Management =====
-  const DRAFT_KEY = 'leave_draft';
-  let hasDraft = false;
-  let draftInfo = null;
-
-  function saveDraft() {
-    const draft = {
-      leaveType,
-      duration,
-      dateFrom,
-      dateUntil,
-      totalDays,
-      reason,
-      savedAt: new Date().toISOString()
-    };
-    localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
-    hasDraft = true;
-    draftInfo = draft;
-  }
-
-  function loadDraft() {
-    try {
-      const saved = localStorage.getItem(DRAFT_KEY);
-      if (saved) {
-        const draft = JSON.parse(saved);
-        // Only restore if draft is less than 24 hours old
-        const savedAt = new Date(draft.savedAt);
-        const now = new Date();
-        const hoursSince = (now - savedAt) / (1000 * 60 * 60);
-        
-        if (hoursSince < 24) {
-          leaveType = draft.leaveType || 'AL';
-          duration = draft.duration || 'Full';
-          dateFrom = draft.dateFrom || '';
-          dateUntil = draft.dateUntil || '';
-          totalDays = draft.totalDays || 1;
-          reason = draft.reason || '';
-          hasDraft = true;
-          draftInfo = draft;
-          return true;
-        } else {
-          // Draft too old, clear it
-          clearDraft();
-        }
-      }
-    } catch (e) {
-      console.error('Failed to load draft:', e);
-      clearDraft();
-    }
-    return false;
-  }
-
-  function clearDraft() {
-    localStorage.removeItem(DRAFT_KEY);
-    hasDraft = false;
-    draftInfo = null;
-  }
-
-  function formatDraftTime(isoString) {
-    if (!isoString) return '';
-    const date = new Date(isoString);
-    return date.toLocaleString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  }
-
-  // Auto-save draft when form values change (debounced)
-  let draftSaveTimeout;
-  $: if (dateFrom || leaveType !== 'AL' || reason) {
-    clearTimeout(draftSaveTimeout);
-    draftSaveTimeout = setTimeout(() => {
-      if (dateFrom) saveDraft();
-    }, 1000);
-  }
 
   // ===== Attachment Validation =====
   const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
@@ -872,11 +794,6 @@ async function loadRecent() {
   }
 
   async function openLeaveForm(date) {
-  // Check for existing draft first
-  const draftLoaded = loadDraft();
-  
-  // If no draft loaded, use defaults with the clicked date
-  if (!draftLoaded) {
     const iso = localISO(date);
     leaveType = leaveType || 'AL'; // keep selected type
     duration  = 'Full';
@@ -884,15 +801,14 @@ async function loadRecent() {
     dateUntil = iso;
     totalDays = 1;
     reason = '';
-  }
-  
-  attachmentFiles = undefined;
-  attachmentError = '';
-  attachmentPreview = null;
 
-  if (!modal?.open) modal.showModal();
-  await tick();
-}
+    attachmentFiles = undefined;
+    attachmentError = '';
+    attachmentPreview = null;
+
+    if (!modal?.open) modal.showModal();
+    await tick();
+  }
 
 // Place this AFTER openLeaveForm function (around line 570)
 // DELETE any duplicate submitLeave functions!
@@ -1099,8 +1015,6 @@ if (
     await loadAppliedLeave();
     buildMonth(viewBase);
 
-    // Clear draft after successful submission
-    clearDraft();
     modal?.close();
 
   } catch (err) {
@@ -1482,14 +1396,6 @@ async function loadApprovedUsedDays() {
   <form class="leave-form" on:submit={submitLeave}>
     <button type="button" class="close-btn" on:click={() => modal.close()} aria-label="Close">✕</button>
     <h2 id="leave-title" class="title">Leave Application Form</h2>
-
-    {#if hasDraft && draftInfo?.savedAt}
-      <div class="draft-banner">
-        <span class="draft-icon">📋</span>
-        <span class="draft-text">Draft saved {formatDraftTime(draftInfo.savedAt)}</span>
-        <button type="button" class="draft-clear-btn" on:click={clearDraft}>Clear</button>
-      </div>
-    {/if}
 
     <label>
       <span>Type</span>
@@ -2181,45 +2087,6 @@ max-width: 150px;         /* optional — so it wraps instead of going super lon
 }
 .total-line.bold {
   font-weight: 700;
-}
-
-/* =========================
-   DRAFT BANNER
-========================= */
-.draft-banner {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: #fef3c7;
-  border: 1px solid #fcd34d;
-  border-radius: 8px;
-  font-size: 12px;
-}
-
-.draft-icon {
-  font-size: 14px;
-}
-
-.draft-text {
-  flex: 1;
-  color: #92400e;
-}
-
-.draft-clear-btn {
-  padding: 4px 8px;
-  font-size: 11px;
-  font-weight: 600;
-  color: #92400e;
-  background: #fde68a;
-  border: 1px solid #fcd34d;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-.draft-clear-btn:hover {
-  background: #fcd34d;
 }
 
 /* =========================
