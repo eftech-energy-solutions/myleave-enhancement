@@ -383,6 +383,28 @@ const meData = meQuery.rows[0];
         ORDER BY id DESC
       `, [meData.department]);
       }
+    // =====================
+    // DIRECTOR → SEE MANAGERS ONLY
+    // =====================
+    } else if (meData.role?.toLowerCase() === "director") {
+      result = await pool.query(`
+        SELECT id, staff_id, full_name, role, position, department, email,
+               employment_date, confirmation_date, termination_date,
+               gender,
+               leave_entitlement_annual_original,
+               leave_entitlement_medical_original,
+               leave_entitlement_annual,
+               leave_entitlement_medical,
+               carry_forward_original,
+               carry_forward_balance,
+               carry_forward_expiry,
+               photourl,
+               notes
+        FROM profiles
+        WHERE LOWER(role) = 'manager'
+        ORDER BY id DESC
+      `);
+
     } else {
       return res.status(403).json({ error: "Unauthorized" });
     }

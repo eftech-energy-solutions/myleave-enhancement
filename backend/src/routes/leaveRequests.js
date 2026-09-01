@@ -765,6 +765,8 @@ if (user.role === 'Manager') {
         p.photourl AS photo_url,
         p.leave_entitlement_annual,
         p.leave_entitlement_medical,
+        p.carry_forward_balance,
+        p.carry_forward_expiry,
         p.notes
       FROM leave_requests lr
       LEFT JOIN profiles p ON p.staff_id = lr.staff_id
@@ -1605,9 +1607,10 @@ router.get("/history/all", async (req, res) => {
     let sql = `
       SELECT
         lr.leave_id, lr.staff_id, lr.staff_name, lr.department,
-        lr.requester_role,
+        lr.requester_role, lr.requester_position,
         lr.leave_type, lr.status, lr.total_days,
         lr.date_from, lr.date_until, lr.created_at,
+        lr.reason, lr.cancellation_reason, lr.attachment_path,
         p.photourl, p.position,
         p.leave_entitlement_annual, p.leave_entitlement_medical
       FROM leave_requests lr

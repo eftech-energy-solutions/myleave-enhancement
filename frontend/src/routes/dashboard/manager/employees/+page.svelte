@@ -13,6 +13,9 @@
   let filteredEmployees = [];
   let detailsById = {};
 
+  let deptSel = "All";
+  let deptSelOptions = [];
+
   let detailsOpen = false;
   let selectedEmp = null;
   let detailsForm = null;
@@ -271,11 +274,28 @@ console.log(
     }
   }
 
-  /* ================================
-      3) FILTER BY DEPT
+/* ================================
+       3) FILTER BY DEPT
      ================================ */
 
-  $: filteredEmployees = employees;
+  $: deptSelOptions = [
+    ...new Set(
+      (managerDept || "")
+        .split(",")
+        .map((d) => d.trim())
+        .filter(Boolean)
+    )
+  ].sort((a, b) => a.localeCompare(b, "en", { sensitivity: "base" }));
+
+  $: filteredEmployees =
+    deptSel === "All"
+      ? employees
+      : employees.filter((e) =>
+          (e.department || "")
+            .split(",")
+            .map((d) => d.trim())
+            .includes(deptSel)
+        );
 
   /* ================================
        4) openDetails (STRUCTURE FIXED)
@@ -385,6 +405,25 @@ console.log(
 
   /* ===== Employees grid & card ===== */
   .employees-grid{ display:grid; gap:1rem; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+
+  .toprow{ display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+  .rightcol{ display:flex; align-items:center; gap:6px; }
+
+  /* ===== Filters (topbar right) ===== */
+  .filter-wrap { display:flex; align-items:center; gap:6px; }
+  .filter-label { margin: 0 6px; font-weight: 600; font-size: 14px; color: var(--ink, #1F2937); }
+  .filter-icon { width: 16px; height: 16px; color: var(--muted, #6B7280); opacity: 0.9; }
+  .filter-select { min-width:210px; }
+  .filter-select select {
+    appearance:none; -webkit-appearance:none;
+    background:#fff url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b7280' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 10px center;
+    border:1px solid var(--line,#e5e7eb); border-radius:10px; padding:.5rem 2rem .5rem .8rem;
+    font-size:14px; font-weight:600; color:var(--ink,#1F2937); cursor:pointer;
+    width:100%;
+  }
+  .filter-select select:focus{ outline:none; border-color:#0F9B8E; box-shadow:0 0 0 3px rgba(15,155,142,.15); }
+  .emp-empty{ background:#fff; border:1px dashed #cbd5e1; border-radius:14px; padding:36px 20px; text-align:center; color:#64748b; }
+  .emp-empty strong{ display:block; font-size:16px; color:#0c4a6e; margin-bottom:4px; }
   .emp-box{ background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:1rem; color:#111827; box-shadow:0 2px 10px rgba(15,23,42,.06); display:flex; flex-direction:column; min-height:240px; }
   .emp-top{ text-align:center; }
   .emp-box h3{ margin:0; font-size:15px; color:#217859; }
@@ -576,6 +615,28 @@ console.log(
 <!-- 9) TOP BAR + GRID       -->
 <!-- ======================= -->
 <div class="main">
+  <div class="toprow">
+    <!-- Department Filter -->
+    <div class="rightcol filter-wrap">
+      <svg class="filter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M3 4h18l-7 8v6l-4 2v-8l-7-8z"/>
+      </svg>
+      <label class="filter-label" for="emp-dept-filter">Department</label>
+      <div class="filter-select">
+        <select id="emp-dept-filter" bind:value={deptSel} aria-label="Filter employees by department">
+          <option value="All">All departments</option>
+          {#each deptSelOptions as d (d)}<option value={d}>{d}</option>{/each}
+        </select>
+      </div>
+    </div>
+  </div>
+
+  {#if manager && filteredEmployees.length === 0}
+    <div class="emp-empty">
+      <strong>No employees for {deptSel}</strong>
+      Try selecting a different department.
+    </div>
+  {:else}
   <div class="employees-grid">
     {#each filteredEmployees as emp (emp.id)}
       <div class="emp-box">
@@ -603,6 +664,7 @@ console.log(
       </div>
     {/each}
   </div>
+  {/if}
 </div>
  
 

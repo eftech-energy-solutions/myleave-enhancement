@@ -4,10 +4,14 @@
   import { afterNavigate } from '$app/navigation';
   import { apiFetch } from '$lib/api';
   import { PUBLIC_VITE_API_BASE } from '$env/static/public';
+  import AdminLeaveApprovals from '$lib/components/AdminLeaveApprovals.svelte';
 
   // --- SIDEBAR TOGGLE ---
   let sidebarOpen = false;
   afterNavigate(() => { sidebarOpen = false; });
+
+  // --- PENDING APPROVAL PANEL ---
+  let approvalPanelOpen = false;
 
   // --- STATE ---
   let profileMenuOpen = false;
@@ -151,6 +155,16 @@ async function loadPendingCount() {
     console.error("Failed to load pending count:", err);
   }
 }
+
+
+function handlePanelKeydown(e) {
+    if (e.key === 'Escape' && approvalPanelOpen) closePanel();
+  }
+
+  function closePanel() {
+    approvalPanelOpen = false;
+    loadPendingCount();
+  }
 
 
   // Profile modal state
@@ -795,6 +809,39 @@ $: pageDesc =
     </div>
   </div>
 </div>
+
+<!-- Pending Approval Slide Panel -->
+{#if pendingCount > 0 && $page.url.pathname.startsWith('/dashboard/admin/employees')}
+  <button
+    class="pending-tab"
+    class:panel-open={approvalPanelOpen}
+    on:click={() => approvalPanelOpen = !approvalPanelOpen}
+    aria-label="Pending approvals"
+  >
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+    </svg>
+    <span class="tab-text">Pending Approval</span>
+    <span class="tab-badge">{pendingCount}</span>
+  </button>
+{/if}
+
+{#if approvalPanelOpen}
+  <!-- svelte-ignore a11y-click-events-have-key-events -->
+  <div class="approval-overlay" on:click={closePanel}></div>
+  <div class="approval-panel" class:open={approvalPanelOpen}>
+    <div class="panel-header">
+      <h3>Pending Approvals</h3>
+      <button class="panel-close" on:click={closePanel}>✕</button>
+    </div>
+    <div class="panel-body">
+      <AdminLeaveApprovals compact />
+    </div>
+  </div>
+{/if}
+
+<svelte:window on:keydown={handlePanelKeydown} />
+
 {#if profileModalOpen}
   <div class="modal-wrap">
     <div class="modal">
@@ -1802,6 +1849,153 @@ $: pageDesc =
   .avatar-img {
     height: 44px;
     width: 44px;
+  }
+}
+
+/* ===== Pending Approval Slide Panel ===== */
+.pending-tab {
+  position: fixed;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 100;
+  background: #0F9B8E;
+  color: #fff;
+  border: none;
+  border-radius: 8px 0 0 8px;
+  padding: 12px 10px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  box-shadow: -2px 0 12px rgba(0,0,0,.15);
+  transition: right 0.3s ease, background 0.2s;
+}
+
+.pending-tab:hover {
+  background: #0d8a7e;
+}
+
+.pending-tab.panel-open {
+  right: 420px;
+}
+
+.pending-tab svg {
+  width: 20px;
+  height: 20px;
+}
+
+.tab-text {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.tab-badge {
+  background: #dc2626;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+}
+
+.approval-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.3);
+  z-index: 101;
+  animation: fadeIn 0.2s ease;
+}
+
+.approval-panel {
+  position: fixed;
+  right: -420px;
+  top: 0;
+  bottom: 0;
+  width: 420px;
+  max-width: 90vw;
+  background: #fff;
+  z-index: 102;
+  box-shadow: -4px 0 24px rgba(0,0,0,.2);
+  transition: right 0.3s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.approval-panel.open {
+  right: 0;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.panel-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.panel-close {
+  border: none;
+  background: transparent;
+  font-size: 20px;
+  cursor: pointer;
+  color: #6b7280;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.panel-close:hover {
+  background: #e5e7eb;
+  color: #111827;
+}
+
+.panel-body {
+  flex: 1;
+  overflow-y: auto;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (max-width: 860px) {
+  .pending-tab {
+    top: auto;
+    bottom: 20px;
+    right: 0;
+    transform: none;
+    border-radius: 8px 0 0 8px;
+  }
+
+  .pending-tab.panel-open {
+    right: 0;
+    bottom: 20px;
+  }
+
+  .approval-panel {
+    width: 100vw;
+    max-width: 100vw;
+    right: -100vw;
+  }
+
+  .approval-panel.open {
+    right: 0;
   }
 }
 </style>

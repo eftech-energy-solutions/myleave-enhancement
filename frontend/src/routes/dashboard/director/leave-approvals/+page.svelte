@@ -1,5 +1,5 @@
 <script>
-  import LeaveApprovals from '$lib/components/LeaveApprovals.svelte';
+  import DirectorLeaveApprovals from '$lib/components/DirectorLeaveApprovals.svelte';
 </script>
 
-<LeaveApprovals role="director" />
+<DirectorLeaveApprovals />

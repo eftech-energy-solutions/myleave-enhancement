@@ -15,7 +15,7 @@
   import { onMount } from 'svelte';
   import { afterNavigate } from '$app/navigation';
   import { PUBLIC_VITE_API_BASE } from '$env/static/public';
-  import LeaveApprovals from '$lib/components/LeaveApprovals.svelte';
+  import ManagerLeaveApprovals from '$lib/components/ManagerLeaveApprovals.svelte';
 
   // --- SIDEBAR TOGGLE ---
   let sidebarOpen = false;
@@ -549,6 +549,24 @@ async function saveProfile(e) {
           </div>
                 {/if}
 
+        <a
+          href="/dashboard/manager/leave-approvals"
+          class="nav-approvals"
+          class:active={$page.url.pathname.startsWith('/dashboard/manager/leave-approvals')}
+        >
+          <span class="ico">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+              <path
+                d="M22 5.18L10.59 16.6l-4.24-4.24 1.41-1.41 2.83 2.83 10-10L22 5.18zm-2.21 5.04c.13.57.21 1.17.21 1.78 0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8c1.58 0 3.04.46 4.28 1.25l1.44-1.44C16.1 2.67 14.13 2 12 2 6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10c0-1.19-.22-2.33-.6-3.39l-1.61 1.61z"
+              ></path>
+            </svg>
+          </span>
+           <span class="text">Leave Approvals</span>
+            {#if pendingCount > 0}
+              <span class="nav-badge">{pendingCount > 9 ? '9+' : pendingCount}</span>
+            {/if}
+        </a>
+
       </nav>
     </div>
 
@@ -592,6 +610,9 @@ async function saveProfile(e) {
         {:else if $page.url.pathname.startsWith('/dashboard/manager/history')}
           <h1 class="page-title">Leave History</h1>
           <p class="page-desc">Browse leave records for your staff.</p>
+        {:else if $page.url.pathname.startsWith('/dashboard/manager/leave-approvals')}
+          <h1 class="page-title">Leave Approvals</h1>
+          <p class="page-desc">Review and manage pending leave requests from your team.</p>
         {:else if $page.url.pathname.startsWith('/dashboard/manager/employees/all')}
           <h1 class="page-title">Employees</h1>
           <p class="page-desc">View all employees across the organisation.</p>
@@ -672,7 +693,7 @@ async function saveProfile(e) {
       <button class="panel-close" on:click={closePanel}>✕</button>
     </div>
     <div class="panel-body">
-      <LeaveApprovals role="manager" />
+      <ManagerLeaveApprovals compact />
     </div>
   </div>
 {/if}

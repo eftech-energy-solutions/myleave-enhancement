@@ -146,7 +146,10 @@ if (manager?.role === "Manager" && managerDept === "Director") {
   );
 
 } else if (manager?.role === "Director") {
-  deptFiltered = fullProfileList; // 🔥 SEMUA EMPLOYEE MASUK GRID
+  // 👥 Director sees Managers only
+  deptFiltered = fullProfileList.filter(
+    (e) => String(e.role || "").toLowerCase() === "manager"
+  );
 }
 
  else {
