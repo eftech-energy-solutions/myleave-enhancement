@@ -383,18 +383,18 @@ async function loadRecent() {
     return d;
   })();
 
-  // ✅ AL boleh backdate max 3 hari
+  // ✅ AL boleh backdate max 7 hari
   const alBackdateLimit = (() => {
     const d = new Date(today);
-    d.setDate(d.getDate() - 3);
+    d.setDate(d.getDate() - 7);
     return d;
   })();
 
-  // Earliest selectable "Date from" per leave type (AL: 3 days, MC: 7 days backdate)
+  // Earliest selectable "Date from" per leave type (AL: 7 days, MC: 7 days backdate)
   $: dateFromMin = (() => {
     if (leaveType === 'AL' || leaveType === 'MC') {
       const d = new Date(today);
-      d.setDate(d.getDate() - (leaveType === 'AL' ? 3 : 7));
+      d.setDate(d.getDate() - (leaveType === 'AL' ? 7 : 7));
       return localISO(d);
     }
     return '';
@@ -925,10 +925,10 @@ if (leaveType === 'MC' && from < mcBackdateLimit) {
   return;
 }
 
-// ❌ AL → max 3 hari je
+// ❌ AL → max 7 hari je
 if (leaveType === 'AL' && from < alBackdateLimit) {
   showToast(
-    "Annual Leave can only be backdated up to 3 days.",
+    "Annual Leave can only be backdated up to 7 days.",
     "warning",
     "Invalid Date"
   );
@@ -1407,11 +1407,11 @@ async function loadApprovedUsedDays() {
                   return;
                 }
 
-                // Backdate guard: older than both AL (3d) and MC (7d) windows
+                // Backdate guard: older than both AL (7d) and MC (7d) windows
                 const clickedISO = localISO(d.date);
                 if (clickedISO < todayISO && clickedISO < localISO(mcBackdateLimit)) {
                   showToast(
-                    "Leave can only be backdated up to 3 days (Annual) or 7 days (Medical).",
+                    "Leave can only be backdated up to 7 days.",
                     "warning",
                     "Backdate Limit"
                   );

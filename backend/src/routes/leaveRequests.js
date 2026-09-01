@@ -306,7 +306,7 @@ router.post("/", upload.single("attachment"), async (req, res) => {
 
     const staffId = user.staff_id;
 
-    // ✅ BACKDATE VALIDATION — AL max 3 days, MC max 7 days
+    // ✅ BACKDATE VALIDATION — AL max 7 days, MC max 7 days
     const msPerDay = 24 * 60 * 60 * 1000;
     const now = new Date();
     const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
@@ -314,10 +314,10 @@ router.post("/", upload.single("attachment"), async (req, res) => {
       (new Date(todayStr) - new Date(dateFrom)) / msPerDay
     );
 
-    if (type === "AL" && backdateDays > 3) {
+    if (type === "AL" && backdateDays > 7) {
       return res
         .status(400)
-        .json({ message: "Annual Leave can only be backdated up to 3 days." });
+        .json({ message: "Annual Leave can only be backdated up to 7 days." });
     }
     if (type === "MC" && backdateDays > 7) {
       return res
@@ -837,7 +837,7 @@ router.patch("/:id/edit", upload.single("attachment"), async (req, res) => {
     if (serverDays <= 0)
       return res.status(400).json({ message: "Invalid date range or no working days" });
 
-    // ✅ BACKDATE VALIDATION — AL max 3 days, MC max 7 days
+    // ✅ BACKDATE VALIDATION — AL max 7 days, MC max 7 days
     const msPerDay = 24 * 60 * 60 * 1000;
     const now = new Date();
     const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
@@ -845,10 +845,10 @@ router.patch("/:id/edit", upload.single("attachment"), async (req, res) => {
       (new Date(todayStr) - new Date(date_from)) / msPerDay
     );
 
-    if (leave_type === "AL" && backdateDays > 3) {
+    if (leave_type === "AL" && backdateDays > 7) {
       return res
         .status(400)
-        .json({ message: "Annual Leave can only be backdated up to 3 days." });
+        .json({ message: "Annual Leave can only be backdated up to 7 days." });
     }
     if (leave_type === "MC" && backdateDays > 7) {
       return res

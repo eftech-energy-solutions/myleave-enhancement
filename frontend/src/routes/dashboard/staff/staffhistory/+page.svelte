@@ -201,11 +201,11 @@ const leaveCodes = {
     return localISO(d);
   };
 
-  // Earliest selectable "Date From" per leave type (AL: 3 days, MC: 7 days backdate)
+  // Earliest selectable "Date From" per leave type (AL: 7 days, MC: 7 days backdate)
   $: dateFromMin = (() => {
     if (leaveType === "AL" || leaveType === "MC") {
       const d = atStartOfDay(new Date());
-      d.setDate(d.getDate() - (leaveType === "AL" ? 3 : 7));
+      d.setDate(d.getDate() - (leaveType === "AL" ? 7 : 7));
       return localISO(d);
     }
     return "";
@@ -605,7 +605,7 @@ async function submitLeave(event) {
     }
 
     // ===============================
-    // 1️⃣b BACKDATE VALIDATION (AL max 3 days, MC max 7 days)
+    // 1️⃣b BACKDATE VALIDATION (AL max 7 days, MC max 7 days)
     // ===============================
     const fromDate = parseLocalISO(dateFrom);
     if (fromDate) {
@@ -613,9 +613,9 @@ async function submitLeave(event) {
         (atStartOfDay(new Date()) - atStartOfDay(fromDate)) / 86400000
       );
 
-      if (leaveType === "AL" && backdateDays > 3) {
+      if (leaveType === "AL" && backdateDays > 7) {
         showToast(
-          "Annual Leave can only be backdated up to 3 days.",
+          "Annual Leave can only be backdated up to 7 days.",
           "warning",
           "Invalid Date"
         );
