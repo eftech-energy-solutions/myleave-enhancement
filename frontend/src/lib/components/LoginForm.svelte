@@ -46,7 +46,7 @@
         bind:value={email}
         placeholder="Email"
         class="w-full rounded-xl border border-gray-200 bg-white/90 pl-10 pr-10 py-3 outline-none
-               placeholder-gray-400 shadow-sm focus:ring-2 focus:ring-[#49bdb3] focus:border-[#49bdb3]"
+               placeholder-gray-400 shadow-sm focus:ring-2 focus:ring-[#0F9B8E] focus:border-[#0F9B8E]"
         name="email"
         autocomplete="email"
         required
@@ -66,7 +66,7 @@
         bind:value={password}
         placeholder="Password"
         class="w-full rounded-xl border border-gray-200 bg-white/90 pl-10 pr-10 py-3 outline-none
-               placeholder-gray-400 shadow-sm focus:ring-2 focus:ring-[#49bdb3] focus:border-[#49bdb3]"
+               placeholder-gray-400 shadow-sm focus:ring-2 focus:ring-[#0F9B8E] focus:border-[#0F9B8E]"
         name="password"
         autocomplete="current-password"
         required
@@ -91,7 +91,7 @@
   <button
     type="submit"
     class="mt-2 w-full rounded-full px-6 py-3 font-semibold tracking-wide
-           bg-[#49bdb3] hover:bg-[#40B1A7] active:bg-[#38948e]
+           bg-[#0F9B8E] hover:bg-[#0C8075] active:bg-[#0A6B62]
            text-white shadow-md transition disabled:opacity-60"
     disabled={loading}
   >

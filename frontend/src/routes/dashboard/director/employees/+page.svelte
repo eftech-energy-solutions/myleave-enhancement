@@ -1,50 +1,6 @@
 <script>
   import { onMount } from "svelte";
   import { PUBLIC_VITE_API_BASE } from '$env/static/public';
-    const leaveTypeFullName = {
-    AL: "Annual / Emergency",
-    MC: "Medical",
-    MAT: "Maternity",
-    PAT: "Paternity",
-    COMP_A: "Compassionate A (Parent/Child/Spouse)",
-    COMP_B: "Compassionate B (Grandparent/Sibling)",
-    MAR: "Marriage",
-    HOSP: "Hospitalization"
-  };
-
-  const leaveTypeShortName = {
-  AL: "Annual / Emergency",
-  MC: "Medical",
-  MAT: "Maternity",
-  PAT: "Paternity",
-  COMP_A: "Compassionate A",
-  COMP_B: "Compassionate B",
-  MAR: "Marriage",
-  HOSP: "Hospitalization",
-  UNPAID: "Unpaid"
-};
-
-function getLeaveShortName(code) {
-  return leaveTypeShortName[code] || code;
-}
-
-  function getLeaveFullName(code) {
-    return leaveTypeFullName[code] || code;
-  }
-
-  function canApprove(item) {
-  // Admin & Manager → boleh approve semua (ikut rule sedia ada)
-  if (manager?.role === 'Admin' || manager?.role === 'Manager') {
-    return true;
-  }
-
-  // Director → BOLEH approve DIRI SENDIRI SAHAJA
-  if (manager?.role === 'Director') {
-    return item.staff_id === manager.staffId;
-  }
-
-  return false;
-}
 
   /* ================================
       1) MANAGER & EMPLOYEE STATE
@@ -60,7 +16,6 @@ function getLeaveShortName(code) {
   let detailsOpen = false;
   let selectedEmp = null;
   let detailsForm = null;
-  let leaveDetailsOpen = {};
   let toast = {
   show: false,
   type: "success",
@@ -87,9 +42,6 @@ function showToast(message, type = "success", title = "", duration = 3000) {
   }, duration);
 }
 
-  const fmt = (iso) =>
-    iso ? new Date(iso).toLocaleDateString() : "-";
-
   const formatDate = (dbDate) => {
     if (!dbDate) return "";
     const d = new Date(dbDate);
@@ -112,9 +64,7 @@ function showToast(message, type = "success", title = "", duration = 3000) {
       manager = userData;
       managerDept = userData?.department;
 
-      await loadPendingRequests();
       await loadEmployees();
-      await loadPending();
     } catch (err) {
       console.error(
         "❌ Error loading manager or employees:",
@@ -168,6 +118,8 @@ function showToast(message, type = "success", title = "", duration = 3000) {
             gender: e.gender,
             annualLeave: e.leave_entitlement_annual_original,
             medicalLeave: e.leave_entitlement_medical_original,
+            remainingAnnual: e.leave_entitlement_annual,
+            remainingMedical: e.leave_entitlement_medical,
             notes: e.notes,
           };
         });
@@ -177,17 +129,6 @@ detailsById = {};
 fullProfileList.forEach((emp) => {
   detailsById[emp.id] = structuredClone(emp);
 });
-
-// === PENTING: Cari staff yang MASIH ada request pending ===
-const pendingIds = new Set(
-  pendingRequests
-    .filter(
-      r =>
-        (r.status === "pending" ||
-         r.status === "cancellation_pending") 
-)
-    .map(r => r.staff_id)
-);
 
 // 1) Filter ONLY employees in manager's department (kalau manager / director)
 let deptFiltered;
@@ -205,7 +146,10 @@ if (manager?.role === "Manager" && managerDept === "Director") {
   );
 
 } else if (manager?.role === "Director") {
-  deptFiltered = fullProfileList; // 🔥 SEMUA EMPLOYEE MASUK GRID
+  // 👥 Director sees Managers only
+  deptFiltered = fullProfileList.filter(
+    (e) => String(e.role || "").toLowerCase() === "manager"
+  );
 }
 
  else {
@@ -213,9 +157,7 @@ if (manager?.role === "Manager" && managerDept === "Director") {
   deptFiltered = fullProfileList;
 }
 
-employees = deptFiltered.filter(
-  (emp) => !pendingIds.has(emp.empId)
-);
+employees = deptFiltered;
 
     } catch (err) {
       console.error("⚠️ Error in loadEmployees():", err);
@@ -227,100 +169,6 @@ employees = deptFiltered.filter(
      ================================ */
 
   $: filteredEmployees = employees;
-
-  /* ================================
-      4) PENDING APPROVAL
-     ================================ */
-
-  let pending = [];
-  let pendingLeave = [];
-  let pendingCancel = [];
-  let pendingRequests = [];
-  let sidebarOpen = false;
-
-  const toggleSidebar = () =>
-    (sidebarOpen = !sidebarOpen);
-
-  $: pendingCount = pendingLeave.length + pendingCancel.length;
-  async function loadPendingRequests() {
-    const res = await fetch(
-      `${PUBLIC_VITE_API_BASE}/api/leave-requests`,
-      {
-        credentials: "include"
-      }
-    );
-    const all = await res.json();
-
-    let view = [];
-
-    // =========================
-    // ADMIN → semua
-    // =========================
-    if (manager?.role === "Admin") {
-      view = all;
-
-    // =========================
-    // MANAGER
-    // =========================
-    } else if (manager?.role === "Manager") {
-      view = all.filter((r) => {
-        const dept =
-          r.profile_department ||
-          r.staff_department ||
-          r.department ||
-          "";
-
-        // Manager Director
-        if (managerDept === "Director") {
-          return (
-            dept === "Director" ||
-            r.requester_role === "Manager"
-          );
-        }
-
-        // Manager biasa
-        return (
-          dept === managerDept &&
-          r.requester_role === "Staff"
-        );
-      });
-
-    // =========================
-    // DIRECTOR (🔥 FIX UTAMA)
-    // =========================
-        } else if (manager?.role === "Director") {
-      view = all.filter((r) => {
-
-        // 1️⃣ DIRI SENDIRI (apa-apa status)
-        if (r.staff_id === manager.staffId) {
-          return true;
-        }
-
-        // 2️⃣ SEMUA MANAGER (apa-apa department)
-        if (r.requester_role === "Manager") {
-          return true;
-        }
-
-        // ❌ Staff lain → jangan masuk sidebar
-        return false;
-      });
-    }
-
-    pendingRequests = view;
-  }
-
-  async function loadPending() {
-
-  pendingLeave = pendingRequests.filter(
-    r => r.status === "pending"
-  );
-
-  pendingCancel = pendingRequests.filter(
-    r => r.status === "cancellation_pending"
-  );
-}
-
-
 
   /* ================================
       5) openDetails (STRUCTURE FIXED)
@@ -401,6 +249,14 @@ employees = deptFiltered.filter(
         profile.medicalLeave ||
         leave.leave_entitlement_medical ||
         "",
+      remainingAnnual:
+        profile.remainingAnnual ||
+        leave.leave_entitlement_annual ||
+        "",
+      remainingMedical:
+        profile.remainingMedical ||
+        leave.leave_entitlement_medical ||
+        "",
       notes: profile.notes || leave.notes || "",
     };
 
@@ -408,134 +264,21 @@ employees = deptFiltered.filter(
     detailsForm = structuredClone(merged);
     detailsOpen = true;
   }
-
-  /* ================================
-      6) APPROVE / REJECT
-     ================================ */
-
-  async function approve(id) {
-  try {
-    await fetch(
-      `${PUBLIC_VITE_API_BASE}/api/leave-requests/${id}`,
-      {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ status: "approved" }),
-      }
-    );
-
-    showToast("Leave request approved successfully.", "success");
-
-    await loadPendingRequests();
-    await loadPending();
-    await loadEmployees();
-
-    window.dispatchEvent(new Event("pending-updated"));
-  } catch (err) {
-    showToast("Failed to approve leave request.", "error");
-  }
-}
-
-  async function reject(id) {
-  try {
-    await fetch(
-      `${PUBLIC_VITE_API_BASE}/api/leave-requests/${id}`,
-      {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ status: "rejected" }),
-      }
-    );
-
-    showToast("Leave request rejected.", "success");
-
-    await loadPendingRequests();
-    await loadPending();
-    await loadEmployees();
-
-    window.dispatchEvent(new Event("pending-updated"));
-  } catch (err) {
-    showToast("Failed to reject leave request.", "error");
-  }
-}
-
-  async function approveCancellation(item) {
-  try {
-    await fetch(
-    `${PUBLIC_VITE_API_BASE}/api/leave-requests/${item.leave_id}`,
-    {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ status: "cancelled" })
-    }
-  );
-
-    showToast("Leave cancellation approved.", "success");
-
-    await loadPendingRequests();
-    await loadPending();
-    await loadEmployees();
-  } catch {
-    showToast("Failed to approve cancellation.", "error");
-  }
-}
-
-
-async function rejectCancellation(item) {
-  try {
-    await fetch(
-  `${PUBLIC_VITE_API_BASE}/api/leave-requests/${item.leave_id}`,
-  {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({ status: "approved" })
-  }
-);
-
-    showToast("Cancellation request rejected.", "success");
-
-    await loadPendingRequests();
-    await loadPending();
-    await loadEmployees();
-  } catch {
-    showToast("Failed to reject cancellation.", "error");
-  }
-}
-
-  function approveRequest(item) {
-    const id =
-      item.leave_id ??
-      item.leaveid ??
-      item.id;
-    approve(id);
-  }
-
-  function rejectRequest(item) {
-    const id =
-      item.leave_id ??
-      item.leaveid ??
-      item.id;
-    reject(id);
-  }
 </script>
 
 
 
 <style>
   :global(html, body){ height:100%; margin:0; }
-  :root { --primary:#49bdb3; --ink:#0c4a6e ; --muted:#64748b; --line:#e5e7eb; --soft:#f8fafc; }
-  :global(body){ font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans"; background:url('/images/bg.png') no-repeat center center fixed; background-size:cover; overflow-y:auto; }
+  :root { --primary:#0F9B8E; --ink:#0c4a6e ; --muted:#64748b; --line:#e5e7eb; --soft:#f8fafc; }
+  :global(body){ font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans"; background: var(--canvas, #F5F7FA); overflow-y:auto; }
 
   /* ===== Layout ===== */
   .main{ padding:1.5rem; }
 
   /* ===== Employees grid & card ===== */
-  .employees-grid{ display:grid; gap:1rem; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); margin-top: -35px;}
-  .emp-box{ background:#fff; border-radius:12px; padding:1rem; color:#111; box-shadow:0 1px 3px rgba(0,0,0,.08); display:flex; flex-direction:column; min-height:240px; }
+  .employees-grid{ display:grid; gap:1rem; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+  .emp-box{ background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:1rem; color:#111827; box-shadow:0 2px 10px rgba(15,23,42,.06); display:flex; flex-direction:column; min-height:240px; }
   .emp-top{ text-align:center; }
   .emp-box h3{ margin:0; font-size:15px; color:#217859; }
   .emp-box p{ margin:2px 0; font-size:12px; color:#334155; }
@@ -551,58 +294,19 @@ async function rejectCancellation(item) {
   .avatar-fallback, .details-avatar-fallback{ position:absolute; inset:0; display:grid; place-items:center; }
   .avatar-fallback svg, .details-avatar-fallback svg{ width:60%; height:60%; }
 
-  /* ===== Sidebar ===== */
-  .overlay{ position:fixed; inset:0; background:rgba(0,0,0,.25); opacity:0; pointer-events:none; transition:opacity .2s; z-index:40; }
-  .overlay.show{ opacity:1; pointer-events:auto; }
-  .sidebar{ position:fixed; right:0; top:0; height:100vh; width:420px; max-width:92vw; background:#fff; box-shadow:-14px 0 32px rgba(0,0,0,.18); transform:translateX(100%); transition:transform .25s ease; z-index:60; display:flex; flex-direction:column; }
-  .sidebar.open{ transform:translateX(0); }
-  .sidebar-header{ display:flex; justify-content:space-between; align-items:center; padding:14px 16px; border-bottom:1px solid var(--line); }
-  .sidebar-title{ font-size:18px; font-weight:700; color:#000; }
-  .close-btn{ border:none; background:transparent; font-size:22px; cursor:pointer; color:#475569; }
-  .sidebar-body{ padding:14px 16px; overflow:auto; flex:1; }
-  .sidebar-footer{ padding:12px 16px; border-top:1px solid var(--line); display:flex; justify-content:flex-end; }
-  .cancel-btn{ border:1px solid var(--line); background:#fff; color:#000; border-radius:8px; padding:.45rem .8rem; font-weight:700; cursor:pointer; }
-  .sub-ttl{ margin: 0 0 10px; font-weight: 800; font-size: 14px; letter-spacing:.2px; color: var(--ink); }
-
-  .sidebar-tab{ position:fixed; right:0; top:40%; transform:translateY(-50%); display:flex; align-items:center; gap:8px; background:#0c4a6e; color:#fff; padding:.6rem .95rem .6rem 1rem; border-top-left-radius:9999px; border-bottom-left-radius:9999px; cursor:pointer; user-select:none; z-index:50; box-shadow:0 8px 20px rgba(0,0,0,.25); }
-  .sidebar-tab .label{ font-weight:700; font-size:14px; }
-  .badge{ min-width:22px; height:22px; display:inline-grid; place-items:center; background:#e30707; color:#fff; font-weight:800; border-radius:9999px; font-size:12px; padding:0 6px; }
-
-  /* ===== Pending card ===== */
-  .pending-card{ background:#fff; border:1px solid var(--line); border-radius:14px; padding:12px 14px; margin-bottom:12px; box-shadow:0 8px 20px rgba(0,0,0,.06); }
-  .pending-card .row1{ display:flex; justify-content:space-between; align-items:flex-start; gap:8px; }
-  .pending-card .name{ font-weight:800; color:#000; font-size:16px; }
-  .pending-card .sub{ font-size:12px; color:#64748b; }
-  .pill.type{ background:#eef2ff; color:#0f172a; border:1px solid #e5e7eb; padding:4px 10px; border-radius:9999px; font-size:12px; font-weight:700; white-space:nowrap; }
-  .kv{ display:grid; grid-template-columns:repeat(2,1fr); gap:6px 14px; margin:8px 0 6px; font-size:12px; }
-  .kv .k{ font-weight:700; color:#334155;}
-  .kv .v{ color:#0f172a; margin-left: 6px; }
-  .actions{ display:flex; justify-content:space-between; align-items:center; margin-top:10px; }
-  .actions .left{ display:flex; gap:8px; align-items:center; }
-  .btn-approve, .btn-reject, .btn-details{ border:none; border-radius:8px; padding:.55rem .9rem; font-weight:700; cursor:pointer; min-width:50px; line-height:1; font-size: 12px; }
-  .btn-approve{ background:#16a34a; color:#fff; }
-  .btn-reject { background:#dc2626; color:#fff; }
-  .btn-details{ background:#e0f2fe; color:#0c4a6e; }
-  .btn-approve:hover, .btn-reject:hover, .btn-details:hover{ filter:brightness(.97); }
-  .unpaid-pill {
-  background-color: rgba(239, 68, 68, 0.18) !important; 
-  color: #b91c1c !important;                            
-  border: 1px solid rgba(239, 68, 68, 0.35) !important;  
-}
-
   /* ===== Modals (Add / Details) ===== */
   .modal-wrap{ position:fixed; inset:0; display:grid; place-items:center; background:rgba(0,0,0,.35); z-index:80; animation:fadeIn .15s ease; }
   @keyframes fadeIn { from{opacity:0} to{opacity:1} }
   .modal{ width:min(900px, 96vw); background:#fff; border-radius:18px; box-shadow:0 14px 40px rgba(0,0,0,.25); overflow:hidden; }
   .modal-hd{ padding:14px 18px; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; }
-  .modal-ttl{ font-weight:700; font-size:22px; color:#49bdb3; }
+  .modal-ttl{ font-weight:700; font-size:22px; color:#0F9B8E; }
   .modal-x{ border:none; background:transparent; font-size:22px; cursor:pointer; color:#475569; }
   .modal-bd{ padding:0; max-height:72vh; overflow:auto; }
 
   .details-layout{ padding:22px; }
   .details-grid-form{ display:grid; grid-template-columns: 1fr 220px; gap:20px; }
   .photo-card{ align-self:flex-start; justify-self:end; width:180px; height:180px; border-radius:20px; background:linear-gradient(180deg,#fff,#f3f4f6); border:1px dashed #d1d5db; display:grid; place-items:center; position:relative; box-shadow:0 8px 20px rgba(0,0,0,.06); }
-  .photo-card .cam{ width:48px; height:48px; border-radius:9999px; background:#49bdb3; display:grid; place-items:center; color:#fff; font-size:20px; box-shadow:0 6px 14px rgba(73,189,179,.35); }
+  .photo-card .cam{ width:48px; height:48px; border-radius:9999px; background:#0F9B8E; display:grid; place-items:center; color:#fff; font-size:20px; box-shadow:0 6px 14px rgba(15,155,142,.35); }
   .photo-card .cam svg { width: 24px; height: 24px; }
   .photo-preview{ position:absolute; inset:0; overflow:hidden; border-radius:20px; }
   .photo-preview img{ width:100%; height:100%; object-fit:cover; display:block; }
@@ -613,7 +317,7 @@ async function rejectCancellation(item) {
   .row.single{ grid-template-columns:1fr; }
   label{ font-size:12px; color:#374151; font-weight:700; margin:0 0 6px; display:block; }
   .ctl{ display:flex; align-items:center; background:#fff; border:1px solid var(--line); border-radius:12px; padding:10px 12px; box-shadow: inset 0 1px 0 rgba(0,0,0,.02); }
-  .ctl:focus-within{ border-color:#49bdb3; box-shadow:0 0 0 3px rgba(73,189,179,.15); }
+  .ctl:focus-within{ border-color:#0F9B8E; box-shadow:0 0 0 3px rgba(15,155,142,.15); }
   .ctl input, .ctl select, .ctl textarea{ border:none; outline:none; width:100%; font-size:14px; color:#111827; background:transparent; }
   .ctl textarea{ min-height:90px; resize:vertical; }
   .ctl.disabled{ background:#f8fafc; }
@@ -706,14 +410,14 @@ async function rejectCancellation(item) {
 }
 
 .toast-item.error {
-  border-color: #ef4444;
+  border-color: #DC2626;
 }
 .toast-item.error .toast-icon {
-  background: #ef4444;
+  background: #DC2626;
 }
 
 .toast-item.info {
-  border-color: #3b82f6;
+  border-color: #0F9B8E;
 }
 .toast-item.info .toast-icon {
   background: #3b82f6;
@@ -793,259 +497,7 @@ async function rejectCancellation(item) {
     {/each}
   </div>
 </div>
-
-<div class:show={sidebarOpen} class="overlay" on:click={toggleSidebar}></div>
-
-<div class:open={sidebarOpen} class="sidebar" aria-hidden={!sidebarOpen}>
-  <div class="sidebar-header">
-    <div class="sidebar-title">
-      Pending Approval{pendingCount > 0 ? ` (${pendingCount})` : ''}
-    </div>
-    <button class="close-btn" on:click={toggleSidebar}>✕</button>
-  </div>
-
-  <div class="sidebar-body">
-
-    {#if pendingLeave.length === 0 && pendingCancel.length === 0}
-      <p style="color:#64748b; text-align:center;">
-        No pending requests.
-      </p>
-    {:else}
-
-
-      <!-- ================================================= -->
-      <!--                 PENDING LEAVE APPROVAL           -->
-      <!-- ================================================= -->
-      {#if pendingLeave.length > 0}
-        <h3 class="sub-ttl">Pending Leave Approval ({pendingLeave.length})</h3>
-
-        {#each pendingLeave as item (item.leave_id)}
-          <div class="pending-card">
-
-            <!-- Header -->
-            <div class="row1">
-              <div class="who">
-                <div class="name">{item.profile_name || item.staff_name}</div>
-                <div class="sub">
-                  {item.requester_position} • {item.staff_id} •
-                  {item.profile_department || item.department}
-                </div>
-              </div>
-              <span class={`pill type ${item.leave_type === "UNPAID" ? "unpaid-pill" : ""}`}>
-              {getLeaveShortName(item.leave_type)}
-            </span>
-            </div>
-
-            <!-- Dates -->
-            <div class="kv">
-              <div>
-                <span class="k">From:</span>
-                <span class="v">{fmt(item.date_from)}</span>
-              </div>
-
-              <div>
-                <span class="k">To:</span>
-                <span class="v">{fmt(item.date_until)}</span>
-              </div>
-
-              <div>
-                <span class="k">Requested:</span>
-                <span class="v">{fmt(item.created_at)}</span>
-              </div>
-
-              <div>
-                <span class="k">Remaining:</span>
-                <span class="v">{item.leave_entitlement_annual ?? "-"} day(s)</span>
-              </div>
-            </div>
-
-            <!-- Actions + Toggle -->
-            <div class="actions">
-              <div class="left">
-                {#if canApprove(item)}
-                  <button class="btn-approve" on:click={() => approveRequest(item)}>Approve</button>
-                  <button class="btn-reject" on:click={() => rejectRequest(item)}>Reject</button>
-                {:else}
-                    <span style="font-size:12px; color:#64748b; font-style:italic;">
-                      View only
-                    </span>
-                    {/if}
-              </div>
-
-              <div style="display:flex; align-items:center; gap:10px;">
-                <span
-                  style="text-decoration: underline; cursor:pointer; color:#0c4a6e; font-size:12px;"
-                  on:click={() => leaveDetailsOpen[item.leave_id] = !leaveDetailsOpen[item.leave_id]}
-                >
-                  {leaveDetailsOpen[item.leave_id] ? "Hide Details" : "Leave Details"}
-                </span>
-
-                <button class="btn-details" on:click={() => openDetails(item)}>Details</button>
-              </div>
-            </div>
-
-            <!-- Expanded Box -->
-            {#if leaveDetailsOpen[item.leave_id]}
-              <div
-                style="
-                  background:#f8fafc;
-                  border:1px solid #e2e8f0;
-                  padding:10px;
-                  border-radius:8px;
-                  margin-top:10px;
-                "
-              >
-                <div>
-                  <strong style="color:#0c4a6e; font-size:13px;">Reason:</strong>
-                  <div style="margin-top:4px; color:#334155; font-size:12px;">{item.reason}</div>
-                </div>
-
-                <div style="margin-top:8px;">
-                  <strong style="color:#0c4a6e; font-size:13px;">Attachment:</strong>
-
-                  {#if item.attachment_path}
-                    <div style="margin-top:4px;">
-                      <a
-                        href={`${PUBLIC_VITE_API_BASE}${item.attachment_path?.startsWith('/') ? '' : '/'}${item.attachment_path}`}
-                        target="_blank"
-                        style="color:#2563eb; text-decoration: underline; font-size:12px;"
-                      >
-                        View Attachment
-                      </a>
-                    </div>
-                  {:else}
-                    <div style="margin-top:4px; color:#64748b; font-size:12px;">No attachment</div>
-                  {/if}
-                </div>
-              </div>
-            {/if}
-
-          </div>
-        {/each}
-      {/if}
-
-      <!-- ================================================= -->
-      <!--             PENDING CANCELLATION APPROVAL        -->
-      <!-- ================================================= -->
-      {#if pendingCancel.length > 0}
-        <h3 class="sub-ttl" style="margin-top:20px;">
-          Pending Cancellation Approval ({pendingCancel.length})
-        </h3>
-
-        {#each pendingCancel as item (item.leave_id)}
-          <div class="pending-card">
-
-            <!-- Header -->
-            <div class="row1">
-              <div class="who">
-                <div class="name">{item.profile_name || item.staff_name}</div>
-                <div class="sub">
-                  {item.requester_position} • {item.staff_id} •
-                  {item.profile_department || item.department}
-                </div>
-              </div>
-              <span class="pill type" style="background:#fee2e2; color:#b91c1c;">
-                  Cancellation: {getLeaveShortName(item.leave_type)}
-                </span>
-            </div>
-
-            <!-- Dates -->
-            <div class="kv">
-              <div>
-                <span class="k">From:</span>
-                <span class="v">{fmt(item.date_from)}</span>
-              </div>
-
-              <div>
-                <span class="k">To:</span>
-                <span class="v">{fmt(item.date_until)}</span>
-              </div>
-
-              <div>
-                <span class="k">Requested:</span>
-                <span class="v">{fmt(item.created_at)}</span>
-              </div>
-
-              <div>
-                <span class="k">Remaining:</span>
-                <span class="v">{item.leave_entitlement_annual ?? "-"} day(s)</span>
-              </div>
-            </div>
-
-            <!-- Actions + Toggle -->
-            <div class="actions">
-              <div class="left">
-                  {#if canApprove(item)}
-                    <button class="btn-approve" on:click={() => approveCancellation(item)}>Approve</button>
-                    <button class="btn-reject" on:click={() => rejectCancellation(item)}>Reject</button>
-                  {/if}
-              </div>
-
-              <div style="display:flex; align-items:center; gap:10px;">
-                <span
-                  style="text-decoration: underline; cursor:pointer; color:#0c4a6e; font-size:12px;"
-                  on:click={() => leaveDetailsOpen[item.leave_id] = !leaveDetailsOpen[item.leave_id]}
-                >
-                  {leaveDetailsOpen[item.leave_id] ? "Hide Details" : "Leave Details"}
-                </span>
-
-                <button class="btn-details" on:click={() => openDetails(item)}>Details</button>
-              </div>
-            </div>
-
-            <!-- Expanded -->
-            {#if leaveDetailsOpen[item.leave_id]}
-              <div
-                style="
-                  background:#f8fafc;
-                  border:1px solid #e2e8f0;
-                  padding:10px;
-                  border-radius:8px;
-                  margin-top:10px;
-                "
-              >
-               <strong style="color:#0c4a6e; font-size:13px;">Cancellation Reason:</strong>
-                  <div style="margin-top:4px; color:#334155; font-size:12px;">
-                    {item.cancellation_reason || "-"}
-                  </div>
-
-                <div style="margin-top:8px;">
-                  <strong style="color:#0c4a6e; font-size:13px;">Attachment:</strong>
-
-                  {#if item.attachment_path}
-                    <div style="margin-top:4px;">
-                      <a
-                        href={`${PUBLIC_VITE_API_BASE}${item.attachment_path?.startsWith('/') ? '' : '/'}${item.attachment_path}`}
-                        target="_blank"
-                        style="color:#2563eb; text-decoration: underline; font-size:12px;"
-                      >
-                        View Attachment
-                      </a>
-                    </div>
-                  {:else}
-                    <div style="margin-top:4px; color:#64748b; font-size:12px;">No attachment</div>
-                  {/if}
-                </div>
-              </div>
-            {/if}
-
-          </div>
-        {/each}
-      {/if}
-    {/if}
-
-  </div>
-
-  <div class="sidebar-footer">
-    <button class="cancel-btn" on:click={() => (sidebarOpen = false)}>Cancel</button>
-  </div>
-</div>
-<div class="sidebar-tab" on:click={toggleSidebar}>
-  <span class="label">Pending Approval</span>
-  {#if pendingCount > 0}
-    <span class="badge">{pendingCount}</span>
-  {/if}
-</div> 
+ 
 
 <!-- ======================= -->
 <!-- 12) DETAILS MODAL (VIEW-ONLY) -->
@@ -1170,6 +622,22 @@ async function rejectCancellation(item) {
                   <label>Medical Leave</label>
                   <div class="ctl pill disabled">
                     <input type="number" value={selectedEmp.medicalLeave} disabled />
+                  </div>
+                </div>
+              </div>
+
+              <!-- REMAINING ANNUAL + MEDICAL LEAVE -->
+              <div class="row two" style="margin-top:8px;">
+                <div>
+                  <label>Remaining Annual Leave</label>
+                  <div class="ctl pill disabled">
+                    <input type="number" value={selectedEmp.remainingAnnual ?? "-"} disabled style="color: #16a34a; font-weight:600;" />
+                  </div>
+                </div>
+                <div>
+                  <label>Remaining Medical Leave</label>
+                  <div class="ctl pill disabled">
+                    <input type="number" value={selectedEmp.remainingMedical ?? "-"} disabled style="color: #16a34a; font-weight:600;" />
                   </div>
                 </div>
               </div>

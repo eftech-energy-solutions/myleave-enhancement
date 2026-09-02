@@ -382,7 +382,24 @@ async function loadRecent() {
     d.setDate(d.getDate() - 7);
     return d;
   })();
-  
+
+  // ✅ AL boleh backdate max 7 hari
+  const alBackdateLimit = (() => {
+    const d = new Date(today);
+    d.setDate(d.getDate() - 7);
+    return d;
+  })();
+
+  // Earliest selectable "Date from" per leave type (AL: 7 days, MC: 7 days backdate)
+  $: dateFromMin = (() => {
+    if (leaveType === 'AL' || leaveType === 'MC') {
+      const d = new Date(today);
+      d.setDate(d.getDate() - (leaveType === 'AL' ? 7 : 7));
+      return localISO(d);
+    }
+    return '';
+  })();
+
   let viewBase = atStartOfDay(new Date());
   function clampToWindowMonth(d) {
     // ⬇️ DIUBAHSUAI: Logik fallback ditambah untuk pastikan ia sentiasa ada nilai
@@ -630,8 +647,59 @@ async function loadRecent() {
 
   let attachmentFiles; // FileList
   let fileInputEl;     // <input type="file">
+  let reason = '';
   $: showAttachmentReminder =
     (leaveType === 'MC') && (!attachmentFiles || attachmentFiles.length === 0);
+
+  // ===== Attachment Validation =====
+  const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+  const ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+  const ALLOWED_EXTENSIONS = '.pdf,.jpg,.jpeg,.png';
+  let attachmentError = '';
+  let attachmentPreview = null;
+
+  function validateAttachment(file) {
+    attachmentError = '';
+    attachmentPreview = null;
+
+    if (!file) return true;
+
+    // Check file type
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      attachmentError = `Invalid file type. Please upload PDF, JPG, or PNG (found: ${file.name.split('.').pop().toUpperCase()})`;
+      return false;
+    }
+
+    // Check file size
+    if (file.size > MAX_FILE_SIZE) {
+      const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+      attachmentError = `File too large (${sizeMB}MB). Maximum size is 5MB.`;
+      return false;
+    }
+
+    // Create preview for images
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        attachmentPreview = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    } else {
+      attachmentPreview = 'pdf';
+    }
+
+    return true;
+  }
+
+  function handleAttachmentChange(e) {
+    const file = e.target.files?.[0];
+    if (file && !validateAttachment(file)) {
+      // Clear the invalid file
+      attachmentFiles = undefined;
+      if (fileInputEl) fileInputEl.value = '';
+    }
+    fileInputEl?.setCustomValidity(attachmentError || '');
+  }
 
     // 🔄 Reset backdated MC dates when switching to other leave types
 // $: if (
@@ -726,55 +794,21 @@ async function loadRecent() {
   }
 
   async function openLeaveForm(date) {
-  // Leave type limits
-  const limit = {
-    AL: Number(user.leave_entitlement_annual_original ?? 14),
-    MC: Number(user.leave_entitlement_medical_original ?? 14),
-    HOSP: 60,
-    MAT: 98,
-    PAT: 7,
-    COMP_A: 3,
-    COMP_B: 1,
-    MAR: 3,
-    UNPAID: Infinity 
-  }[leaveType];
+    const iso = localISO(date);
+    leaveType = leaveType || 'AL'; // keep selected type
+    duration  = 'Full';
+    dateFrom  = iso;
+    dateUntil = iso;
+    totalDays = 1;
+    reason = '';
 
-  // Current usage including pending
-const totalUsed = {
-  AL: totalALUsed,
-  MC: totalMCUsed,
-  HOSP: totalHOSPUsed,
+    attachmentFiles = undefined;
+    attachmentError = '';
+    attachmentPreview = null;
 
-  // FIXED LEAVE → start as 0 used
-  MAT: totalMCUsed,   // OR 0 → lagi selamat 
-  PAT: 0,
-  COMP_A: 0,
-  COMP_B: 0,
-  MAR: 0,
-  
-  UNPAID: 0
-}[leaveType];
-
-
-  // ❌ If max reached, block
-  // if (totalUsed >= limit) {
-  //   alert(`${getLeaveFullName(leaveType)} limit (${limit} days) has been reached.`);
-  //   return;
-  // }
-
-  // ✅ Open form normally
-  const iso = localISO(date);
-
-  leaveType = leaveType || 'AL'; // keep selected type
-  duration  = 'Full';
-  dateFrom  = iso;
-  dateUntil = iso;
-  totalDays = 1;
-  attachmentFiles = undefined;
-
-  if (!modal?.open) modal.showModal();
-  await tick();
-}
+    if (!modal?.open) modal.showModal();
+    await tick();
+  }
 
 // Place this AFTER openLeaveForm function (around line 570)
 // DELETE any duplicate submitLeave functions!
@@ -801,6 +835,16 @@ async function submitLeave(e) {
 if (leaveType === 'MC' && from < mcBackdateLimit) {
   showToast(
     "Medical Leave can only be backdated up to 7 days.",
+    "warning",
+    "Invalid Date"
+  );
+  return;
+}
+
+// ❌ AL → max 7 hari je
+if (leaveType === 'AL' && from < alBackdateLimit) {
+  showToast(
+    "Annual Leave can only be backdated up to 7 days.",
     "warning",
     "Invalid Date"
   );
@@ -918,6 +962,13 @@ if (
   fd.set("dateFrom", dateFrom);
   fd.set("dateUntil", dateUntil);
   fd.set("totalDays", String(totalDays));
+
+  // Validate attachment before submission
+  const file = attachmentFiles?.[0];
+  if (file && !validateAttachment(file)) {
+    showToast(attachmentError, "error", "Invalid Attachment");
+    return;
+  }
 
   try {
    const res = await fetch(
@@ -1146,7 +1197,7 @@ async function loadApprovedUsedDays() {
       </div>
         <div
           class="donut fancy"
-          style="--size:110px; --spent:{pct(d.spent,d.total)}; --spent-color: var(--spentRed); --rest-color: var(--restBlue);"
+          style="--size:110px; --spent:{pct(d.spent,d.total)}; --spent-color: var(--spentTeal); --rest-color: var(--restSlate);"
         ></div>
         <div class="legend-row">
           <div class="legend-item"><span class="chip spent"></span><span>Spent Leave</span></div>
@@ -1270,6 +1321,17 @@ async function loadApprovedUsedDays() {
                   return;
                 }
 
+                // Backdate guard: older than both AL (7d) and MC (7d) windows
+                const clickedISO = localISO(d.date);
+                if (clickedISO < todayISO && clickedISO < localISO(mcBackdateLimit)) {
+                  showToast(
+                    "Leave can only be backdated up to 7 days.",
+                    "warning",
+                    "Backdate Limit"
+                  );
+                  return;
+                }
+
                 openLeaveForm(d.date);
               }}
 
@@ -1373,7 +1435,8 @@ async function loadApprovedUsedDays() {
     <div class="dates">
       <label>
         <span>Date from</span>
-        <input type="date" name="dateFrom" bind:value={dateFrom} required  
+        <input type="date" name="dateFrom" bind:value={dateFrom} required
+          min={dateFromMin}
           on:change={onFromChange} />
       </label>
 
@@ -1383,11 +1446,7 @@ async function loadApprovedUsedDays() {
             type="date"
             name="dateUntil"
             bind:value={dateUntil}
-            min={
-              leaveType === 'MC'
-                ? (dateFrom || localISO(mcBackdateLimit))
-                : (dateFrom || todayISO)
-            }
+            min={dateFrom || dateFromMin}
             disabled={duration === 'Half' || endLocked}
             aria-disabled={duration === 'Half' || endLocked}
             readonly={endLocked}
@@ -1403,18 +1462,46 @@ async function loadApprovedUsedDays() {
       <input type="number" name="totalDays" bind:value={totalDays} min="0.5" step="0.5" required readonly />
     </label>
 
-    <label><span>Reason</span><textarea name="reason" rows="3" required></textarea></label>
+    <label class="reason-label">
+      <span>Reason</span>
+      <textarea 
+        name="reason" 
+        rows="3" 
+        required
+        maxlength="500"
+        bind:value={reason}
+        placeholder="Please provide a reason for your leave request..."
+      ></textarea>
+      <span class="char-count">{reason.length}/500</span>
+    </label>
 
     <label>
-      <span>Attachment</span>
+      <span>Attachment {leaveType === 'MC' ? '(Required)' : '(Optional)'}</span>
       <input
         type="file"
         name="attachment"
+        accept={ALLOWED_EXTENSIONS}
         bind:this={fileInputEl}
         bind:files={attachmentFiles}
         required={leaveType === 'MC'}
-        on:change={() => fileInputEl?.setCustomValidity('')}
+        on:change={handleAttachmentChange}
       />
+      <small class="help">Accepted: PDF, JPG, PNG (Max 5MB)</small>
+      
+      {#if attachmentError}
+        <small class="help error">{attachmentError}</small>
+      {/if}
+
+      {#if attachmentPreview && attachmentPreview !== 'pdf'}
+        <div class="attachment-preview">
+          <img src={attachmentPreview} alt="Attachment preview" />
+        </div>
+      {:else if attachmentPreview === 'pdf'}
+        <div class="attachment-preview pdf-preview">
+          <span>📄 PDF Selected</span>
+        </div>
+      {/if}
+
       {#if showAttachmentReminder}
         <small class="help warn">Reminder: please attach your medical certificate.</small>
       {/if}
@@ -1467,7 +1554,7 @@ async function loadApprovedUsedDays() {
   .main { padding: 18px; }
 
   .sw-blue{ background:#71c0f5; border:1px solid #71c0f5; }
-  .sw-today{ background:#fff; border:1px solid #49bdb3; }
+  .sw-today{ background:#fff; border:1px solid #0F9B8E; }
   .sw-applied {
   background: #fef08a;   /* yellow */
   border: 1px solid #facc15;
@@ -1477,9 +1564,9 @@ async function loadApprovedUsedDays() {
   }
   .swatch{ display:inline-block; width:14px; height:9px; border-radius:3px; margin-right:6px; vertical-align:middle; }
 
-  .grid{ margin-top:-30px; display:grid; gap:10px; grid-template-columns:repeat(12, minmax(0,1fr)); }
+  .grid{ margin-top:0; display:grid; gap:10px; grid-template-columns:repeat(12, minmax(0,1fr)); }
 
-  :global(:root){ --spentRed:#ef4444; --restBlue:#3b82f6; --ring:#e5e7eb; --shadow:0 2px 12px rgba(0,0,0,.06); }
+  :global(:root){ --spentTeal:#DC2626; --restSlate:#3b82f6; --ring:#e5e7eb; --shadow:0 2px 12px rgba(0,0,0,.06); }
   .card{ border:1px solid var(--ring); border-radius:12px; padding:8px; background:#fff; box-shadow:var(--shadow); overflow: visible; }
   .text-red-600 { color: #dc2626; }
 
@@ -1504,7 +1591,7 @@ async function loadApprovedUsedDays() {
 
   /* ✅ GUNA animated-spent */
   background: conic-gradient(
-    var(--spent-color, #ef4444) calc(var(--animated-spent) * 1%),
+    var(--spent-color, #DC2626) calc(var(--animated-spent) * 1%),
     var(--rest-color, #3b82f6) 0
   );
 }
@@ -1519,12 +1606,12 @@ async function loadApprovedUsedDays() {
   .donut.fancy::after{
     content:""; height:66%; width:66%; background:#fff; border-radius:9999px; box-shadow:inset 0 0 0 1px var(--ring);
   }
-  .donut-title{ font-size:14px; font-weight:700; color:#374151; margin:0 0 6px; }
+  .donut-title{ font-size:var(--fs-section-heading, 16px); font-weight:600; color:var(--ink, #1F2937); margin:0 0 6px; }
   .legend-row{ display:flex; gap:18px; justify-content:center; align-items:center; margin:6px 0 2px; font-size:12px; color:#6b7280;  }
   .legend-item{ display:flex; align-items:center; gap:8px;  }
   .chip{ display:inline-block; width:24px; height:8px; border-radius:4px; }
-  .chip.spent{ background: var(--spentRed); }
-  .chip.unspent{ background: var(--restBlue); }
+  .chip.spent{ background: var(--spentTeal); }
+  .chip.unspent{ background: var(--restSlate); }
   .total-line{ text-align:center; font-size:12px; color:#6b7280; margin-top:4px; }
 
   /* carry-forward line + tooltip (added) */
@@ -1617,14 +1704,19 @@ max-width: 150px;         /* optional — so it wraps instead of going super lon
 .recent-footer {
   display: flex;
   justify-content: flex-end;
-  margin-top: 8px;
+  margin-top: auto;
+  padding-top: 8px;
 }
 .recent-empty {
   text-align: center;
-  padding: 20px;
+  padding: 40px 20px;
   color: #9ca3af;
   font-size: 13px;
   font-style: italic;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 
@@ -1735,13 +1827,31 @@ max-width: 150px;         /* optional — so it wraps instead of going super lon
 .days{ display:grid; grid-template-columns:repeat(7,1fr); gap:2px; }
   .days button{
   height: 43px; /* ✅ kawal tinggi */
-  width: 50px;   
+  width: 50px;
   font-size: 13px;
   padding: 4px 4px;
   }
 
+  /* Tactile click feedback for day buttons */
+  .days button{
+    cursor: pointer;
+    transition: background .12s ease, border-color .12s ease, transform .08s ease, box-shadow .12s ease;
+  }
+  .days button:hover:not(:disabled):not(.blocked):not(.applied-ph){
+    background: #e6f4f2;
+    border-color: #0F9B8E;
+  }
+  .days button:active:not(:disabled){
+    transform: scale(.9);
+    box-shadow: 0 0 0 3px rgba(15,155,142,.25);
+  }
+  .days button:focus-visible{
+    outline: 2px solid #0F9B8E;
+    outline-offset: 1px;
+  }
+
   .days button.today {
-    border: 2px solid #49bdb3; font-weight: 700; color: #111827; background: #ffff;
+    border: 2px solid #0F9B8E; font-weight: 700; color: #111827; background: #ffff;
   }
   .days button.muted{ opacity:.5; }
   .days button:disabled{ background:#f3f4f6; color:#9ca3af; cursor:not-allowed; }
@@ -1770,8 +1880,8 @@ max-width: 150px;         /* optional — so it wraps instead of going super lon
   cursor: not-allowed !important;
 }
 
-  .recent-wrap{ display:grid; gap: 6px;  }
-  .recent-card { height: 390px;}
+  .recent-wrap{ display:flex; flex-direction:column; gap: 6px; flex:1; min-height:0; }
+  .recent-card { height: 390px; display: flex; flex-direction: column; }
   .recent-item{ border:1px solid var(--ring); border-radius:12px; padding:10px; display:grid; gap:6px; background:#f9fafb; }
   .recent-item .when{ font-weight:700; color:#111827; font-size: 13.5px;}
   .recent-item .cols{ display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; font-size:11px; }
@@ -1811,7 +1921,7 @@ max-width: 150px;         /* optional — so it wraps instead of going super lon
     padding: 8px 10px;
   }
   .leave-form input[required]:invalid, .leave-form textarea[required]:invalid {
-    border-color: #ef4444;
+    border-color: #DC2626;
   }
   
   .leave-form .duration { display:flex; flex-direction:column; gap:.5rem; align-items:flex-start; }
@@ -1826,13 +1936,13 @@ max-width: 150px;         /* optional — so it wraps instead of going super lon
   .help.warn { color:#b45309; }
 
   .submit-btn {
-    background: #3FADA4;
+    background: var(--brand, #0F9B8E);
     color: #fff;
     border: none;
-    border-radius: 8px;
+    border-radius: 10px;
     padding: 10px 14px;
     cursor: pointer;
-    font-weight: 700;
+    font-weight: 600;
     font-size: 14px;
     margin-top: 8px;
   }
@@ -1930,14 +2040,14 @@ max-width: 150px;         /* optional — so it wraps instead of going super lon
 }
 
 .toast-item.error {
-  border-color: #ef4444;
+  border-color: #DC2626;
 }
 .toast-item.error .toast-icon {
-  background: #ef4444;
+  background: #DC2626;
 }
 
 .toast-item.info {
-  border-color: #3b82f6;
+  border-color: #0F9B8E;
 }
 .toast-item.info .toast-icon {
   background: #3b82f6;
@@ -1977,6 +2087,60 @@ max-width: 150px;         /* optional — so it wraps instead of going super lon
 }
 .total-line.bold {
   font-weight: 700;
+}
+
+/* =========================
+   REASON & CHARACTER COUNT
+========================= */
+.reason-label {
+  position: relative;
+}
+
+.char-count {
+  position: absolute;
+  bottom: 8px;
+  right: 10px;
+  font-size: 11px;
+  font-weight: 400;
+  color: #6b7280;
+  pointer-events: none;
+}
+
+.reason-label textarea {
+  padding-bottom: 24px;
+}
+
+/* =========================
+   ATTACHMENT VALIDATION
+========================= */
+.help.error {
+  color: #dc2626;
+}
+
+.attachment-preview {
+  margin-top: 8px;
+  padding: 8px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.attachment-preview img {
+  max-width: 100%;
+  max-height: 120px;
+  border-radius: 4px;
+  object-fit: contain;
+}
+
+.pdf-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px;
+  color: #6b7280;
+  font-size: 13px;
 }
 
 /* =========================

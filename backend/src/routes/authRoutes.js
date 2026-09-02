@@ -13,6 +13,10 @@ dotenv.config({ path: path.join(__dirname, "..", "..", ".env") });
 
 const router = express.Router();
 
+// Dummy hash used to equalize response time when the email doesn't exist,
+// so attackers can't enumerate valid emails via timing.
+const DUMMY_HASH = bcrypt.hashSync('timing-equalizer', bcrypt.genSaltSync(10));
+
 // ============================
 // LOGIN
 // ============================
@@ -35,7 +39,8 @@ router.post('/login', async (req, res) => {
     );
 
     if (!q.rows.length) {
-      return res.status(400).json({ error: 'Email is wrong' });
+      await bcrypt.compare(password, DUMMY_HASH);
+      return res.status(401).json({ error: 'Invalid email or password' });
     }
 
     const user = q.rows[0];
@@ -51,7 +56,7 @@ router.post('/login', async (req, res) => {
     }
 
     if (!ok) {
-      return res.status(400).json({ error: 'Wrong password' });
+      return res.status(401).json({ error: 'Invalid email or password' });
     }
 
     // role override

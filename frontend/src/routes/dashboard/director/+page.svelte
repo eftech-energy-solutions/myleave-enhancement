@@ -5,6 +5,7 @@
   import { tick } from "svelte";
   import Chart from "chart.js/auto";
   import { apiFetch } from '$lib/api';
+  import { CHART_COLORS, CHART_COLORS_WITH_CARRY, CHART_COLORS_BASIC } from '$lib/config';
   import { PUBLIC_VITE_API_BASE } from '$env/static/public';
   const BASE_ANNUAL = 14;
 
@@ -166,8 +167,8 @@ tooltip.style.opacity = 1;
   let frozenTooltip = false;
 
   const palette = [
-    "#FFD9CC", "#C6DEF1", "#F2C6DE",
-    "#C9E4DE", "#DBCDF0", "#E2F0CB"
+    "#0F9B8E", "#D97706", "#475569",
+    "#14B8A6", "#F59E0B", "#94A3B8"
   ];
 
  // ===== FETCH DEPT DATA + RENDER CHART =====
@@ -388,8 +389,8 @@ donuts.forEach(d => {
     : ['Spent Leave', 'Balance Leave'];
 
   const colors = hasCarry
-    ? ['#ef4444', '#3b82f6', '#10b981']
-    : ['#ef4444', '#3b82f6'];
+    ? CHART_COLORS_WITH_CARRY
+    : CHART_COLORS_BASIC;
 
   const values = hasCarry ? [1,1,1] : [1,1];
 
@@ -499,12 +500,12 @@ donuts.forEach(d => {
           <!-- TAKEN + REMAINING -->
           <div class="legend-row-top">
             <div class="legend-item">
-              <span class="chip" style="background:#ef4444"></span>
+              <span class="chip" style="background:{CHART_COLORS.spent}"></span>
               <span>Spent Leave</span>
             </div>
 
             <div class="legend-item">
-              <span class="chip" style="background:#3b82f6"></span>
+              <span class="chip" style="background:{CHART_COLORS.balance}"></span>
               <span>Balance Leave</span>
             </div>
           </div>
@@ -513,7 +514,7 @@ donuts.forEach(d => {
           {#if d.key === "annual"}
             <div class="legend-row-bottom">
               <div class="legend-item">
-                <span class="chip" style="background:#10b981"></span>
+                <span class="chip" style="background:{CHART_COLORS.carry}"></span>
                 <span>Carry-forward Leave</span>
               </div>
             </div>
@@ -558,9 +559,11 @@ donuts.forEach(d => {
         {/each}
       </div>
 
-      <a class="numbers-link" href="/dashboard/manager/employees">
-        View employees
+         <div class='recent-footer'>
+      <a class='view-more' href="/dashboard/manager/employees">
+        View employees →
       </a>
+      </div>
     </div>
   </div> <!-- END GRID -->
 </main>
@@ -572,12 +575,12 @@ donuts.forEach(d => {
   cursor: pointer !important;
 }
   /* grid + cards */
-  .grid{ margin-top:-35px; display:grid; gap:10px; grid-template-columns:repeat(12, minmax(0,1fr)); }
+  .grid{ margin-top:0; display:grid; gap:10px; grid-template-columns:repeat(12, minmax(0,1fr)); }
   .card{ background:#fff; border:1px solid var(--ring); border-radius:12px; padding:14px; box-shadow:var(--shadow); }
-  h3{ margin:0 0 8px 0; }
+  h3{ margin:0 0 8px 0; font-size:var(--fs-section-heading, 16px); font-weight:600; color:var(--ink, #1F2937); }
 
   /* donut */
-  :global(:root){ --spentRed:#ef4444; --restBlue:#3b82f6; }
+  :global(:root){ --spentTeal:#0F9B8E; --restSlate:#94A3B8; }
 
   :global(#tooltip-scroll) {
   scrollbar-width: none;          /* Firefox */
@@ -588,7 +591,7 @@ donuts.forEach(d => {
   display: none;                  /* Chrome/Safari */
 }
 
-  .donut-title{ font-size:12px; font-weight:700; color:#374151; margin:0 0 6px; }
+  .donut-title{ font-size:var(--fs-section-heading, 16px); font-weight:600; color:var(--ink, #1F2937); margin:0 0 6px; }
  .donut-container {
   width: 110px;
   height: 110px;
@@ -666,7 +669,7 @@ donuts.forEach(d => {
 }
   .stat{ background:#f9fafb; border:1px solid var(--ring); border-radius:12px; padding:20px; display:grid; gap:4px; }
   .stat .label{ color:#6b7280; font-size:12px; display:flex; align-items:center; gap:8px; }
-  .stat .value{ font-size:25px; font-weight:800; color:#111827; line-height:1; }
+  .stat .value{ font-size:28px; font-weight:700; color:#1F2937; line-height:1; }
   .dot{ width:10px; height:10px; border-radius:999px; display:inline-block; }
   .numbers-link{ display:inline-block; margin-top:270px; font-weight:600; color:#2563eb; text-decoration:none;  margin-left: 463px; white-space: nowrap;  } /* RIGHT side */
   .numbers-link:hover{ text-decoration:underline; }
@@ -679,4 +682,21 @@ donuts.forEach(d => {
     .donut-container { margin-left: 0; transform: none; }
     .numbers-link { margin-left: 0; margin-top: 12px; display: block; text-align: center; }
   }
+
+  .recent-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: auto;
+  padding-top: 8px;
+}
+
+.view-more {
+  font-size: 13px;
+  font-weight: 600;
+  color: #2563eb;          /* blue */
+  cursor: pointer;
+}
+.view-more:hover {
+  color: #1d4ed8;
+}
 </style>

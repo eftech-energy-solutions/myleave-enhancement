@@ -12,11 +12,26 @@
   import { onMount } from 'svelte';
   import { afterNavigate } from '$app/navigation';
   import { PUBLIC_VITE_API_BASE } from '$env/static/public';
+  import DirectorLeaveApprovals from '$lib/components/DirectorLeaveApprovals.svelte';
 
   // --- SIDEBAR TOGGLE ---
   let sidebarOpen = false;
   afterNavigate(() => { sidebarOpen = false; });
-  
+
+  // --- PENDING APPROVAL PANEL ---
+  let approvalPanelOpen = false;
+
+  // --- COLLAPSIBLE NAV GROUPS ---
+  let dashOpen = false;
+  let histOpen = false;
+
+  afterNavigate(({ to }) => {
+    const p = to?.url?.pathname ?? $page.url.pathname;
+    const b = '/dashboard/director';
+    dashOpen = p === b || p.startsWith(b + '/reports');
+    histOpen = p.startsWith(b + '/history') || p.startsWith(b + '/myhistory');
+  });
+
   let selectedFile = null;
 
   // Fallback user info (before fetching from server)
@@ -148,11 +163,11 @@ async function loadPendingCount() {
     }
 
     // ======================
-    // DIRECTOR → DIRI SENDIRI SAHAJA 🔥
+    // DIRECTOR → MANAGERS' PENDING 🔥
     // ======================
     else if (role === 'Director') {
       count = all.filter(r =>
-        r.staff_id === staffId &&
+        String(r.requester_role || '').toLowerCase() === 'manager' &&
         (r.status === 'pending' ||
          r.status === 'cancellation_pending')
       ).length;
@@ -164,6 +179,15 @@ async function loadPendingCount() {
     console.error('Failed to load pending count', e);
   }
 }
+
+function handlePanelKeydown(e) {
+    if (e.key === 'Escape' && approvalPanelOpen) closePanel();
+  }
+
+  function closePanel() {
+    approvalPanelOpen = false;
+    loadPendingCount();
+  }
 
 
 
@@ -435,7 +459,13 @@ async function saveProfile(e) {
       </div>
 
       <nav class="nav">
-        <div class="nav-group">
+        <button
+          type="button"
+          class="nav-group"
+          class:open={dashOpen}
+          on:click={() => dashOpen = !dashOpen}
+          aria-expanded={dashOpen}
+        >
           <span class="ico">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
               <path
@@ -444,11 +474,13 @@ async function saveProfile(e) {
             </svg>
           </span>
           <span class="text">Dashboard</span>
-        </div>
+          <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5z"/></svg>
+        </button>
+        {#if dashOpen}
         <div class="sub-links">
           <a
             href="/dashboard/director"
-            class:active={$page.url.pathname.startsWith('/dashboard/director')}
+            class:active={$page.url.pathname === '/dashboard/director' || $page.url.pathname.startsWith('/dashboard/director/main')}
           >
             <span class="text">Main</span>
           </a>
@@ -459,8 +491,15 @@ async function saveProfile(e) {
             <span class="text">Reports</span>
           </a>
         </div>
+        {/if}
 
-        <div class="nav-group">
+        <button
+          type="button"
+          class="nav-group"
+          class:open={histOpen}
+          on:click={() => histOpen = !histOpen}
+          aria-expanded={histOpen}
+        >
           <span class="ico">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
               <path
@@ -469,7 +508,9 @@ async function saveProfile(e) {
             </svg>
           </span>
           <span class="text">Leave History</span>
-        </div>
+          <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5z"/></svg>
+        </button>
+        {#if histOpen}
         <div class="sub-links">
           <a
             href="/dashboard/director/history"
@@ -484,6 +525,7 @@ async function saveProfile(e) {
             <span class="text">Personal</span>
           </a>
         </div>
+        {/if}
 
         <a
           href="/dashboard/director/employees"
@@ -497,9 +539,21 @@ async function saveProfile(e) {
             </svg>
           </span>
            <span class="text">Employees</span>
-            <!-- {#if pendingCount > 0}
-              <span class="nav-badge">{pendingCount}</span>
-            {/if} kira tanpa 9+ --> 
+        </a>
+
+        <a
+          href="/dashboard/director/leave-approvals"
+          class="nav-approvals"
+          class:active={$page.url.pathname.startsWith('/dashboard/director/leave-approvals')}
+        >
+          <span class="ico">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+              <path
+                d="M22 5.18L10.59 16.6l-4.24-4.24 1.41-1.41 2.83 2.83 10-10L22 5.18zm-2.21 5.04c.13.57.21 1.17.21 1.78 0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8c1.58 0 3.04.46 4.28 1.25l1.44-1.44C16.1 2.67 14.13 2 12 2 6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10c0-1.19-.22-2.33-.6-3.39l-1.61 1.61z"
+              ></path>
+            </svg>
+          </span>
+           <span class="text">Leave Approvals</span>
             {#if pendingCount > 0}
               <span class="nav-badge">
                 {pendingCount > 9 ? '9+' : pendingCount}
@@ -533,20 +587,34 @@ async function saveProfile(e) {
         {/if}
       </button>
       <div class="title-wrap">
-        <div class="hello">Welcome back, {safeUser?.name || 'admin'}!</div>
+        {#if $page.url.pathname === '/dashboard/director' || $page.url.pathname.startsWith('/dashboard/director/main')}
+          <div class="hello">Welcome back, {safeUser?.name || 'admin'}!</div>
+        {/if}
 
         {#if $page.url.pathname.startsWith('/dashboard/director/main')}
           <h1 class="page-title">Dashboard</h1>
+          <p class="page-desc">Company-wide leave overview and the public holiday calendar.</p>
         {:else if $page.url.pathname.startsWith('/dashboard/director/reports')}
           <h1 class="page-title">My Dashboard</h1>
+          <p class="page-desc">Personal dashboard with your leave statistics and calendar.</p>
         {:else if $page.url.pathname.startsWith('/dashboard/director/myhistory')}
           <h1 class="page-title">My Leave History</h1>
+          <p class="page-desc">View and manage your own past and upcoming leave applications.</p>
         {:else if $page.url.pathname.startsWith('/dashboard/director/history')}
-          <h1 class="page-title">Approved Leave History</h1>
+          <h1 class="page-title">Leave History</h1>
+          <p class="page-desc">Browse leave records for all managers.</p>
         {:else if $page.url.pathname.startsWith('/dashboard/director/employees')}
           <h1 class="page-title">Employees</h1>
+          <p class="page-desc">Employee directory with quick access to staff profiles.</p>
+        {:else if $page.url.pathname.startsWith('/dashboard/director/leave-approvals')}
+          <h1 class="page-title">Leave Approvals</h1>
+          <p class="page-desc">Review and act on pending leave requests addressed to you.</p>
+        {:else if $page.url.pathname.startsWith('/dashboard/director/profile')}
+          <h1 class="page-title">My Profile</h1>
+          <p class="page-desc">Your personal details and available leave balance.</p>
         {:else}
           <h1 class="page-title">Dashboard</h1>
+          <p class="page-desc">Company-wide leave overview and the public holiday calendar.</p>
         {/if}
       </div>
 
@@ -579,8 +647,19 @@ async function saveProfile(e) {
 
         {#if profileMenuOpen}
           <div class="menu" role="menu">
+            <a class="menu-btn" href="/dashboard/director/profile">
+              <svg class="menu-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                <circle cx="12" cy="7" r="4"/>
+              </svg>
+              <span>My Profile</span>
+            </a>
             <button class="menu-btn" type="button" on:click={openProfileModal}>
-              Update Profile
+              <svg class="menu-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+              </svg>
+              <span>Update Profile</span>
             </button>
           </div>
         {/if}
@@ -592,6 +671,38 @@ async function saveProfile(e) {
     </div>
   </main>
 </div>
+
+<!-- Pending Approval Slide Panel -->
+{#if pendingCount > 0 && $page.url.pathname.startsWith('/dashboard/director/employees')}
+  <button
+    class="pending-tab"
+    class:panel-open={approvalPanelOpen}
+    on:click={() => approvalPanelOpen = !approvalPanelOpen}
+    aria-label="Pending approvals"
+  >
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+    </svg>
+    <span class="tab-text">Pending Approval</span>
+    <span class="tab-badge">{pendingCount}</span>
+  </button>
+{/if}
+
+{#if approvalPanelOpen}
+  <!-- svelte-ignore a11y-click-events-have-key-events -->
+  <div class="approval-overlay" on:click={closePanel}></div>
+  <div class="approval-panel" class:open={approvalPanelOpen}>
+    <div class="panel-header">
+      <h3>Pending Approvals</h3>
+      <button class="panel-close" on:click={closePanel}>✕</button>
+    </div>
+    <div class="panel-body">
+      <DirectorLeaveApprovals compact />
+    </div>
+  </div>
+{/if}
+
+<svelte:window on:keydown={handlePanelKeydown} />
 
 {#if profileModalOpen}
   <div
@@ -806,11 +917,11 @@ async function saveProfile(e) {
     margin-top: auto;
   }
   .main {
-    background: linear-gradient(180deg, #49bdb3 0%, #0c4a6e 100%);
+    background: var(--canvas, #F5F7FA);
     overflow-y: auto;
   }
   .container-inner {
-    padding: 16px;
+    padding: 24px 24px 32px;
   }
 
   /* Sidebar Navigation */
@@ -831,15 +942,35 @@ async function saveProfile(e) {
     text-decoration: none;
     transition: background-color 0.2s;
   }
+  button.nav-group {
+    background: none;
+    border: none;
+    width: 100%;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .nav-group .chev {
+    width: 18px;
+    height: 18px;
+    fill: #217859;
+    margin-left: auto;
+    flex-shrink: 0;
+    opacity: 0.8;
+    transition: transform 0.2s ease;
+  }
+  .nav-group.open .chev {
+    transform: rotate(180deg);
+  }
   .nav a:hover {
     background: #f3f4f6;
   }
   .nav a.active {
     background: #eaf6f7;
-    color: #1fb3b2;
+    color: #0F9B8E;
   }
   .nav-badge {
-  margin-left: 10px;
+  margin-left: auto;
   background: #dc2626;   /* red */
   color: #fff;
   font-size: 12px;
@@ -848,8 +979,12 @@ async function saveProfile(e) {
   border-radius: 9999px;
   line-height: 1.4;
   position: relative;
-  top: 1.5px; 
+  top: 1.5px;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
+
+  .nav-approvals .text{ white-space: nowrap; }
 
   /* Sub-links specific styling */
   .sub-links {
@@ -864,7 +999,7 @@ async function saveProfile(e) {
     color: #9ca3af;
   }
   .sub-links a.active .text::before {
-    color: #1fb3b2;
+    color: #0F9B8E;
   }
 
   /* Icons */
@@ -881,7 +1016,7 @@ async function saveProfile(e) {
   }
   .nav a.active .ico svg,
   .nav-group.active .ico svg {
-    fill: #1fb3b2;
+    fill: #0F9B8E;
   }
 
   /* Sign Out Button */
@@ -891,7 +1026,7 @@ async function saveProfile(e) {
     gap: 12px;
     padding: 10px 12px;
     border-radius: 10px;
-    color: #e34040;
+    color: #DC2626;
     font-weight: 600;
     text-decoration: none;
   }
@@ -899,43 +1034,55 @@ async function saveProfile(e) {
     background: #feecec;
   }
   .signout .ico svg {
-    fill: #e34040;
+    fill: #DC2626;
   }
 
-  /* Header */
+  /* Header — teal header band */
   .topbar {
     display: flex;
     align-items: flex-end;
     justify-content: space-between;
     gap: 10px;
     padding: 12px 16px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    background: linear-gradient(135deg, var(--brand, #0F9B8E), var(--brand-dark, #0C8075));
   }
   .title-wrap {
     display: flex;
     flex-direction: column;
-    gap: 0.5px;
+    gap: 2px;
     color: #fff;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .page-desc {
+    margin: 2px 0 0;
+    font-size: var(--fs-meta, 12.5px);
+    line-height: 1.35;
+    color: rgba(255, 255, 255, 0.75);
   }
   .hello {
   max-width: 980px;       /* kekalkan limit ruang */
-  white-space: normal;    /* ❗ benarkan wrap */
-  word-break: break-word;
+  white-space: nowrap;    /* jangan bungkus */
+  overflow: hidden;
+  text-overflow: ellipsis;
   line-height: 1.3;
 
-  font-size: 18px;
+  font-size: var(--fs-body, 14px);
   font-weight: 400;
-  opacity: 0.95;
+  opacity: 0.85;
   margin: 0;
   color: #fff;
 }
 
   .page-title {
     margin: 0;
-    font-size: 55px;
-    line-height: 1.1;
-    font-weight: 700;
+    font-size: var(--fs-page-title, 24px);
+    line-height: 1.2;
+    font-weight: 600;
     color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .logo img {
     height: 38px;
@@ -949,6 +1096,7 @@ async function saveProfile(e) {
     display: flex;
     align-items: center;
     gap: 10px;
+    flex-shrink: 0;
   }
   .icon-btn {
     border: none;
@@ -1006,7 +1154,9 @@ async function saveProfile(e) {
     z-index: 30;
   }
   .menu-btn {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 8px;
     width: 100%;
     padding: 10px 12px;
     border: none;
@@ -1017,6 +1167,8 @@ async function saveProfile(e) {
     text-align: left;
     cursor: pointer;
   }
+  .menu-btn .menu-ico { width: 16px; height: 16px; color: #0F9B8E; flex: none; }
+  a.menu-btn { text-decoration: none; }
   .menu-btn:hover {
     background: #f3f4f6;
   }
@@ -1047,7 +1199,7 @@ async function saveProfile(e) {
   .modal-ttl {
     font-size: 18px;
     font-weight: 700;
-    color: #49bdb3;
+    color: #0F9B8E;
   }
   .modal-x {
     border: none;
@@ -1071,7 +1223,7 @@ async function saveProfile(e) {
   }
   .tabs button.selected {
     background: #fff;
-    border-bottom: 2px solid #49bdb3;
+    border-bottom: 2px solid #0F9B8E;
     color: #000;
   }
 
@@ -1117,19 +1269,20 @@ async function saveProfile(e) {
   }
   .btn-ghost {
     background: #fff;
-    color: #000e;
-    border: 1px solid #d1d5db;
-    border-radius: 8px;
+    color: var(--ink, #1F2937);
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
     padding: 0.6rem 1rem;
     font-weight: 600;
   }
   .btn-primary {
-    background: #49bdb3;
+    background: #0F9B8E;
     color: #fff;
     border: none;
-    border-radius: 8px;
-    padding: 0.6rem 1rem;
-    font-weight: 700;
+    border-radius: 10px;
+    padding: 0.65rem 1.25rem;
+    font-weight: 600;
+    font-size: 14px;
   }
   .btn-primary:hover {
     filter: brightness(0.95);
@@ -1150,8 +1303,8 @@ async function saveProfile(e) {
     box-sizing: border-box;
   }
   .input-lg:focus {
-    border-color: #49bdb3;
-    box-shadow: 0 0 0 3px rgba(73, 189, 179, 0.15);
+    border-color: #0F9B8E;
+    box-shadow: 0 0 0 3px rgba(15, 155, 142, 0.15);
   }
 
   .input-wrap-lg {
@@ -1184,7 +1337,7 @@ async function saveProfile(e) {
   /* Messages */
   .form-error {
     background: #feecec;
-    color: #e34040;
+    color: #DC2626;
     padding: 10px 14px;
     border-radius: 8px;
     font-weight: 600;
@@ -1281,14 +1434,14 @@ async function saveProfile(e) {
 }
 
 .toast-item.error {
-  border-color: #ef4444;
+  border-color: #DC2626;
 }
 .toast-item.error .toast-icon {
-  background: #ef4444;
+  background: #DC2626;
 }
 
 .toast-item.info {
-  border-color: #3b82f6;
+  border-color: #0F9B8E;
 }
 .toast-item.info .toast-icon {
   background: #3b82f6;
@@ -1366,6 +1519,10 @@ async function saveProfile(e) {
     z-index: 40;
   }
 
+  .page-desc {
+    display: none;
+  }
+
   .container {
     display: flex;
     flex-direction: column;
@@ -1396,7 +1553,7 @@ async function saveProfile(e) {
   }
 
   .page-title {
-    font-size: 28px;
+    font-size: 20px;
   }
 
   .hello {
@@ -1408,5 +1565,151 @@ async function saveProfile(e) {
     width: 44px;
   }
 }
-  
+
+/* ===== Pending Approval Slide Panel ===== */
+.pending-tab {
+  position: fixed;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 100;
+  background: #0F9B8E;
+  color: #fff;
+  border: none;
+  border-radius: 8px 0 0 8px;
+  padding: 12px 10px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  box-shadow: -2px 0 12px rgba(0,0,0,.15);
+  transition: right 0.3s ease, background 0.2s;
+}
+
+.pending-tab:hover {
+  background: #0d8a7e;
+}
+
+.pending-tab.panel-open {
+  right: 420px;
+}
+
+.pending-tab svg {
+  width: 20px;
+  height: 20px;
+}
+
+.tab-text {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.tab-badge {
+  background: #dc2626;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+}
+
+.approval-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.3);
+  z-index: 101;
+  animation: fadeIn 0.2s ease;
+}
+
+.approval-panel {
+  position: fixed;
+  right: -420px;
+  top: 0;
+  bottom: 0;
+  width: 420px;
+  max-width: 90vw;
+  background: #fff;
+  z-index: 102;
+  box-shadow: -4px 0 24px rgba(0,0,0,.2);
+  transition: right 0.3s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.approval-panel.open {
+  right: 0;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.panel-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.panel-close {
+  border: none;
+  background: transparent;
+  font-size: 20px;
+  cursor: pointer;
+  color: #6b7280;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.panel-close:hover {
+  background: #e5e7eb;
+  color: #111827;
+}
+
+.panel-body {
+  flex: 1;
+  overflow-y: auto;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (max-width: 860px) {
+  .pending-tab {
+    top: auto;
+    bottom: 20px;
+    right: 0;
+    transform: none;
+    border-radius: 8px 0 0 8px;
+  }
+
+  .pending-tab.panel-open {
+    right: 0;
+    bottom: 20px;
+  }
+
+  .approval-panel {
+    width: 100vw;
+    max-width: 100vw;
+    right: -100vw;
+  }
+
+  .approval-panel.open {
+    right: 0;
+  }
+}
 </style>

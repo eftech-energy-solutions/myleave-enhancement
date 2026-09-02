@@ -4,10 +4,14 @@
   import { afterNavigate } from '$app/navigation';
   import { apiFetch } from '$lib/api';
   import { PUBLIC_VITE_API_BASE } from '$env/static/public';
+  import AdminLeaveApprovals from '$lib/components/AdminLeaveApprovals.svelte';
 
   // --- SIDEBAR TOGGLE ---
   let sidebarOpen = false;
   afterNavigate(() => { sidebarOpen = false; });
+
+  // --- PENDING APPROVAL PANEL ---
+  let approvalPanelOpen = false;
 
   // --- STATE ---
   let profileMenuOpen = false;
@@ -58,19 +62,20 @@ function showToast(message, type = "success", title = "", duration = 3000) {
 
   let dashboardOpen = true;
 
-$: {
-  const path = $page.url.pathname;
+afterNavigate(({ to }) => {
+  const path = to?.url?.pathname ?? $page.url.pathname;
 
   if (
     path.startsWith("/dashboard/admin") &&
     !path.startsWith("/dashboard/admin/history") &&
     !path.startsWith("/dashboard/admin/employees") &&
+    !path.startsWith("/dashboard/admin/leave-approvals") &&
     !path.startsWith("/dashboard/admin/logs") &&
     !path.startsWith("/dashboard/admin/chat")
   ) {
     dashboardOpen = true;
   }
-}
+});
 
   const isActive = (href) => {
     const current = $page.url.pathname;
@@ -150,6 +155,16 @@ async function loadPendingCount() {
     console.error("Failed to load pending count:", err);
   }
 }
+
+
+function handlePanelKeydown(e) {
+    if (e.key === 'Escape' && approvalPanelOpen) closePanel();
+  }
+
+  function closePanel() {
+    approvalPanelOpen = false;
+    loadPendingCount();
+  }
 
 
   // Profile modal state
@@ -586,14 +601,38 @@ $: pageTitle =
   $page.url.pathname === roleBase
     ? 'Dashboard'
     : $page.url.pathname.startsWith('/dashboard/admin/history')
-    ? 'Approved Leave History'
+    ? 'Leave History'
     : $page.url.pathname.startsWith('/dashboard/admin/employees')
     ? 'Employees'
+    : $page.url.pathname.startsWith('/dashboard/admin/leave-approvals')
+    ? 'Leave Approvals'
     : $page.url.pathname.startsWith('/dashboard/admin/logs')
     ? 'Activity Logs'
     : $page.url.pathname.startsWith('/dashboard/admin/chat')
     ? 'Chat'
+    : $page.url.pathname.startsWith('/dashboard/admin/profile')
+    ? 'My Profile'
     : 'My Dashboard';
+
+// Page description
+$: pageDesc =
+  $page.url.pathname === roleBase
+    ? 'Company-wide leave overview and the public holiday calendar.'
+    : $page.url.pathname.startsWith('/dashboard/admin/main')
+    ? 'Key leave statistics and activity across the organisation.'
+    : $page.url.pathname.startsWith('/dashboard/admin/history')
+    ? 'Browse and search approved leave records for all employees.'
+    : $page.url.pathname.startsWith('/dashboard/admin/employees')
+    ? 'Employee directory — view profiles, add new staff and manage details.'
+    : $page.url.pathname.startsWith('/dashboard/admin/leave-approvals')
+    ? 'Review and act on pending leave and cancellation requests from all employees.'
+    : $page.url.pathname.startsWith('/dashboard/admin/logs')
+    ? 'Audit trail of actions performed in the system.'
+    : $page.url.pathname.startsWith('/dashboard/admin/chat')
+    ? 'Real-time messaging between admins and employees.'
+    : $page.url.pathname.startsWith('/dashboard/admin/profile')
+    ? 'Your personal details and available leave balance.'
+    : 'Company-wide calendar and leave statistics at a glance.';
 
   // Settings Modal Title
   $: settingsModalTitle =
@@ -609,22 +648,23 @@ $: pageTitle =
         <img src="/images/myleave.logo.png" alt="MyLeave" />
       </div>
       <nav class="nav">
-        <div class="nav-group">
-  <a
-    href={roleBase}
-    class:active={isActive(roleBase)}
-    on:click={() => dashboardOpen = !dashboardOpen}
-  >
-    <span class="ico">
-      <!-- keep your existing dashboard icon -->
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-        <path d="M10 3H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1zm0 11H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-6a1 1 0 0 0-1-1zm11-11h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1zm0 11h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-6a1 1 0 0 0-1-1z"/>
-      </svg>
-    </span>
+        <button
+          type="button"
+          class="nav-group"
+          class:open={dashboardOpen}
+          on:click={() => dashboardOpen = !dashboardOpen}
+          aria-expanded={dashboardOpen}
+        >
+          <span class="ico">
+            <!-- keep your existing dashboard icon -->
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+              <path d="M10 3H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1zm0 11H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-6a1 1 0 0 0-1-1zm11-11h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1zm0 11h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-6a1 1 0 0 0-1-1z"/>
+            </svg>
+          </span>
 
-    <span class="text">Dashboard</span>
-  </a>
-
+          <span class="text">Dashboard</span>
+          <svg class="chev" class:open={dashboardOpen} viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5z"/></svg>
+        </button>
         {#if dashboardOpen}
           <div class="submenu">
 
@@ -644,7 +684,6 @@ $: pageTitle =
 
           </div>
         {/if}
-      </div>
         <a href="/dashboard/admin/history" class:active={isActive('/dashboard/admin/history')}>
           <span class="ico">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zM9 14H7v-2h2v2zm4 0h-2v-2h2v2zm4 0h-2v-2h2v2zM5 8V6h14v2H5z"/></svg>
@@ -655,14 +694,16 @@ $: pageTitle =
           <span class="ico">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
           </span>
-           <span class="text">
-              Employees
-              {#if pendingCount > 0}
-                <span class="nav-badge">
-                  {pendingCount > 9 ? '9+' : pendingCount}
-                </span>
-              {/if}
+           <span class="text">Employees</span>
+        </a>
+        <a href="/dashboard/admin/leave-approvals" class="nav-approvals" class:active={isActive('/dashboard/admin/leave-approvals')}>
+          <span class="ico">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M22 5.18L10.59 16.6l-4.24-4.24 1.41-1.41 2.83 2.83 10-10L22 5.18zm-2.21 5.04c.13.57.21 1.17.21 1.78 0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8c1.58 0 3.04.46 4.28 1.25l1.44-1.44C16.1 2.67 14.13 2 12 2 6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10c0-1.19-.22-2.33-.6-3.39l-1.61 1.61z"/></svg>
           </span>
+           <span class="text">Leave Approvals</span>
+           {#if pendingCount > 0}
+             <span class="nav-badge">{pendingCount > 9 ? '9+' : pendingCount}</span>
+           {/if}
         </a>
          <a href="/dashboard/admin/logs" class:active={isActive('/dashboard/admin/logs')}>
           <span class="ico">
@@ -719,8 +760,11 @@ $: pageTitle =
         {/if}
       </button>
       <div class="title-wrap">
-        <div class="hello">Welcome back, {safeUser?.name}!</div>
+        {#if $page.url.pathname === roleBase || $page.url.pathname.startsWith('/dashboard/admin/main')}
+          <div class="hello">Welcome back, {safeUser?.name}!</div>
+        {/if}
         <h1 class="page-title">{pageTitle}</h1>
+        <p class="page-desc">{pageDesc}</p>
       </div>
 
       <div class="profile" use:clickOutside>
@@ -749,7 +793,20 @@ $: pageTitle =
 
           {#if profileMenuOpen}
             <div class="menu">
-              <button class="menu-btn" on:click={openProfileModal}>Update Profile</button>
+              <a class="menu-btn" href="/dashboard/admin/profile">
+                <svg class="menu-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                  <circle cx="12" cy="7" r="4"/>
+                </svg>
+                <span>My Profile</span>
+              </a>
+              <button class="menu-btn" on:click={openProfileModal}>
+                <svg class="menu-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="3"/>
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                </svg>
+                <span>Update Profile</span>
+              </button>
             </div>
           {/if}
         </div>
@@ -769,6 +826,39 @@ $: pageTitle =
     </div>
   </div>
 </div>
+
+<!-- Pending Approval Slide Panel -->
+{#if pendingCount > 0 && $page.url.pathname.startsWith('/dashboard/admin/employees')}
+  <button
+    class="pending-tab"
+    class:panel-open={approvalPanelOpen}
+    on:click={() => approvalPanelOpen = !approvalPanelOpen}
+    aria-label="Pending approvals"
+  >
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+    </svg>
+    <span class="tab-text">Pending Approval</span>
+    <span class="tab-badge">{pendingCount}</span>
+  </button>
+{/if}
+
+{#if approvalPanelOpen}
+  <!-- svelte-ignore a11y-click-events-have-key-events -->
+  <div class="approval-overlay" on:click={closePanel}></div>
+  <div class="approval-panel" class:open={approvalPanelOpen}>
+    <div class="panel-header">
+      <h3>Pending Approvals</h3>
+      <button class="panel-close" on:click={closePanel}>✕</button>
+    </div>
+    <div class="panel-body">
+      <AdminLeaveApprovals compact />
+    </div>
+  </div>
+{/if}
+
+<svelte:window on:keydown={handlePanelKeydown} />
+
 {#if profileModalOpen}
   <div class="modal-wrap">
     <div class="modal">
@@ -1019,7 +1109,7 @@ $: pageTitle =
   background: #fafafa;
 }
 
-  /* RIGHT SIDE (Tidak berubah) */
+  /* RIGHT SIDE */
 .right {
   position: relative;
   display: flex;
@@ -1027,24 +1117,10 @@ $: pageTitle =
   min-width: 0;
   min-height: 100dvh;
 
-  background: linear-gradient(
-    180deg,
-    #49bdb3 0%,
-    #2bb7b3 35%,
-    #1798a5 65%,
-    #0c4a6e 100%
-  );
+  background: var(--canvas, #F5F7FA);
 
   overflow: visible;
 }
-  .right::before{
-    content:"";
-    position:absolute; inset:0;
-    background:
-      radial-gradient(1000px 420px at 110% -20%,rgba(255,255,255,.25) 0%,rgba(255,255,255,0) 70%),
-      url('/images/bg.png') center/cover no-repeat fixed;
-    opacity:.35; mix-blend-mode: soft-light; pointer-events:none;
-  }
 
   /* Sidebar (Tidak berubah) */
   .aside{ background:#fff; border-right:1px solid var(--ring,#e5e7eb); padding:15px 14px; position:sticky; top:0; height:100dvh; display:flex; flex-direction:column; }
@@ -1052,12 +1128,16 @@ $: pageTitle =
   .logo img{ height:38px; display:block; margin:auto; }
   .nav{ display:flex; flex-direction:column; gap:12px; }
   .nav a{ display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:12px; color:#217859; font-weight:600; text-decoration:none; }
+  button.nav-group{ display:flex; flex-direction:row; align-items:center; gap:12px; width:100%; padding:10px 12px; border:none; border-radius:12px; background:none; color:#217859; font-family:inherit; font-size:inherit; font-weight:600; text-align:left; cursor:pointer; }
+  button.nav-group:hover{ background:#f3f4f6; }
+  .nav .chev{ width:18px; height:18px; fill:#217859; margin-left:auto; transition:transform .2s ease; opacity:.8; flex-shrink:0; }
+  .nav .chev.open{ transform:rotate(180deg); }
   .nav a:hover{ background:#f3f4f6; }
-  .nav a.active{ background:#eaf6f7; border-left:4px solid #1fb3b2; padding-left:8px; color:#1fb3b2; }
+  .nav a.active{ background:#eaf6f7; border-left:4px solid var(--brand, #0F9B8E); padding-left:8px; color:var(--brand, #0F9B8E); }
   .ico{ font-size:20px; width:24px; height:24px; display:inline-grid; place-items:center; }
   .ico svg{ width:22px; height:22px; fill:#217859; }
-  .nav a.active .ico svg{ fill:#1fb3b2; }
-  .signout .ico svg{ fill:#e34040; }
+  .nav a.active .ico svg{ fill:var(--brand, #0F9B8E); }
+  .signout .ico svg{ fill:var(--danger, #DC2626); }
 
   .success-msg {
   background: #eef6ff;        
@@ -1084,44 +1164,52 @@ $: pageTitle =
 
   /* Bottom Bar (Tidak berubah) */
   .bottom{ margin-top:auto; display:flex; justify-content:space-between; align-items:center; }
-  .signout{ color:#e34040; display:flex; align-items:center; gap:12px; padding:10px; border-radius:12px; text-decoration:none; width: 100%; }
+  .signout{ color:var(--danger, #DC2626); display:flex; align-items:center; gap:12px; padding:10px; border-radius:12px; text-decoration:none; width: 100%; }
   .signout:hover{ background:#feecec; }
   .settings-btn{ display:flex; align-items:center; padding:10px; border-radius:12px; color:#217859; background:transparent; border:none; cursor:pointer; }
   .settings-btn:hover{ background:#f3f4f6; }
   
-  /* Topbar (Tidak berubah) */
-  /* Header */
+  /* Topbar — teal header band */
   .topbar {
     display: flex;
     align-items: flex-end;
     justify-content: space-between;
     gap: 10px;
     padding: 12px 16px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    background: linear-gradient(135deg, var(--brand, #0F9B8E), var(--brand-dark, #0C8075));
   }
   .title-wrap {
     display: flex;
     flex-direction: column;
-    gap: 0.5px;
+    gap: 2px;
     color: #fff;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .page-desc {
+    margin: 2px 0 0;
+    font-size: var(--fs-meta, 12.5px);
+    line-height: 1.35;
+    color: rgba(255, 255, 255, 0.75);
   }
   .hello {
   max-width: 980px;       /* kekalkan limit ruang */
-  white-space: normal;    /* ❗ benarkan wrap */
-  word-break: break-word;
+  white-space: nowrap;    /* jangan bungkus */
+  overflow: hidden;
+  text-overflow: ellipsis;
   line-height: 1.3;
 
-  font-size: 18px;
+  font-size: var(--fs-body, 14px);
   font-weight: 400;
-  opacity: 0.95;
+  opacity: 0.85;
   margin: 0;
   color: #fff;
 }
 
-  .page-title{ margin:0; font-size:55px; line-height:1.1; font-weight:700; color:#fff; }
+  .page-title{ margin:0; font-size:var(--fs-page-title, 24px); line-height:1.2; font-weight:600; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
   .nav-badge {
-  margin-left: 10px;
+  margin-left: auto;
   background: #dc2626;   /* red */
   color: #fff;
   font-size: 12px;
@@ -1130,12 +1218,16 @@ $: pageTitle =
   border-radius: 9999px;
   line-height: 1.4;
   position: relative;
-  top: -1.5px; 
+  top: -1.5px;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
+
+  .nav-approvals .text{ white-space: nowrap; }
 
 
   /* Profile Dropdown (Tidak berubah) */
-  .profile{ position:relative; display:flex; align-items:center; gap:10px; }
+  .profile{ position:relative; display:flex; align-items:center; gap:10px; flex-shrink:0; }
   .icon-btn{ border:none; background:transparent; cursor:pointer; font-size:18px; line-height:1; padding:6px; border-radius:8px; color:#fff; }
   .icon-btn:hover{ background:rgba(255,255,255,.12); }
   .caret{ font-size:16px; }
@@ -1167,7 +1259,8 @@ $: pageTitle =
   .who .sub{ font-size:12px; opacity:.95; }
 
   .menu{ position:absolute; right:0; top:calc(100% + 8px); background:#fff; border:1px solid #e5e7eb; border-radius:10px; box-shadow:0 10px 30px rgba(0,0,0,.12); min-width:200px; padding:6px; z-index:30; }
-  .menu-btn{ display:block; width:100%; padding:10px 12px; border:none; background:#fff; border-radius:8px; color:#111827; font-weight:600; text-align:left; cursor:pointer; }
+  .menu-btn{ display:flex; align-items:center; gap:8px; width:100%; padding:10px 12px; border:none; background:#fff; border-radius:8px; color:#111827; font-weight:600; text-align:left; cursor:pointer; }
+  .menu-btn .menu-ico{ width:16px; height:16px; color:#0F9B8E; flex:none; }
   .menu-btn:hover{ background:#f3f4f6; }
   a.menu-btn{ text-decoration:none; } 
 
@@ -1175,7 +1268,7 @@ $: pageTitle =
 .content-wrap {
   flex: 1;
   min-width: 0;
-  padding: 16px;
+  padding: 24px 24px 32px;
   overflow-y: auto;
   background: transparent;
 }
@@ -1263,11 +1356,11 @@ $: pageTitle =
   .modal-wrap{ position:fixed; inset:0; background:rgba(0,0,0,.4); display:grid; place-items:center; z-index:50; }
   .modal{ background:#fff; border-radius:12px; width:420px; max-width:95vw; box-shadow:0 12px 30px rgba(0,0,0,.2); overflow:hidden; }
   .modal-hd{ display:flex; justify-content:space-between; align-items:center; padding:14px 18px; border-bottom:1px solid #e5e7eb; }
-  .modal-ttl{ font-size:18px; font-weight:700; color:#49bdb3; }
+  .modal-ttl{ font-size:18px; font-weight:700; color:#0F9B8E; }
   .modal-x{ border:none; background:transparent; font-size:20px; cursor:pointer; }
   .tabs{ display:flex; border-bottom:1px solid #e5e7eb; }
   .tabs button{ flex:1; padding:10px; background:#f9fafb; border:none; cursor:pointer; font-weight:600; color:#000; }
-  .tabs button.selected{ background:#fff; border-bottom:2px solid #49bdb3; color:#000; }
+  .tabs button.selected{ background:#fff; border-bottom:2px solid #0F9B8E; color:#000; }
   .modal-bd {
     padding: 18px 28px;
     display: flex;
@@ -1281,8 +1374,8 @@ $: pageTitle =
   .row label{ font-weight:600; font-size:14px; color:#000; }
   .form-ft{ display:flex; justify-content:flex-end; gap:10px; margin-top:10px; padding:18px; border-top:1px solid #e5e7eb; background:#f9fafb; }
   .modal-bd + .form-ft { margin-top:0; }
-  .btn-ghost{ background:#fff; color:#000e; border:1px solid #d1d5db; border-radius:8px; padding:.6rem 1rem; font-weight:600; cursor:pointer; }
-  .btn-primary{ background:#49bdb3; color:#fff; border:none; border-radius:8px; padding:.6rem 1rem; font-weight:700; cursor:pointer; }
+  .btn-ghost{ background:#fff; color:var(--ink,#1F2937); border:1px solid #e5e7eb; border-radius:10px; padding:.6rem 1rem; font-weight:600; cursor:pointer; }
+  .btn-primary{ background:#0F9B8E; color:#fff; border:none; border-radius:10px; padding:.65rem 1.25rem; font-weight:600; font-size:14px; cursor:pointer; }
   .btn-primary:hover{ filter:brightness(.95); }
   .muted{ color:#64748b; font-size:12px; }
   .input-lg {
@@ -1295,8 +1388,8 @@ $: pageTitle =
     box-sizing: border-box;
   }
   .input-lg:focus {
-    border-color: #49bdb3;
-    box-shadow: 0 0 0 3px rgba(73, 189, 179, 0.15);
+    border-color: #0F9B8E;
+    box-shadow: 0 0 0 3px rgba(15, 155, 142, 0.15);
   }
   .input-wrap-lg {
     position: relative;
@@ -1377,8 +1470,8 @@ $: pageTitle =
 }
 
 .input-lg:focus {
-  border-color: #49bdb3;
-  box-shadow: 0 0 0 3px rgba(73, 189, 179, 0.25);
+  border-color: #0F9B8E;
+  box-shadow: 0 0 0 3px rgba(15, 155, 142, 0.25);
   outline: none;
 }
 
@@ -1413,7 +1506,7 @@ $: pageTitle =
   padding: 0 12px;          /* 👉 kecilkan width */
   font-size: 13px;
   border-radius: 8px;
-  background: #49bdb3;
+  background: #0F9B8E;
   color: #fff;
   font-weight: 700;
   border: none;
@@ -1488,7 +1581,7 @@ $: pageTitle =
 
 /* edit button */
 .btn-edit {
-  background: #49bdb3;
+  background: #0F9B8E;
   color: #fff;
   border: none;
   padding: 8px 14px;
@@ -1521,7 +1614,7 @@ $: pageTitle =
   padding: 0 16px;       /* smaller width */
   font-size: 14px;       /* smaller text */
   border-radius: 8px;
-  background: #49bdb3;
+  background: #0F9B8E;
   color: #fff;
   font-weight: 700;
   cursor: pointer;
@@ -1618,14 +1711,14 @@ $: pageTitle =
 }
 
 .toast-item.error {
-  border-color: #ef4444;
+  border-color: #DC2626;
 }
 .toast-item.error .toast-icon {
-  background: #ef4444;
+  background: #DC2626;
 }
 
 .toast-item.info {
-  border-color: #3b82f6;
+  border-color: #0F9B8E;
 }
 .toast-item.info .toast-icon {
   background: #3b82f6;
@@ -1698,8 +1791,8 @@ $: pageTitle =
 
 .submenu a.active{
   background:#eaf6f7;
-  color:#1fb3b2;
-  border-left:3px solid #1fb3b2;
+  color:var(--brand, #0F9B8E);
+  border-left:3px solid var(--brand, #0F9B8E);
 }
 
 /* ========= HAMBURGER BUTTON ========= */
@@ -1766,8 +1859,12 @@ $: pageTitle =
     box-shadow: 4px 0 24px rgba(0,0,0,.15);
   }
 
+  .page-desc {
+    display: none;
+  }
+
   .page-title {
-    font-size: 28px;
+    font-size: 20px;
   }
 
   .hello {
@@ -1777,6 +1874,153 @@ $: pageTitle =
   .avatar-img {
     height: 44px;
     width: 44px;
+  }
+}
+
+/* ===== Pending Approval Slide Panel ===== */
+.pending-tab {
+  position: fixed;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 100;
+  background: #0F9B8E;
+  color: #fff;
+  border: none;
+  border-radius: 8px 0 0 8px;
+  padding: 12px 10px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  box-shadow: -2px 0 12px rgba(0,0,0,.15);
+  transition: right 0.3s ease, background 0.2s;
+}
+
+.pending-tab:hover {
+  background: #0d8a7e;
+}
+
+.pending-tab.panel-open {
+  right: 420px;
+}
+
+.pending-tab svg {
+  width: 20px;
+  height: 20px;
+}
+
+.tab-text {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.tab-badge {
+  background: #dc2626;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+}
+
+.approval-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.3);
+  z-index: 101;
+  animation: fadeIn 0.2s ease;
+}
+
+.approval-panel {
+  position: fixed;
+  right: -420px;
+  top: 0;
+  bottom: 0;
+  width: 420px;
+  max-width: 90vw;
+  background: #fff;
+  z-index: 102;
+  box-shadow: -4px 0 24px rgba(0,0,0,.2);
+  transition: right 0.3s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.approval-panel.open {
+  right: 0;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.panel-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.panel-close {
+  border: none;
+  background: transparent;
+  font-size: 20px;
+  cursor: pointer;
+  color: #6b7280;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.panel-close:hover {
+  background: #e5e7eb;
+  color: #111827;
+}
+
+.panel-body {
+  flex: 1;
+  overflow-y: auto;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (max-width: 860px) {
+  .pending-tab {
+    top: auto;
+    bottom: 20px;
+    right: 0;
+    transform: none;
+    border-radius: 8px 0 0 8px;
+  }
+
+  .pending-tab.panel-open {
+    right: 0;
+    bottom: 20px;
+  }
+
+  .approval-panel {
+    width: 100vw;
+    max-width: 100vw;
+    right: -100vw;
+  }
+
+  .approval-panel.open {
+    right: 0;
   }
 }
 </style>

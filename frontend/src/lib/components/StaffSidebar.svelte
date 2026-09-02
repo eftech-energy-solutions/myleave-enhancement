@@ -322,7 +322,21 @@ $: pageTitle =
     ? 'Leave History'
     : $page.url.pathname.startsWith('/dashboard/staff/chat')
     ? 'Chat'
+    : $page.url.pathname.startsWith('/dashboard/staff/profile')
+    ? 'My Profile'
     : 'My Dashboard';
+
+// ---- Page description (staff paths) ----
+$: pageDesc =
+  $page.url.pathname === roleBase
+    ? 'Apply for leave, check your balances and see the holiday calendar.'
+    : $page.url.pathname.startsWith('/dashboard/staff/staffhistory')
+    ? 'Track your leave applications — apply, edit or cancel upcoming leave.'
+    : $page.url.pathname.startsWith('/dashboard/staff/chat')
+    ? 'Real-time messaging with your team.'
+    : $page.url.pathname.startsWith('/dashboard/staff/profile')
+    ? 'Your personal details and available leave balance.'
+    : 'Apply for leave, check your balances and see the holiday calendar.';
 </script>
 
 <div class="layout" class:sidebar-open={sidebarOpen}>
@@ -390,9 +404,12 @@ $: pageTitle =
         {/if}
       </button>
       <div class="title-wrap">
-        <div class="hello">Welcome back, {safeUser?.name}!</div>
+        {#if $page.url.pathname === roleBase}
+          <div class="hello">Welcome back, {safeUser?.name}!</div>
+        {/if}
         <h1 class="page-title">{pageTitle}</h1>
-      </div>  
+        <p class="page-desc">{pageDesc}</p>
+      </div>
 
       <div class="profile" use:clickOutside>
         <div class="profile-info">
@@ -422,8 +439,19 @@ $: pageTitle =
 
         {#if profileMenuOpen}
           <div class="menu" role="menu">
+            <a class="menu-btn" href="/dashboard/staff/profile">
+              <svg class="menu-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                <circle cx="12" cy="7" r="4"/>
+              </svg>
+              <span>My Profile</span>
+            </a>
             <button class="menu-btn" type="button" on:click={openProfileModal}>
-              Update Profile
+              <svg class="menu-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+              </svg>
+              <span>Update Profile</span>
             </button>
           </div>
         {/if}
@@ -616,29 +644,15 @@ $: pageTitle =
     background:#fafafa;
 }
 
-  /* RIGHT SIDE gradient */
+  /* RIGHT SIDE */
 .right {
   position: relative;
   display: flex;
   flex-direction: column;
   min-height: 100dvh;
-  background: linear-gradient(
-    180deg,
-    #49bdb3 0%,
-    #2bb7b3 35%,
-    #1798a5 65%,
-    #0c4a6e 100%
-  );
+  background: var(--canvas, #F5F7FA);
   overflow: visible;
 }
-  .right::before{
-    content:"";
-    position:absolute; inset:0;
-    background:
-      radial-gradient(1000px 420px at 110% -20%, rgba(255,255,255,.25) 0%, rgba(255,255,255,0) 70%),
-      url('/images/bg.png') center/cover no-repeat fixed;
-    opacity:.35; mix-blend-mode: soft-light; pointer-events:none;
-  }
 
   /* Sidebar */
   .aside{
@@ -658,9 +672,9 @@ $: pageTitle =
   .nav a:hover{ background:#f3f4f6; }
   .nav a.active{
     background:#eaf6f7;
-    border-left:4px solid #1fb3b2;
+    border-left:4px solid #0F9B8E;
     padding-left:8px;
-    color: #1fb3b2; /* Active color */
+    color: #0F9B8E; /* Active color */
   }
   .ico{ display:inline-grid; place-items:center; width: 24px; height: 24px;}
 
@@ -671,49 +685,61 @@ $: pageTitle =
     fill: #217859; /* Your requested color */
   }
   .nav a.active .ico svg {
-    fill: #1fb3b2; /* Active color to match border */
+    fill: #0F9B8E; /* Active color to match border */
   }
   .signout .ico svg {
-    fill: #e34040; /* Keep signout icon red */
+    fill: #DC2626; /* Keep signout icon red */
   }
 
   .bottom{ margin-top:auto; }
-  .signout{ color:#e34040; display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:12px; }
+  .signout{ color:#DC2626; display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:12px; }
   .signout:hover{ background:#feecec; }
-/* Header */
+/* Header — teal header band */
   .topbar {
     display: flex;
     align-items: flex-end;
     justify-content: space-between;
     gap: 10px;
     padding: 12px 16px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    background: linear-gradient(135deg, var(--brand, #0F9B8E), var(--brand-dark, #0C8075));
   }
   .title-wrap {
     display: flex;
     flex-direction: column;
-    gap: 0.5px;
+    gap: 2px;
     color: #fff;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .page-desc {
+    margin: 2px 0 0;
+    font-size: var(--fs-meta, 12.5px);
+    line-height: 1.35;
+    color: rgba(255, 255, 255, 0.75);
   }
   .hello {
   max-width: 980px;       /* kekalkan limit ruang */
-  white-space: normal;    /* ❗ benarkan wrap */
-  word-break: break-word;
+  white-space: nowrap;    /* jangan bungkus */
+  overflow: hidden;
+  text-overflow: ellipsis;
   line-height: 1.3;
 
-  font-size: 18px;
+  font-size: var(--fs-body, 14px);
   font-weight: 400;
-  opacity: 0.95;
+  opacity: 0.85;
   margin: 0;
   color: #fff;
 }
 
   .page-title {
     margin: 0;
-    font-size: 55px;
-    line-height: 1.1;
-    font-weight: 700;
+    font-size: var(--fs-page-title, 24px);
+    line-height: 1.2;
+    font-weight: 600;
     color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .logo img {
@@ -728,6 +754,7 @@ $: pageTitle =
     display: flex;
     align-items: center;
     gap: 10px;
+    flex-shrink: 0;
   }
   .icon-btn {
     border: none;
@@ -778,9 +805,10 @@ $: pageTitle =
     min-width:200px; padding:6px; z-index:30;
   }
   .menu-btn{
-    display:block; width:100%; padding:10px 12px; border:none; background:#fff;
+    display:flex; align-items:center; gap:8px; width:100%; padding:10px 12px; border:none; background:#fff;
     border-radius:8px; color:#111827; font-weight:600; text-align:left; cursor:pointer;
   }
+  .menu-btn .menu-ico{ width:16px; height:16px; color:#0F9B8E; flex:none; }
   .menu-btn:hover{ background:#f3f4f6; }
 
   /* Content */
@@ -788,7 +816,7 @@ $: pageTitle =
   flex: 1;
   min-height: 0;
   background: transparent;
-  padding: 16px;
+  padding: 24px 24px 32px;
   overflow-y: auto;
 }
 
@@ -804,12 +832,12 @@ $: pageTitle =
   .modal-wrap{ position:fixed; inset:0; background:rgba(0,0,0,.4); display:grid; place-items:center; z-index:50; }
   .modal{ background:#fff; border-radius:12px; width:420px; max-width:95vw; box-shadow:0 12px 30px rgba(0,0,0,.2); overflow:hidden; }
   .modal-hd{ display:flex; justify-content:space-between; align-items:center; padding:14px 18px; border-bottom:1px solid #e5e7eb; }
-  .modal-ttl{ font-size:18px; font-weight:700; color:#49bdb3; }
+  .modal-ttl{ font-size:18px; font-weight:700; color:#0F9B8E; }
   .modal-x{ border:none; background:transparent; font-size:20px; cursor:pointer; }
 
   .tabs{ display:flex; border-bottom:1px solid #e5e7eb; }
   .tabs button{ flex:1; padding:10px; background:#f9fafb; border:none; cursor:pointer; font-weight:600; color:#000; }
-  .tabs button.selected{ background:#fff; border-bottom:2px solid #49bdb3; color:#000; }
+  .tabs button.selected{ background:#fff; border-bottom:2px solid #0F9B8E; color:#000; }
 
   .modal-bd{ padding:18px; display:flex; flex-direction:column; gap:14px; }
   .pic-wrap{ display:flex; flex-direction:column; gap:10px; }
@@ -820,14 +848,14 @@ $: pageTitle =
   .row label{ font-weight:600; font-size:14px; color:#000; }
 
   .form-ft{ display:flex; justify-content:flex-end; gap:10px; margin-top:10px; }
-  .btn-ghost{ background:#fff; color:#000e; border:1px solid #d1d5db; border-radius:8px; padding:.6rem 1rem; font-weight:600; cursor:pointer; }
-  .btn-primary{ background:#49bdb3; color:#fff; border:none; border-radius:8px; padding:.6rem 1rem; font-weight:700; cursor:pointer; }
+  .btn-ghost{ background:#fff; color:var(--ink,#1F2937); border:1px solid #e5e7eb; border-radius:10px; padding:.6rem 1rem; font-weight:600; cursor:pointer; }
+  .btn-primary{ background:#0F9B8E; color:#fff; border:none; border-radius:10px; padding:.65rem 1.25rem; font-weight:600; font-size:14px; cursor:pointer; }
   .btn-primary:hover{ filter:brightness(.95); }
 
   .muted{ color:#64748b; font-size:12px; }
 
   .input-lg{ font-size:16px; padding:12px 14px; border:1px solid #d1d5db; border-radius:10px; outline:none; }
-  .input-lg:focus{ border-color:#49bdb3; box-shadow:0 0 0 3px rgba(73,189,179,.15); }
+  .input-lg:focus{ border-color:#0F9B8E; box-shadow:0 0 0 3px rgba(15,155,142,.15); }
 
   .input-wrap-lg{ position:relative; display:flex; align-items:center; }
   .input-wrap-lg .input-lg{ width:100%; padding-right:44px; }
@@ -919,14 +947,14 @@ $: pageTitle =
 }
 
 .toast-item.error {
-  border-color: #ef4444;
+  border-color: #DC2626;
 }
 .toast-item.error .toast-icon {
-  background: #ef4444;
+  background: #DC2626;
 }
 
 .toast-item.info {
-  border-color: #3b82f6;
+  border-color: #0F9B8E;
 }
 .toast-item.info .toast-icon {
   background: #3b82f6;
@@ -1030,7 +1058,11 @@ $: pageTitle =
   }
 
   .page-title {
-    font-size: 28px;
+    font-size: 20px;
+  }
+
+  .page-desc {
+    display: none;
   }
 
   .hello {

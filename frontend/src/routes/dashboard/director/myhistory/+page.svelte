@@ -55,6 +55,9 @@
   let leaveToCancel = null;
   let newAttachmentName = "";
 
+  let showDetailModal = false;
+  let selectedLeave = null;
+
   // ===== Edit Modal State (same as staff) =====
 let modal; 
 let isEdit = false;
@@ -244,6 +247,7 @@ $: {
           duration: l.duration,  
           attachment_path: l.attachment_path, 
           cancellationReason: l.cancellation_reason,
+          createdAt: l.created_at,
 
           status:
             Number(l.total_days) === 0
@@ -643,6 +647,16 @@ function onFromChange() {
 function onUntilChange() {
   if (duration === "Half") return;
 }
+
+function openDetail(l) {
+  selectedLeave = l;
+  showDetailModal = true;
+}
+
+function closeDetail() {
+  showDetailModal = false;
+  selectedLeave = null;
+}
 </script>
 
 <!-- ===== Confirmation Modal ===== -->
@@ -700,48 +714,142 @@ function onUntilChange() {
 {/if}
 
 
+<!-- ===== DETAIL MODAL ===== -->
+{#if showDetailModal && selectedLeave}
+  <div class="modal-backdrop" on:click={closeDetail}>
+    <div class="detail-modal" on:click|stopPropagation>
+      <button class="detail-close-btn" on:click={closeDetail}>✕</button>
+      <h3 class="detail-title">Leave Application Details</h3>
+
+      <div class="detail-grid">
+        <div class="detail-row">
+          <span class="detail-label">Staff ID</span>
+          <span class="detail-value">{selectedLeave.id}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Name</span>
+          <span class="detail-value">{selectedLeave.name}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Requested On</span>
+          <span class="detail-value">{selectedLeave.createdAt ? fmt(selectedLeave.createdAt) : '-'}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Leave Type</span>
+          <span class="detail-value">{getLeaveFullName(selectedLeave.type)}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Duration</span>
+          <span class="detail-value">{selectedLeave.duration === 'Half' ? 'Half Day' : 'Full Day'}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Date From</span>
+          <span class="detail-value">{fmt(selectedLeave.dateFrom)}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Date Until</span>
+          <span class="detail-value">{fmt(selectedLeave.dateTo)}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Total Days</span>
+          <span class="detail-value">{formatDays(selectedLeave.totalDays)}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Status</span>
+          <span class="detail-value">
+            <span class="badge {selectedLeave.status.toLowerCase().replace(' ', '-')} {selectedLeave.status === 'Approved' && selectedLeave.type === 'UNPAID' ? 'unpaid-approved' : ''}">
+              {selectedLeave.status}
+            </span>
+          </span>
+        </div>
+        <div class="detail-row detail-row-full">
+          <span class="detail-label">Reason</span>
+          <span class="detail-value detail-reason">{selectedLeave.reason || '-'}</span>
+        </div>
+        {#if selectedLeave.attachment_path}
+          <div class="detail-row detail-row-full">
+            <span class="detail-label">Attachment</span>
+            <span class="detail-value">
+              <a
+                href={`${PUBLIC_VITE_API_BASE}${selectedLeave.attachment_path?.startsWith('/') ? '' : '/'}${selectedLeave.attachment_path}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="detail-attachment-link"
+              >
+                View Attachment
+              </a>
+            </span>
+          </div>
+        {/if}
+        {#if selectedLeave.cancellationReason}
+          <div class="detail-row detail-row-full">
+            <span class="detail-label">Cancellation Reason</span>
+            <span class="detail-value detail-reason">{selectedLeave.cancellationReason}</span>
+          </div>
+        {/if}
+      </div>
+    </div>
+  </div>
+{/if}
+
 <!-- ===== FILTER BAR (Right aligned) ===== -->
-<div class="filter-bar">
+<div class="toprow">
   <div class="filters">
-    <div class="filter">
-      <label>STATUS</label>
-      <select bind:value={selectedStatus} aria-label="Filter by status">
-        {#each statuses as s}
-          <option value={s}>{s}</option>
-        {/each}
-      </select>
+    <div class="filter-wrap">
+      <svg class="filter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M3 4h18l-7 8v6l-4 2v-8l-7-8z"/>
+      </svg>
+      <label class="filter-label" for="status-filter">Status</label>
+      <div class="filter-select">
+        <select id="status-filter" bind:value={selectedStatus} aria-label="Filter by status">
+          {#each statuses as s}
+            <option value={s}>{s}</option>
+          {/each}
+        </select>
+      </div>
     </div>
 
-   <div class="filter">
-  <label>LEAVE TYPE</label>
-  <select bind:value={selectedLeaveType}>
-    <option value="All">All</option>
-
-    {#each leaveTypes.slice(1) as t}
-      <option value={t}>
-        {leaveTypeShortName[t] || t}
-      </option>
-    {/each}
-  </select>
-</div>
-
-
-    <div class="filter">
-      <label>YEAR</label>
-      <select bind:value={selectedYear} aria-label="Filter by year">
-        {#each years as y}
-          <option value={y}>{y}</option>
-        {/each}
-      </select>
+    <div class="filter-wrap">
+      <svg class="filter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M3 4h18l-7 8v6l-4 2v-8l-7-8z"/>
+      </svg>
+      <label class="filter-label" for="type-filter">Leave Type</label>
+      <div class="filter-select">
+        <select id="type-filter" bind:value={selectedLeaveType} aria-label="Filter by leave type">
+          <option value="All">All</option>
+          {#each leaveTypes.slice(1) as t}
+            <option value={t}>{leaveTypeShortName[t] || t}</option>
+          {/each}
+        </select>
+      </div>
     </div>
 
-    <div class="filter">
-      <label>MONTH</label>
-      <select bind:value={selectedMonth} aria-label="Filter by month">
-        {#each months as m}
-          <option value={m}>{m}</option>
-        {/each}
-      </select>
+    <div class="filter-wrap">
+      <svg class="filter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M3 4h18l-7 8v6l-4 2v-8l-7-8z"/>
+      </svg>
+      <label class="filter-label" for="year-filter">Year</label>
+      <div class="filter-select">
+        <select id="year-filter" bind:value={selectedYear} aria-label="Filter by year">
+          {#each years as y}
+            <option value={y}>{y}</option>
+          {/each}
+        </select>
+      </div>
+    </div>
+
+    <div class="filter-wrap">
+      <svg class="filter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M3 4h18l-7 8v6l-4 2v-8l-7-8z"/>
+      </svg>
+      <label class="filter-label" for="month-filter">Month</label>
+      <div class="filter-select">
+        <select id="month-filter" bind:value={selectedMonth} aria-label="Filter by month">
+          {#each months as m}
+            <option value={m}>{m}</option>
+          {/each}
+        </select>
+      </div>
     </div>
   </div>
 </div>
@@ -850,12 +958,18 @@ function onUntilChange() {
   </form>
 </dialog>
 <!-- ===== TABLE ===== -->
-<table class="leave-table">
+<div class="table-card">
+  {#if filteredLeaves.length === 0}
+    <div class="no-data">No leave applications found.</div>
+  {:else}
+    <div class="table-wrapper">
+      <table class="leave-table">
   <thead>
     <tr>
       <th style="width:56px;">No.</th>
       <th>Staff ID</th>
       <th>Name</th>
+      <th>Requested</th>
       <th>Dates</th>
       <th class="center">Total Days</th>
       <th>Leave Type</th>
@@ -869,6 +983,7 @@ function onUntilChange() {
         <td>{i + 1}</td>
         <td>{l.id}</td>
         <td>{l.name}</td>
+        <td>{l.createdAt ? fmt(l.createdAt) : '-'}</td>
         <td>
           {fmt(l.dateFrom)}
           {#if l.dateTo !== l.dateFrom} – {fmt(l.dateTo)}{/if}
@@ -888,6 +1003,12 @@ function onUntilChange() {
 
     <td class="center">
   <div class="action-wrapper">
+
+    <button class="icon-btn view-details-btn" title="View Details" on:click={() => openDetail(l)}>
+      <svg viewBox="0 0 24 24">
+        <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/>
+      </svg>
+    </button>
 
    <!-- SLOT: FILE ICON -->
 <div class="slot">
@@ -939,6 +1060,9 @@ function onUntilChange() {
     {/each}
   </tbody>
 </table>
+    </div>
+  {/if}
+</div>
 
 {#if toast.show}
   <div class="toast-stack">
@@ -987,62 +1111,105 @@ function onUntilChange() {
 {/if}
 
 <style>
-  /* ===== FILTER BAR ===== */
-  .filter-bar {
+  /* ===== TOP ROW: filters left, action right ===== */
+  .toprow {
     display: flex;
-    justify-content: flex-end; /* push filters to the right */
-    padding-right: 20px;
-    margin-bottom: 1rem;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
   }
   .filters {
     display: flex;
-    gap: 1.25rem;
-    align-items: end;
+    gap: 14px;
+    flex-wrap: wrap;
+    align-items: center;
   }
-  .filter label {
-    display: block;
-    font-size: 12px;
-    font-weight: 700;
-    color: white; /* as requested: white label text */
-    margin-bottom: 4px;
+  .filter-wrap { display: flex; align-items: center; gap: 6px; }
+  .filter-label { margin: 0 6px; font-weight: 600; font-size: 14px; color: var(--ink, #1F2937); }
+  .filter-icon { width: 16px; height: 16px; color: var(--muted, #6B7280); opacity: 0.9; }
+  .filter-select { min-width: 210px; }
+  .filter-select select {
+    appearance: none; -webkit-appearance: none;
+    background: #fff url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b7280' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 10px center;
+    border: 1px solid var(--line, #e5e7eb);
+    border-radius: 10px;
+    padding: .5rem 2rem .5rem .8rem;
+    font-size: 14px; font-weight: 600; color: var(--ink, #1F2937);
+    cursor: pointer; width: 100%;
   }
-  .filter select {
-    padding: 6px 10px;
-    border-radius: 9999px;
-    border: 1px solid #d1d5db;
-    font-size: 14px;
-    background: #fff;
+  .filter-select select:focus {
+    outline: none;
+    border-color: #0F9B8E;
+    box-shadow: 0 0 0 3px rgba(15,155,142,.15);
   }
 
-  /* ===== TABLE ===== */
-  table.leave-table {
-    width: 97%;
-    margin: 0 auto;
-    border-collapse: collapse;
-    background: #f9fafb;
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: #0F9B8E;
+    color: #fff;
+    border: none;
     border-radius: 10px;
-    overflow: hidden;
+    padding: .6rem 1.15rem;
+    font-weight: 600;
     font-size: 14px;
+    cursor: pointer;
+    box-shadow: 0 2px 10px rgba(15,23,42,.08);
+    white-space: nowrap;
   }
-  thead {
-    background: #f1f5f9;
-    text-align: left;
-    font-weight: 700;
-    color: #0f172a;
+  .btn-primary:hover { background: #0C8075; }
+  .add-leave-btn svg { width: 18px; height: 18px; fill: #fff; flex: none; }
+
+  /* ===== TABLE CARD (matches Admin Activity Log) ===== */
+  .table-card {
+    background: #fff;
+    border-radius: 12px;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 2px 10px rgba(15,23,42,.06);
+    overflow: hidden;
   }
-  th, td {
-    padding: 10px 12px;
+  .table-wrapper { overflow-x: auto; }
+  table.leave-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .leave-table thead {
+    background: #f9fafb;
     border-bottom: 1px solid #e5e7eb;
+  }
+  .leave-table th {
+    padding: 14px 16px;
+    text-align: left;
+    font-size: 12px;
+    font-weight: 600;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
     vertical-align: middle;
   }
-  tbody tr:hover {
-    background: #f3f4f6;
+  .leave-table td {
+    padding: 14px 16px;
+    font-size: 14px;
+    color: #111827;
+    vertical-align: middle;
+    border-bottom: 1px solid #f3f4f6;
+  }
+  .leave-table tbody tr:hover { background: #f9fafb; }
+  .no-data {
+    padding: 48px;
+    text-align: center;
+    color: #6b7280;
+    font-size: 16px;
   }
   .center {
     text-align: center;
   }
   .actions-col {
-    width: 80px;
+    width: 140px;
     text-align: center;
   }
 
@@ -1059,11 +1226,9 @@ function onUntilChange() {
   .badge.rejected { background: #fee2e2; color: #991b1b; border-color:#f3c2c2; }
   .badge.cancelled {background:#f1f5f9; color:#475569; border-color:#e2e8f0;}
   .badge.cancellation-pending { background: #fef08a; color: #854d0e; border-color: #fddc63;}
-
-/* === SPECIAL COLOR FOR APPROVED UNPAID LEAVE === */
 .badge.unpaid-approved {
-  background: #ffe7bb;    /* soft orange / light gold */
-  color: #b45309;         /* darker amber text */
+  background: #ffe7bb;
+  color: #b45309;
   border: 1px solid #f5c66c;
 }
 .badge.invalid {
@@ -1072,7 +1237,6 @@ function onUntilChange() {
   border: 1px  #cbd5e1;
 }
 
-  /* ===== ACTION BUTTON ===== */
   .delete-btn {
     background: transparent;
     border: none;
@@ -1088,9 +1252,23 @@ function onUntilChange() {
     background: #dcfce7;
     color: #166534;
   }
+  .delete-btn svg {
+    width: 18px;
+    height: 18px;
+  }
 
+  .file-btn svg {
+  width: 18px;
+  height: 18px;
+  color: #217859;
+}
 
-  /* ===== MODAL ===== */
+  .disabled-file {
+  opacity: 0.35 !important;
+  cursor: not-allowed !important;
+  pointer-events: none !important;
+}
+
   .modal-backdrop {
     position: fixed;
     inset: 0;
@@ -1109,7 +1287,7 @@ function onUntilChange() {
   }
   .modal-dialog h3 { 
     margin: 0 0 0.5rem; 
-    color: #49bdb3;
+    color: #0F9B8E;
     font-size: 26px;
   }
   .modal-dialog p { margin: 0 0 1.5rem; color: #4b5563; }
@@ -1127,29 +1305,24 @@ function onUntilChange() {
     font-size: 14px;
   }
   .btn-secondary { background: #e5e7eb; color: #1f2937; }
-  .btn-danger { background: #ef4444; color: white; }
+  .btn-danger { background: #DC2626; color: white; }
 
- .action-wrapper {
+.action-wrapper {
   display: flex;
   justify-content: center;
+  gap: 2px;
   align-items: center;
-  gap: 8px;
 }
-
-.slot {
-  width: 24px;          /* fixed width slot */
-  display: flex;
-  justify-content: center;
-}
-
 
 .icon-btn {
   background: transparent;
   border: none;
-  cursor: pointer;
   padding: 4px;
+  cursor: pointer;
   border-radius: 6px;
-  color: #217859;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .icon-btn svg {
@@ -1161,24 +1334,74 @@ function onUntilChange() {
 .icon-btn:hover {
   background: #dcfce7;
 }
-.file-btn svg {
-  width: 15px;
-  height: 15px;
-  color: #217859; /* SAME GREEN AS TRASH */
-  margin-left: 80px;
-  margin-top: 0.5px;
-}
 
-.disabled-file {
-  opacity: 0.35 !important;
-  cursor: not-allowed !important;
-  pointer-events: none !important;
+/* ===== DETAIL MODAL ===== */
+.detail-modal {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  width: min(520px, 92vw);
+  max-height: 85vh;
+  overflow-y: auto;
+  padding: 28px 32px 32px;
+  position: relative;
 }
-.pencil-btn{
-  margin-left: 18px;
+.detail-close-btn {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  border: none;
+  background: transparent;
+  font-size: 20px;
+  cursor: pointer;
+  color: #9ca3af;
+  padding: 4px 8px;
+  border-radius: 6px;
 }
-
-
+.detail-close-btn:hover { background: #f3f4f6; color: #111827; }
+.detail-title {
+  margin: 0 0 20px;
+  font-size: 20px;
+  font-weight: 700;
+  color: #111827;
+}
+.detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 24px;
+}
+.detail-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.detail-row-full {
+  grid-column: 1 / -1;
+}
+.detail-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.detail-value {
+  font-size: 14px;
+  color: #111827;
+}
+.detail-reason {
+  background: #f9fafb;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  line-height: 1.5;
+}
+.detail-attachment-link {
+  color: #2563eb;
+  text-decoration: underline;
+  font-size: 14px;
+}
+.detail-attachment-link:hover { color: #1d4ed8; }
 
  /* Modal Styles */
   .leave-modal {
@@ -1212,8 +1435,10 @@ function onUntilChange() {
     border-radius: 8px;
     padding: 8px 10px;
   }
+  .leave-form input[required]:invalid, .leave-form textarea[required]:invalid {
+    border-color: #DC2626;
+  }
   
-  /* --- Keep radios inline/left without changing their markup position --- */
   .leave-form .duration {
     display: flex;
     flex-direction: column;
@@ -1227,16 +1452,15 @@ function onUntilChange() {
     gap: .5rem;
     cursor: pointer;
     text-align: left;
-    font-weight: 400; /* label weight normal */
+    font-weight: 400;
   }
   .leave-form .duration input[type="radio"] {
-    accent-color: #3FADA4; /* slightly darker than #49bdb3 */
+    accent-color: #3FADA4;
     width: 16px;
     height: 16px;
     margin: 0;
   }
 
-  /* Greyed-out look for locked fields */
   .leave-form input[readonly],
   .leave-form input:disabled {
     background:#f3f4f6;
@@ -1244,18 +1468,17 @@ function onUntilChange() {
     cursor:not-allowed;
   }
 
-  /* helper text */
   .help { color:#6b7280; font-size:12px; display:block; margin-top:4px; font-weight: 400; }
   .help.warn { color:#b45309; }
   
   .submit-btn {
-    background: #3FADA4;
+    background: var(--brand, #0F9B8E);
     color: #fff;
     border: none;
-    border-radius: 8px;
+    border-radius: 10px;
     padding: 10px 14px;
     cursor: pointer;
-    font-weight: 700;
+    font-weight: 600;
     font-size: 14px;
     margin-top: 8px;
   }
@@ -1282,10 +1505,6 @@ function onUntilChange() {
     color: #1d4ed8;
   }
 
- /* =========================
-   TOAST NOTIFICATION
-========================= */
-/* ===== TOAST STACK ===== */
 .toast-stack {
   position: fixed;
   top: 20px;
@@ -1293,7 +1512,6 @@ function onUntilChange() {
   z-index: 9999;
 }
 
-/* ===== TOAST ITEM ===== */
 .toast-item {
   display: flex;
   align-items: flex-start; 
@@ -1307,7 +1525,6 @@ function onUntilChange() {
   border-left: 5px solid;
 }
 
-/* ICON */
 .toast-icon {
   width: 28px;
   height: 28px;
@@ -1325,7 +1542,6 @@ function onUntilChange() {
   fill: #fff;
 }
 
-/* BODY */
 .toast-body {
   flex: 1;
 }
@@ -1343,7 +1559,6 @@ function onUntilChange() {
   color: #4b5563;
 }
 
-/* CLOSE */
 .toast-close {
   background: transparent;
   border: none;
@@ -1356,7 +1571,6 @@ function onUntilChange() {
   color: #111827;
 }
 
-/* ===== TYPES ===== */
 .toast-item.success {
   border-color: #22c55e;
 }
@@ -1365,14 +1579,14 @@ function onUntilChange() {
 }
 
 .toast-item.error {
-  border-color: #ef4444;
+  border-color: #DC2626;
 }
 .toast-item.error .toast-icon {
-  background: #ef4444;
+  background: #DC2626;
 }
 
 .toast-item.info {
-  border-color: #3b82f6;
+  border-color: #0F9B8E;
 }
 .toast-item.info .toast-icon {
   background: #3b82f6;
@@ -1385,7 +1599,6 @@ function onUntilChange() {
   background: #f59e0b;
 }
 
-/* ===== ANIMATION ===== */
 @keyframes slideIn {
   from {
     opacity: 0;
@@ -1411,10 +1624,9 @@ function onUntilChange() {
   animation: fadeOut 0.25s ease forwards;
 }
 
-  /* ===== Responsive (keep filters usable) ===== */
   @media (max-width: 640px) {
     .filters { gap: .75rem; }
-    .filter select { font-size: 13px; }
+    .filter-select select { font-size: 13px; }
     th, td { padding: 8px 10px; }
   }
 </style>

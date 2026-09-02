@@ -306,6 +306,25 @@ router.post("/", upload.single("attachment"), async (req, res) => {
 
     const staffId = user.staff_id;
 
+    // ✅ BACKDATE VALIDATION — AL max 7 days, MC max 7 days
+    const msPerDay = 24 * 60 * 60 * 1000;
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const backdateDays = Math.floor(
+      (new Date(todayStr) - new Date(dateFrom)) / msPerDay
+    );
+
+    if (type === "AL" && backdateDays > 7) {
+      return res
+        .status(400)
+        .json({ message: "Annual Leave can only be backdated up to 7 days." });
+    }
+    if (type === "MC" && backdateDays > 7) {
+      return res
+        .status(400)
+        .json({ message: "Medical Leave can only be backdated up to 7 days." });
+    }
+
     // let serverDays;
     // if (duration === 'Half') {
     //   serverDays = 0.5;
@@ -746,6 +765,8 @@ if (user.role === 'Manager') {
         p.photourl AS photo_url,
         p.leave_entitlement_annual,
         p.leave_entitlement_medical,
+        p.carry_forward_balance,
+        p.carry_forward_expiry,
         p.notes
       FROM leave_requests lr
       LEFT JOIN profiles p ON p.staff_id = lr.staff_id
@@ -815,6 +836,25 @@ router.patch("/:id/edit", upload.single("attachment"), async (req, res) => {
     
     if (serverDays <= 0)
       return res.status(400).json({ message: "Invalid date range or no working days" });
+
+    // ✅ BACKDATE VALIDATION — AL max 7 days, MC max 7 days
+    const msPerDay = 24 * 60 * 60 * 1000;
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const backdateDays = Math.floor(
+      (new Date(todayStr) - new Date(date_from)) / msPerDay
+    );
+
+    if (leave_type === "AL" && backdateDays > 7) {
+      return res
+        .status(400)
+        .json({ message: "Annual Leave can only be backdated up to 7 days." });
+    }
+    if (leave_type === "MC" && backdateDays > 7) {
+      return res
+        .status(400)
+        .json({ message: "Medical Leave can only be backdated up to 7 days." });
+    }
 
     // ✅ CHECK FOR OVERLAPPING DATES (excluding current leave being edited)
     const overlapCheck = await pool.query(
@@ -1567,10 +1607,12 @@ router.get("/history/all", async (req, res) => {
     let sql = `
       SELECT
         lr.leave_id, lr.staff_id, lr.staff_name, lr.department,
-        lr.requester_role,
+        lr.requester_role, lr.requester_position,
         lr.leave_type, lr.status, lr.total_days,
         lr.date_from, lr.date_until, lr.created_at,
-        p.photourl, p.position
+        lr.reason, lr.cancellation_reason, lr.attachment_path,
+        p.photourl, p.position,
+        p.leave_entitlement_annual, p.leave_entitlement_medical
       FROM leave_requests lr
       LEFT JOIN profiles p ON p.staff_id = lr.staff_id
     `;

@@ -1,732 +1,557 @@
-<!-- letak dalam app.html (head) -->
-<link href="https://fonts.googleapis.com/css2?family=Bungee&display=swap" rel="stylesheet" />
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&display=swap" rel="stylesheet" />
-
 <script>
   import { onMount } from "svelte";
-  import { PUBLIC_VITE_API_BASE } from '$env/static/public';
-  const leaveTypeFullName = {
-    AL: "Annual / Emergency",
-    MC: "Medical",
-    MAT: "Maternity",
-    PAT: "Paternity",
-    COMP_A: "Compassionate A (Parent/Child/Spouse)",
-    COMP_B: "Compassionate B (Grandparent/Sibling)",
-    MAR: "Marriage",
-    HOSP: "Hospitalization",
-    UNPAID: "Unpaid"
-  };
+  import { PUBLIC_VITE_API_BASE } from "$env/static/public";
+  import StatCardsRow from "$lib/components/history/StatCardsRow.svelte";
+  import FilterBar from "$lib/components/history/FilterBar.svelte";
+  import ViewToggle from "$lib/components/history/ViewToggle.svelte";
+  import LeaveTable from "$lib/components/history/LeaveTable.svelte";
+  import MonthGroup from "$lib/components/history/MonthGroup.svelte";
+  import EmptyState from "$lib/components/history/EmptyState.svelte";
+  import ExportPanel from "$lib/components/history/ExportPanel.svelte";
+  import LeaveDetailModal from "$lib/components/history/LeaveDetailModal.svelte";
+  import { makeEmployeeRecord, MONTHS } from "$lib/components/history/utils.js";
+  import { exportCSV } from "$lib/components/history/exportCSV.js";
+  import { exportPDF } from "$lib/components/history/exportPDF.js";
+
   let me = null;
-
-  function getLeaveFullName(code) {
-    return leaveTypeFullName[code] || code;
-  }
-  let rows = [];
-  let showModal = false;
-  let selected = null;
-  let showAll = false;
-
-  const months = [
-    "January","February","March","April","May","June",
-    "July","August","September","October","November","December"
-  ];
-  const monthShort = ['All','Jan','Feb','Mar','Apr','May','June','July','Aug','Sept','Oct','Nov','Dec'];
-  const railTabs = [{ label: 'All', value: 'All' }, ...months.map((m,i)=>({label:monthShort[i+1], value:m}))];
-
-  let statusFilter = "";
-  let leaveTypeFilter = "";
-  let q = "";
-  let monthFilter = "All";
-
+  let rawRecords = [];
   let allDepartments = [];
 
-  // ===== Fetch Manager-filtered data =====
+  let viewMode = "restricted";
+  let showModeMenu = false;
+
+  let view = "flat";
+  let monthFilter = "All";
+  let deptFilter = "";
+  let typeFilter = "";
+  let statusFilter = "";
+  let searchQuery = "";
+
+  let showExportPanel = false;
+  let detailItem = null;
+
   async function loadHistory() {
-  const res = await fetch(
-  `${PUBLIC_VITE_API_BASE}/api/leave-requests/history/all?viewMode=${encodeURIComponent(viewMode)}`,
-  { credentials: "include" }
-);
-
-
-  const data = await res.json();
-  let filteredData = data;
-
-  // ===============================
-  // ROLE-BASED + VIEW MODE LOGIC
-  // ===============================
-
-  if (me?.role === "Manager") {
-
-    // 🔥 ALL VIEW (Admin-like)
-    if (viewMode === "all") {
-      filteredData = data;
-    }
-
-    // 🔒 MANAGER VIEW (Restricted)
-    else {
-      if (me.department === "Director") {
-        filteredData = data.filter(
-          (r) =>
-            r.requester_role === "Manager" ||   // all managers
-            r.department === "Director"          // director department staff
-        );
-      } else {
-        // normal manager (non-director)
-        const managerDepartments = me.department
-        .split(",")
-        .map(d => d.trim());
-
-      filteredData = data.filter(
-        r => managerDepartments.includes(r.department?.trim())
-      );
-      }
-    }
-  }
-
-  // ===============================
-  // GROUP + SET STATE
-  // ===============================
-  rows = groupByMonth(filteredData);
-
-  allDepartments = Array.from(
-    new Set(filteredData.map(e => e.department).filter(Boolean))
-  ).sort();
-}
-
-onMount(async () => {
-  const meRes = await fetch(
-  `${PUBLIC_VITE_API_BASE}/api/me`,
-  { credentials: "include" }
-);
-  me = await meRes.json();
-
-  await loadHistory();
-});
-
-
-function groupByMonth(list) {
-  const out = months.map(m => ({ month: m, employees: [] }));
-
-  list.forEach(item => {
-    if (!item.date_from || !item.date_until) return;
-
-    const start = new Date(item.date_from);
-    const end   = new Date(item.date_until);
-
-    let startMonth = start.getMonth();
-    let endMonth   = end.getMonth();
-
-    // If same month → push once
-    if (startMonth === endMonth) {
-      out[startMonth].employees.push(makeEmployeeRecord(item));
-    } 
-    // If spans multiple months → push into ALL involved months
-    else {
-      for (let m = startMonth; m <= endMonth; m++) {
-        out[m].employees.push(makeEmployeeRecord(item));
-      }
-    }
-  });
-
-  // 🔥 SORT employees inside each month by earliest date_from
-  out.forEach(monthObj => {
-    monthObj.employees.sort((a, b) => {
-      const da = new Date(a.dateFrom);
-      const db = new Date(b.dateFrom);
-      return da - db;  // earliest → latest
-    });
-  });
-
-  return out;
-}
-let viewMode = "restricted"; 
-// "restricted" = behaviour sekarang
-// "all" = view semua staff (macam admin)
-function resetAllFilters() {
-  statusFilter = "";
-  leaveTypeFilter = "";
-  q = "";
-  monthFilter = "All";
-}
-let showModeMenu = false;
-
-async function reloadAndReselect() {
-  const currentMonth = selected?.month;
-  await loadHistory();
-
-  if (currentMonth && currentMonth !== 'All') {
-    const found = rows.find(r => r.month === currentMonth);
-    selected = found || null;
-  } else {
-    selected = null;
-  }
-}
-
-function makeEmployeeRecord(item) {
-  const raw = item.status.toLowerCase();
-
-  let formatted =
-    raw === "cancellation_pending"
-      ? "Cancellation pending"
-      : raw.charAt(0).toUpperCase() + raw.slice(1);
-
-  return {
-    id: item.staff_id,
-    name: item.staff_name,
-    department: item.department,
-    totalDays: item.total_days,
-    leaveType: item.leave_type,
-    status: formatted,
-    dateFrom: item.date_from,
-    dateTo: item.date_until
-  };
-}
-  // ===== UI handlers =====
-  const count = (row) =>
-  row.employees.filter(e => e.status === "Approved").length;
-
-  async function onDetails(row){
-  await loadHistory();  
-  selected = row;
-  resetFiltersForMonthView();
-  showModal = true;
-}
-
-
-  function closeModal(){ showModal = false; selected = null; showAll = false; }
-  function handleKey(e){ if(e.key === 'Escape') closeModal(); }
-
-  $: allCombined = rows.flatMap(r => r.employees.map(e => ({ ...e, _month: r.month })));
-
-  function selectAllMonths(){
-    selected = { month: 'All', employees: allCombined };
-    monthFilter = 'All';
-  }
-
-  function jumpToMonth(m){
-    if (m === 'All') return selectAllMonths();
-    const found = rows.find(r => r.month === m);
-    if(found){ selected = found; resetFiltersForMonthView(); }
-  }
-
-  function onMonthFilterChange(value){
-    if (!selected) return;
-    if (value === 'All') return selectAllMonths();
-    if (months.includes(value)) jumpToMonth(value);
-  }
-
-  function resetFiltersForMonthView(){
-    monthFilter = selected?.month === 'All' ? 'All' : selected?.month || 'All';
-    showAll = false;
-  }
-
-  function fmt(iso){
-    return new Date(iso).toLocaleDateString(undefined,{
-      day:'numeric', month:'short', year:'numeric'
-    });
-  }
-
-  const dateRange = (a,b) => a===b ? fmt(a) : `${fmt(a)} – ${fmt(b)}`;
-
- const applyFilters = (list = []) => {
-  let out = list;
-
-  if (statusFilter)
-    out = out.filter(e => e.status.toLowerCase() === statusFilter.toLowerCase());
-
-  if (leaveTypeFilter)
-    out = out.filter(e => e.leaveType === leaveTypeFilter);
-
-  if (q.trim()) {
-    const term = q.trim().toLowerCase();
-    out = out.filter(e =>
-      e.name.toLowerCase().includes(term) ||
-      e.id.toLowerCase().includes(term)
+    const res = await fetch(
+      `${PUBLIC_VITE_API_BASE}/api/leave-requests/history/all?viewMode=${encodeURIComponent(viewMode)}`,
+      { credentials: "include" }
     );
+    const data = await res.json();
+    let filteredData = data;
+
+    if (me?.role === "Manager") {
+      if (viewMode === "all") {
+        filteredData = data;
+      } else {
+        if (me.department === "Director") {
+          filteredData = data.filter(
+            (r) =>
+              r.requester_role === "Manager" ||
+              r.department === "Director"
+          );
+        } else {
+          const managerDepartments = me.department
+            .split(",")
+            .map((d) => d.trim());
+          filteredData = data.filter((r) =>
+            managerDepartments.includes(r.department?.trim())
+          );
+        }
+      }
+    }
+
+    rawRecords = filteredData.map(makeEmployeeRecord);
+    allDepartments = Array.from(
+      new Set(rawRecords.map((e) => e.department).filter(Boolean))
+    ).sort();
   }
 
-  return out;
-};
+  onMount(async () => {
+    const meRes = await fetch(`${PUBLIC_VITE_API_BASE}/api/me`, {
+      credentials: "include",
+    });
+    me = await meRes.json();
+    await loadHistory();
+  });
 
-$: filtered = (() => {
-  // 👇 force Svelte to track these
-  statusFilter;
-  leaveTypeFilter;
-  q;
-  monthFilter;
-  selected;
+  async function switchViewMode(newMode) {
+    viewMode = newMode;
+    showModeMenu = false;
+    resetFilters();
+    await loadHistory();
+  }
 
-  if (!selected) return [];
+  function resetFilters() {
+    monthFilter = "All";
+    deptFilter = "";
+    typeFilter = "";
+    statusFilter = "";
+    searchQuery = "";
+  }
 
-  const base = allCombined.filter(e =>
-    selected.month === 'All'
-      ? monthFilter === 'All' || e._month === monthFilter
-      : e._month === selected.month
+  function handleFilterChange(e) {
+    const update = e.detail;
+    if ("monthFilter" in update) monthFilter = update.monthFilter;
+    if ("deptFilter" in update) deptFilter = update.deptFilter;
+    if ("typeFilter" in update) typeFilter = update.typeFilter;
+    if ("statusFilter" in update) statusFilter = update.statusFilter;
+    if ("searchQuery" in update) searchQuery = update.searchQuery;
+  }
+
+  function handleClearFilters() {
+    resetFilters();
+  }
+
+  $: filteredRecords = (() => {
+    let out = rawRecords;
+
+    if (monthFilter !== "All") {
+      out = out.filter((r) => {
+        const startMonth = new Date(r.dateFrom).getMonth();
+        const endMonth = new Date(r.dateTo).getMonth();
+        const targetIdx = MONTHS.indexOf(monthFilter);
+        return startMonth <= targetIdx && endMonth >= targetIdx;
+      });
+    }
+
+    if (deptFilter) {
+      out = out.filter((r) => r.department === deptFilter);
+    }
+
+    if (typeFilter) {
+      out = out.filter((r) => r.leaveType === typeFilter);
+    }
+
+    if (statusFilter) {
+      out = out.filter(
+        (r) => r.status.toLowerCase() === statusFilter.toLowerCase()
+      );
+    }
+
+    if (searchQuery.trim()) {
+      const term = searchQuery.trim().toLowerCase();
+      out = out.filter(
+        (r) =>
+          r.name.toLowerCase().includes(term) ||
+          r.id.toLowerCase().includes(term)
+      );
+    }
+
+    return out;
+  })();
+
+  $: monthGroups = (() => {
+    const groups = MONTHS.map((m) => ({ month: m, records: [] }));
+
+    filteredRecords.forEach((r) => {
+      const startMonth = new Date(r.dateFrom).getMonth();
+      const endMonth = new Date(r.dateTo).getMonth();
+      for (let m = startMonth; m <= endMonth; m++) {
+        groups[m].records.push({ ...r, _month: MONTHS[m] });
+      }
+    });
+
+    groups.forEach((g) =>
+      g.records.sort(
+        (a, b) => new Date(a.dateFrom) - new Date(b.dateFrom)
+      )
+    );
+
+    return groups;
+  })();
+
+  $: hasActiveFilters =
+    monthFilter !== "All" ||
+    deptFilter !== "" ||
+    typeFilter !== "" ||
+    statusFilter !== "" ||
+    searchQuery !== "";
+
+  $: visibleMonthGroups = monthGroups.filter(
+    (g) => g.records.length > 0 || (!hasActiveFilters && monthFilter === "All")
   );
 
-  return applyFilters(base);
-})();
+  $: expandedMonth = (() => {
+    const currentMonthIdx = new Date().getMonth();
+    const candidate = monthGroups[currentMonthIdx];
+    if (candidate && candidate.records.length > 0) {
+      return candidate.month;
+    }
+    for (const g of monthGroups) {
+      if (g.records.length > 0) return g.month;
+    }
+    return null;
+  })();
 
-  $: total = filtered.length;
+  $: flatRecords = filteredRecords.map((r) => ({
+    ...r,
+    _month: new Date(r.dateFrom).toLocaleDateString("en-US", { month: "long" })
+  }));
+
+  $: stats = {
+    total: filteredRecords.length,
+    approved: filteredRecords.filter((r) => r.status === "Approved").length,
+    pending: filteredRecords.filter((r) => r.status === "Pending" || r.status === "Cancellation pending").length,
+    cancelled: filteredRecords.filter((r) => r.status === "Cancelled" || r.status === "Rejected" || r.status === "Invalid").length
+  };
+
+  async function handleExport(e) {
+    const { format, scope, includeCancelled } = e.detail;
+    let records = scope === "filtered" ? filteredRecords : rawRecords;
+
+    if (!includeCancelled) {
+      records = records.filter(
+        (r) => r.status !== "Cancelled" && r.status !== "Rejected" && r.status !== "Invalid"
+      );
+    }
+
+    const exportFilters = {
+      deptFilter: scope === "filtered" ? deptFilter : "",
+      typeFilter: scope === "filtered" ? typeFilter : "",
+      statusFilter: scope === "filtered" ? statusFilter : "",
+      monthFilter: scope === "filtered" ? monthFilter : "All",
+      searchQuery: scope === "filtered" ? searchQuery : "",
+      scope
+    };
+
+    if (format === "csv") {
+      exportCSV(records, { deptFilter: exportFilters.deptFilter, includeAll: scope === "all" });
+    } else {
+      const allStats = {
+        total: records.length,
+        approved: records.filter((r) => r.status === "Approved").length,
+        pending: records.filter((r) => r.status === "Pending" || r.status === "Cancellation pending").length,
+        cancelled: records.filter((r) => r.status === "Cancelled" || r.status === "Rejected" || r.status === "Invalid").length
+      };
+      await exportPDF(records, exportFilters, allStats);
+    }
+
+    showExportPanel = false;
+  }
 </script>
 
-<svelte:window on:keydown={handleKey}/>
+<svelte:window
+  on:keydown={(e) => {
+    if (e.key === "Escape") showModeMenu = false;
+  }}
+/>
 
 <div class="page">
-{#if me?.role === "Manager" && me?.department === "Director"}
-      <div class="fab-container">
-        <button class="fab" on:click={() => showModeMenu = !showModeMenu} aria-label="Change view mode">
-            <svg class="fab-icon" viewBox="0 0 24 24" aria-hidden="true">
-              <rect x="3" y="6" width="18" height="2" />
-              <rect x="3" y="11" width="18" height="2" />
-              <rect x="3" y="16" width="18" height="2" />
-            </svg>
-          </button>
-
-       {#if showModeMenu}
-          <div class="fab-menu">
-
-           <!-- MANAGER VIEW (SOLID SINGLE USER) -->
-           <button
-               class:active={viewMode === 'restricted'}
-                on:click={async () => {
-                  viewMode = 'restricted';
-                  showModeMenu = false;
-
-                  resetAllFilters();
-                  await reloadAndReselect();
-
-                  selected = null;
-                }}
-            >
-              <!-- Single user -->
-              <svg class="mode-icon" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5z"/>
-              </svg>
-              <span>Manager View</span>
-            </button>
-
-            <!-- ALL VIEW -->
-           <button
-                class:active={viewMode === 'all'}
-                on:click={async () => {
-                  viewMode = 'all';
-                  showModeMenu = false;
-
-                  resetAllFilters();
-                  await reloadAndReselect();
-
-                  selected = null;       
-                }}
-            >
-              <svg class="mode-icon" viewBox="0 0 24 24" aria-hidden="true">
-                <!-- left person -->
-                <circle cx="8" cy="9" r="4"/>
-                <path d="M2 21c0-3 3.5-5 6-5s6 2 6 5v1H2v-1z"/>
-
-                <!-- right person -->
-                <circle cx="16" cy="9" r="5"/>
-                <path d="M8 21c0-3.5 4-5.5 8-5.5s8 2 8 5.5v1H8v-1z"/>
-              </svg>
-              <span>All View</span>
-            </button>
-          </div>
-        {/if}
-  </div>
-{/if}
-
-    <!-- Grid of month cards -->
-    <div class="card-grid">
-      {#each rows as row}
-        <div class="month-card" on:click={() => onDetails(row)}>
-          <h2>{row.month}</h2>
-          <p>Number of Approved Leaves</p>
-          <div class="count">{count(row)}</div>
+  <!-- <div class="page-header"> -->
+    <!-- <div>
+      <h1 class="page-title">Leave history</h1>
+      <p class="page-subtitle">Browse leave records for your team.</p>
+    </div> -->
+    <!-- <div class="header-right">
+      {#if me}
+        <div class="profile-badge">
+          <span class="profile-name">{me.full_name}</span>
+          <span class="profile-role">{me.role}</span>
         </div>
-      {/each}
+      {/if}
     </div>
+  </div> -->
+
+  {#if me?.role === "Manager" && me?.department === "Director"}
+    <div class="fab-container">
+      <button
+        class="fab"
+        on:click={() => (showModeMenu = !showModeMenu)}
+        aria-label="Change view mode"
+      >
+        <svg class="fab-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="3" y="6" width="18" height="2" />
+          <rect x="3" y="11" width="18" height="2" />
+          <rect x="3" y="16" width="18" height="2" />
+        </svg>
+      </button>
+
+      {#if showModeMenu}
+        <div class="fab-menu">
+          <button
+            class:active={viewMode === "restricted"}
+            on:click={() => switchViewMode("restricted")}
+          >
+            <svg class="mode-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5z"
+              />
+            </svg>
+            <span>Manager View</span>
+          </button>
+          <button
+            class:active={viewMode === "all"}
+            on:click={() => switchViewMode("all")}
+          >
+            <svg class="mode-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="8" cy="9" r="4" />
+              <path
+                d="M2 21c0-3 3.5-5 6-5s6 2 6 5v1H2v-1z"
+              />
+              <circle cx="16" cy="9" r="5" />
+              <path
+                d="M8 21c0-3.5 4-5.5 8-5.5s8 2 8 5.5v1H8v-1z"
+              />
+            </svg>
+            <span>All View</span>
+          </button>
+        </div>
+      {/if}
+    </div>
+  {/if}
+
+  <StatCardsRow records={filteredRecords} />
+
+  <div class="controls-row">
+    <FilterBar
+      departments={allDepartments}
+      bind:monthFilter
+      bind:deptFilter
+      bind:typeFilter
+      bind:statusFilter
+      bind:searchQuery
+      on:change={handleFilterChange}
+      on:clear={handleClearFilters}
+    />
+    <div class="controls-right">
+      <ViewToggle bind:value={view} />
+      <button class="export-btn" on:click={() => (showExportPanel = true)}>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+          <polyline points="7 10 12 15 17 10" />
+          <line x1="12" y1="15" x2="12" y2="3" />
+        </svg>
+        Export
+      </button>
+    </div>
+  </div>
+
+  {#if view === "flat"}
+    {#if filteredRecords.length === 0}
+      <EmptyState on:clear={handleClearFilters} />
+    {:else}
+      <LeaveTable records={flatRecords} showMonthColumn={monthFilter === "All"} on:detail={(e) => (detailItem = e.detail)} />
+    {/if}
+  {:else}
+    {#if filteredRecords.length === 0}
+      <EmptyState on:clear={handleClearFilters} />
+    {:else}
+      <div class="month-groups">
+        {#each visibleMonthGroups as group}
+          <MonthGroup
+            month={group.month}
+            records={group.records}
+            expanded={expandedMonth === group.month}
+            empty={group.records.length === 0}
+            emptyOpacity={group.records.length === 0 && !hasActiveFilters}
+            on:detail={(e) => (detailItem = e.detail)}
+          />
+        {/each}
+      </div>
+    {/if}
+  {/if}
 </div>
 
+<ExportPanel
+  visible={showExportPanel}
+  filteredCount={filteredRecords.length}
+  allCount={rawRecords.length}
+  on:generate={handleExport}
+  on:close={() => (showExportPanel = false)}
+/>
 
-<!-- Modal -->
-{#if showModal}
-  <div class="modal">
-    <div class="backdrop" on:click={closeModal}></div>
-    <div class="dialog" role="dialog" aria-modal="true" aria-label="Leave details">
-      <div class="dialog-head">
-        <h3>{selected?.month} — Leave Details</h3>
-        <button class="iconbtn" on:click={closeModal} aria-label="Close">✕</button>
-      </div>
-
-      <div class="dialog-body">
-        <aside class="rail" aria-label="Month bookmarks">
-          {#each railTabs as t}
-            <button
-              class="tab {selected?.month === t.value ? 'active' : ''}"
-              style="--tab-bg: var(--primary);"
-              title={t.value}
-              on:click={() => jumpToMonth(t.value)}>
-              <span class="tab-chip">{t.label}</span>
-            </button>
-          {/each}
-        </aside>
-
-        <section class="table-wrap">
-          <div class="controls">
-            <div class="spacer"></div>
-              <label class="control">
-              <span>Status</span>
-              <select bind:value={statusFilter}>
-                <option value="">All</option>
-                <option>Approved</option>
-                <option>Pending</option>
-                <option>Rejected</option>
-                <option>Cancelled</option>
-                <option>Invalid</option>
-              </select>
-            </label>
-
-            <label class="control">
-              <span>Leave Type</span>
-              <select bind:value={leaveTypeFilter}>
-                <option value="">All</option>
-                <option value="AL">Annual / Emergency</option>
-                <option value="MC">Medical</option>
-                <option value="MAT">Maternity</option>
-                <option value="PAT">Paternity</option>
-                <option value="COMP_A">Compassionate A</option>
-                <option value="COMP_B">Compassionate B</option>
-                <option value="MAR">Marriage</option>
-                <option value="HOSP">Hospitalization</option>
-                <option value="UNPAID">Unpaid</option>
-              </select>
-            </label>
-
-            <label class="control">
-              <span>Name / ID</span>
-              <input type="text" placeholder="Search…" bind:value={q} />
-            </label>
-
-            <label class="control">
-              <span>Month</span>
-              <select on:change={(e)=>onMonthFilterChange(e.target.value)} bind:value={monthFilter}>
-                <option>All</option>
-                {#each months as m}<option>{m}</option>{/each}
-              </select>
-            </label>
-          </div>
-
-          {#if selected && total > 0}
-            <div class="table-meta">
-              {#if selected.month === 'All' && monthFilter === 'All'}Showing: <b>All months</b>. {/if}
-              {#if selected.month === 'All' && monthFilter !== 'All'}Month: <b>{monthFilter}</b>. {/if}
-              {#if statusFilter}Status: <b>{statusFilter}</b>. {/if}
-              {#if q}Search: <b>{q}</b>. {/if}
-              {#if !showAll && total > 10}
-                Showing first 10 of {total}. <button class="linkbtn" on:click={() => showAll = true}>Show all</button>
-              {:else if showAll && total > 10}
-                Showing all {total}. <button class="linkbtn" on:click={() => showAll = false}>Show less</button>
-              {/if}
-            </div>
-
-            <table class="table">
-              <thead>
-                <tr>
-                  <th>No.</th>
-                  {#if selected.month === 'All'}<th>Month</th>{/if}
-                  <th>Staff ID</th>
-                  <th>Name</th>
-                  <th>Department</th>
-                  <th>Dates</th>
-                  <th class="center">Total Days</th>
-                  <th>Leave Type</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {#each (showAll ? filtered : filtered.slice(0, 10)) as emp, i}
-                  <tr>
-                    <td>{i + 1}</td>
-                    {#if selected.month === 'All'}<td>{emp._month}</td>{/if}
-                    <td>{emp.id}</td>
-                    <td>{emp.name}</td>
-                    <td>{emp.department}</td>
-                    <td>{dateRange(emp.dateFrom, emp.dateTo)}</td>
-                    <td class="center">{emp.totalDays}</td>
-                    <td>{getLeaveFullName(emp.leaveType)}</td>
-                    <td><span class="status {emp.status.toLowerCase().replace(' ', '-')}">{emp.status}</span></td>
-                  </tr>
-                {/each}
-              </tbody>
-            </table>
-          {:else}
-            <div class="empty">
-            No results found.
-          </div>
-        {/if}
-        </section>
-      </div>
-
-      <div class="dialog-foot">
-        <button class="btn" on:click={closeModal}>Close</button>
-      </div>
-    </div>
-  </div>
-{/if}
+<LeaveDetailModal bind:item={detailItem} />
 
 <style>
-  :root{
-    --primary:#49bdb3; --ink:#0c4a6e;
-    --pop-out:14px; --tab-h:30px; --tab-gap:6px; --chip:18px; --chip-font:11px; --tab-radius:10px;
-  }
-  :global(html, body) {
-    margin: 0;
-    background: #0c4a6e;
-    font-family: system-ui, sans-serif;
-  }
-
- .page {
+  .page {
     padding: 1.5rem;
     max-width: 1500px;
     margin: auto;
   }
 
-  .header {
+  .page-header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1.5rem;
+    align-items: flex-start;
+    margin-bottom: 1.25rem;
   }
 
-  .header-logo {
-    font-family:'Bungee', cursive;
-    font-size: 24px;
-    color: #fff;
-    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+  .page-title {
+    margin: 0;
+    font-size: var(--fs-page-title, 24px);
+    font-weight: 800;
+    color: var(--ink, #1F2937);
   }
 
-  /* ===== New Month Cards ===== */
-  .card-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-    gap: 1rem;
-    margin-top: -33px;
-  }
-
-  .month-card {
-    background: #fff;
-    border-radius: 12px;
-    padding: 1.5rem;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    cursor: pointer;
-    transition: transform 0.2s, box-shadow 0.2s;
-    text-align: center;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.08);
-    height: 175px;
-
-  }
-  .month-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
-  }
-  .month-card h2 {
-    margin: 0 0 0.5rem;
-    color: #0c4a6e;
-    font-family:'Outfit', sans-serif;
-    font-weight: 900;
-    text-transform: uppercase;
-    background: rgba(73, 189, 179, 0.15);
-    padding: 8px 0;
-    border-radius: 8px;
-
-  }
-  .month-card p {
-    margin: 0 0 1rem;
-    color: #475569;
+  .page-subtitle {
+    margin: 0.2rem 0 0;
     font-size: 0.9rem;
+    color: #64748b;
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .profile-badge {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.1rem;
+  }
+
+  .profile-name {
+    font-weight: 700;
+    font-size: 0.88rem;
+    color: #1F2937;
+  }
+
+  .profile-role {
+    font-size: 0.75rem;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .controls-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0;
+  }
+
+  .controls-right {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-shrink: 0;
+    padding-top: 0.1rem;
+  }
+
+  .export-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.45rem 0.85rem;
+    border-radius: 10px;
+    border: 1px solid #e5e7eb;
+    background: #fff;
+    color: #475569;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+
+  .export-btn:hover {
+    border-color: var(--brand, #0F9B8E);
+    color: var(--brand, #0F9B8E);
+    background: #f0fdf9;
+  }
+
+  .month-groups {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  /* FAB */
+  .fab-container {
+    position: fixed;
+    right: 16px;
+    top: 115px;
+    z-index: 999;
+  }
+
+  .fab {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: none;
+    background: #fef08a;
+    cursor: pointer;
+    box-shadow: 0 6px 16px rgba(15, 155, 142, 0.45);
+  }
+
+  .fab-icon {
+    width: 22px;
+    height: 22px;
+    margin-top: 4px;
+    margin-left: -0.5px;
+    color: #0f766e;
+  }
+
+  .fab-menu {
+    position: absolute;
+    top: 44px;
+    right: 0;
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 6px;
+    min-width: 180px;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .fab-menu button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border: none;
+    background: transparent;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    color: #0c4a6e;
+    text-align: left;
+    font-family: inherit;
+  }
+
+  .fab-menu button:hover {
+    background: #f1f5f9;
+  }
+
+  .fab-menu button.active {
+    background: #e6f7f5;
+    color: #0f766e;
     font-weight: 500;
   }
-  .month-card .count {
-    font-size: 2.5rem;
-    font-weight: bold;
-    color: #49bdb3;
-    margin-top: -10px;
-  }
-  /* Button styles (for modal) */
-  .btn{
-    background:#e0f2fe; border:1px solid #e0f2fe;
-    border-radius:8px; padding:6px 14px;
-    font-weight:700; cursor:pointer; font-size:13px;
-  }
-  .btn:hover{ background:#f3f4f6; }
 
-  /* ===== Modal ===== */
-  .modal{ position:fixed; inset:0; z-index:50; display:grid; place-items:center; }
-  .backdrop{ position:absolute; inset:0; background:rgba(0,0,0,.35); }
-  .dialog{ position:relative; width:min(1100px, 94vw); max-height:82vh; background:#fff; border-radius:14px; box-shadow:0 10px 30px rgba(0,0,0,.2); display:flex; flex-direction:column; overflow:hidden; }
-  .dialog-head{ display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-bottom:1px solid #eee; }
-  .dialog-head h3{ margin:0; font-size:18px; color:#000; }
-  .iconbtn{ background:transparent; border:none; font-size:18px; cursor:pointer; line-height:1; color:#476577; }
-  .dialog-body{ display:grid; grid-template-columns:76px 1fr; gap:0; min-height:0; }
-
-  /* Vertical numbered tabs */
-  .rail{ display:flex; flex-direction:column; gap:var(--tab-gap); padding:10px 8px; border-right:1px solid #eef3f4; background:#f9fcfc; overflow-y:auto; overflow-x:visible; position:relative; }
-  .tab{ position:relative; width:60px; height:var(--tab-h); border:none; background:transparent; cursor:pointer; display:flex; align-items:center; padding-left:16px; }
-  .tab::before{ content:""; position:absolute; top:0; bottom:0; left:10px; right:0; background:var(--tab-bg); border-radius:var(--tab-radius); box-shadow:0 2px 4px rgba(0,0,0,.06); transition:right .18s ease, border-radius .18s ease, box-shadow .18s ease; }
-  .tab-chip{ position:relative; z-index:1; min-width:var(--chip); height:var(--chip); padding:0 8px; border-radius:10px; background:#49bdb3; color:#fff; font-weight:900; font-size:var(--chip-font); display:grid; place-items:center; }
-  .tab.active::before{ right:calc(-1 * var(--pop-out)); border-top-right-radius:calc(var(--tab-radius) + 6px); border-bottom-right-radius:calc(var(--tab-radius) + 6px); box-shadow:0 6px 14px rgba(0,0,0,.14); }
-  .tab:focus-visible{ outline:2px solid #0ea5a5; outline-offset:2px; }
-
-  /* Right side content */
-  .table-wrap{ overflow:auto; padding:10px 16px 12px 16px; }
-  .controls{ display:flex; align-items:end; gap:10px; margin-bottom:8px; }
-  .controls .spacer{ flex:1; }
-  .control{ display:flex; flex-direction:column; gap:4px; }
-  .control span{ font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:#486474; font-weight:800; }
-  .control select, .control input{ padding:6px 10px; border-radius:6px; border:1px solid #e3eef0; background:#fff; color:#0c4a6e; font-size:13px; min-width:150px; }
-  .control input{ min-width:200px; }
-
-  .table{ width:100%; border-collapse:separate; border-spacing:0; font-size:14px; }
-  .table thead th{ position:sticky; top:0; background:#f6fbfb; text-align:left; padding:10px 12px; font-weight:700; color:#285a6d; border-bottom:1px solid #e5f2f1; }
-  .table tbody td{ padding:10px 12px; border-bottom:1px solid #f0f4f7; color:#1b3342; vertical-align:middle; }
-  .table tbody tr:hover td{ background:#fcfefe; }
-  .table-meta{ font-size:12px; color:#4a6978; margin:6px 0 8px; }
-  .linkbtn{ border:none; background:transparent; text-decoration:underline; cursor:pointer; font-weight:700; color:#0c4a6e; }
-
-  .table th.center,
-  .table td.center {
-    text-align: center;
+  .fab-menu button.active::after {
+    content: "";
+    margin-left: auto;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #0F9B8E;
   }
 
-  .status{ display:inline-block; padding:4px 8px; border-radius:999px; font-weight:700; font-size:12px; border:1px solid transparent; text-transform: capitalize; }
-  .status.approved{ background:#e8f8f3; color:#116a51; border-color:#cbeee3; }
-  .status.pending{  background:#fff8e7; color:#8a5b00; border-color:#f5e1b7; }
-  .status.rejected{ background:#fdecec; color:#9b1c1c; border-color:#f3c2c2; }
-  .status.cancelled{ background:#f1f5f9; color:#475569; border-color:#e2e8f0; }
-  .status.cancellation-pending {
-  background: #fef08a;
-  color: #854d0e;
-  border-color: #fddc63;
-  white-space: nowrap;
-}
-.status.invalid {
-  background: #a5a5a7;     /* soft grey */
-  color: #ffffff;         /* white text */
-  border: 1px solid #cbd5e1;
-}
-
-  .empty{ padding:22px; color:#567; text-align:center; }
-  .dialog-foot{ padding:12px 16px; border-top:1px solid #eee; display:flex; justify-content:flex-end; }
-
-  .fab-container{
-  position:fixed;
-  right:16px;
-  top: 115px;
-  z-index:999;
-}
-
-.fab{
-  width:32px;
-  height:32px;
-  border-radius:50%;
-  border:none;
-  background:#fef08a;
-  color:#0c4a6e;;
-  font-size:18px;
-  cursor:pointer;
-  box-shadow:0 6px 16px rgba(73,189,179,.45);
-}
-
-.fab-icon {
-  width: 22px;
-  height: 22px;
-  margin-top: 4px;
-  margin-left:-0.5px;
-  color: #0f766e;
-}
-
-.fab-menu{
-  position:absolute;
-  top:44px;
-  right:0;
-  background:#ffffff;
-  border-radius:12px;
-  padding:6px;
-  min-width:180px;
-  box-shadow:0 12px 30px rgba(0,0,0,.18);
-  display:flex;
-  flex-direction:column;
-  gap:4px;
-}
-
-.fab-menu button{
-  display:flex;
-  align-items:center;
-  gap:10px;
-  padding:10px 12px;
-  border:none;
-  background:transparent;
-  border-radius:8px;
-  cursor:pointer;
-  font-size:14px;
-  font-weight:500;
-  color:#0c4a6e;
-  text-align:left;
-}
-
-
-.fab-menu button:hover{
-  background:#f1f5f9;
-}
-
-.fab-menu button.active{
-  background:#e6f7f5;
-  color:#0f766e;
-  font-weight:500;
-}
-
-.fab-menu button.active::after{
-  content:"";
-  margin-left:auto;
-  width:6px;
-  height:6px;
-  border-radius:50%;
-  background:#49bdb3;
-}
-
-.mode-icon{
-  width:18px;
-  height:18px;
-  fill:#217859;      /* warna solid */
-  flex-shrink:0;
-}
-.fab-menu button{
-  display:flex;
-  align-items:center;
-  gap:10px;
-}
-
-
-
-  @media(max-width:900px){
-    .dialog-body{ grid-template-columns:1fr; }
-    .rail{ flex-direction:row; gap:8px; padding:8px; border-right:none; border-bottom:1px solid #eef3f4; }
-    .tab{ width:56px; height:28px; }
-    .controls{ flex-wrap:wrap; }
-    .control select, .control input{ min-width:140px; }
+  .mode-icon {
+    width: 18px;
+    height: 18px;
+    fill: #217859;
+    flex-shrink: 0;
   }
-  @media(max-width:860px){
-    .card-grid{ grid-template-columns: repeat(2, 1fr); }
-    .month-card{ height: auto; min-height: 150px; }
-    .page{ padding: 1rem; }
-    .dialog{ width: 96vw; max-height: 90vh; }
-    .table{ font-size: 13px; }
-    .table thead th, .table tbody td{ padding: 8px 10px; }
+
+  @media (max-width: 900px) {
+    .controls-row {
+      flex-direction: column;
+    }
+    .controls-right {
+      align-self: flex-start;
+    }
   }
-  @media(max-width:560px){
-    .card-grid{ grid-template-columns: 1fr; }
-    .dialog-body{ grid-template-columns: 1fr; }
-    .rail{ flex-direction:row; overflow-x:auto; }
+
+  @media (max-width: 860px) {
+    .page {
+      padding: 1rem;
+    }
   }
 </style>
-
