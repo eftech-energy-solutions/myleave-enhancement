@@ -561,7 +561,7 @@ async function saveProfile(e) {
               ></path>
             </svg>
           </span>
-           <span class="text">Leave Approvals</span>
+           <span class="text">Approve Leave</span>
             {#if pendingCount > 0}
               <span class="nav-badge">{pendingCount > 9 ? '9+' : pendingCount}</span>
             {/if}
@@ -611,13 +611,13 @@ async function saveProfile(e) {
           <h1 class="page-title">Leave History</h1>
           <p class="page-desc">Browse leave records for your staff.</p>
         {:else if $page.url.pathname.startsWith('/dashboard/manager/leave-approvals')}
-          <h1 class="page-title">Leave Approvals</h1>
+          <h1 class="page-title">Approve Leave</h1>
           <p class="page-desc">Review and manage pending leave requests from your team.</p>
         {:else if $page.url.pathname.startsWith('/dashboard/manager/employees/all')}
           <h1 class="page-title">Employees</h1>
           <p class="page-desc">View all employees across the organisation.</p>
         {:else if $page.url.pathname.startsWith('/dashboard/manager/employees')}
-          <h1 class="page-title">Employees &amp; Leave Approvals</h1>
+          <h1 class="page-title">Employees &amp; Approve Leave</h1>
           <p class="page-desc">View employees and review pending leave requests from your team.</p>
         {:else if $page.url.pathname.startsWith('/dashboard/manager/profile')}
           <h1 class="page-title">My Profile</h1>
