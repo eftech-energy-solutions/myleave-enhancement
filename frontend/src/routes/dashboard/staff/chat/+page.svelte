@@ -104,10 +104,6 @@
   }
 </script>
 
-<svelte:head>
-  <title>Chat | MyLeave</title>
-</svelte:head>
-
 <div class="chat-container">
   <section class="conversation-panel">
     <div class="conversation-header">
