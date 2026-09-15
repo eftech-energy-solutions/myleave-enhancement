@@ -10,6 +10,7 @@ export const load = async ({ locals, url }) => {
       case 'admin':   throw redirect(302, '/dashboard/admin');
       case 'manager': throw redirect(302, '/dashboard/manager/main');
       case 'staff':   throw redirect(302, '/dashboard/staff');
+      case 'director': throw redirect(302, '/dashboard/director');
       default:        throw redirect(302, '/login');
     }
   }

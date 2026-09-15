@@ -130,6 +130,30 @@ CREATE TABLE IF NOT EXISTS holiday_overrides (
 );
 
 -- ============================================================
+-- TABLE: conversations
+-- ============================================================
+CREATE TABLE IF NOT EXISTS conversations (
+    id              SERIAL PRIMARY KEY,
+    participant_1   TEXT NOT NULL,
+    participant_2   TEXT NOT NULL,
+    last_message_at TIMESTAMP,
+    created_at      TIMESTAMP NOT NULL DEFAULT NOW(),
+    UNIQUE(participant_1, participant_2)
+);
+
+-- ============================================================
+-- TABLE: messages
+-- ============================================================
+CREATE TABLE IF NOT EXISTS messages (
+    id              SERIAL PRIMARY KEY,
+    conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    sender_id       TEXT NOT NULL,
+    text            TEXT NOT NULL,
+    read_at         TIMESTAMP,
+    created_at      TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+-- ============================================================
 -- INDEXES
 -- ============================================================
 CREATE INDEX IF NOT EXISTS idx_profiles_email_lower ON profiles (LOWER(email));
@@ -147,3 +171,9 @@ CREATE INDEX IF NOT EXISTS idx_admin_logs_action ON admin_logs (action);
 CREATE INDEX IF NOT EXISTS idx_password_resets_email ON password_resets (user_email, used);
 CREATE INDEX IF NOT EXISTS idx_public_holidays_date ON public_holidays (date);
 CREATE INDEX IF NOT EXISTS idx_holiday_overrides_action ON holiday_overrides (action);
+CREATE INDEX IF NOT EXISTS idx_conversations_participant_1 ON conversations (participant_1);
+CREATE INDEX IF NOT EXISTS idx_conversations_participant_2 ON conversations (participant_2);
+CREATE INDEX IF NOT EXISTS idx_conversations_last_message ON conversations (last_message_at DESC);
+CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages (conversation_id, id);
+CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages (sender_id);
+CREATE INDEX IF NOT EXISTS idx_messages_read ON messages (conversation_id, read_at);

@@ -7,6 +7,7 @@
   let pendingLeave = [];
   let pendingCancel = [];
   let pendingCount = 0;
+  let unreadChatCount = 0;
 
   let sessionUser = null;
   let sessionDept = null;
@@ -116,6 +117,8 @@ onMount(async () => {
 
       // ✅ PANGGIL LEPAS safeUser DAH ADA
       await loadPendingCount();
+      await loadUnreadChatCount();
+      setInterval(loadUnreadChatCount, 15000);
     }
   } catch (err) {
     console.error(err);
@@ -185,6 +188,19 @@ onMount(async () => {
     console.error('Failed to load pending count', e);
   }
 }
+
+  async function loadUnreadChatCount() {
+    try {
+      const res = await fetch(`${PUBLIC_VITE_API_BASE}/api/chat/unread`, {
+        credentials: 'include'
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      unreadChatCount = data.total || 0;
+    } catch (e) {
+      console.error('Failed to load unread chat count', e);
+    }
+  }
 
   // Profile modal
   let profileModalOpen = false;
@@ -556,19 +572,37 @@ async function saveProfile(e) {
         >
           <span class="ico">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-              <path
-                d="M22 5.18L10.59 16.6l-4.24-4.24 1.41-1.41 2.83 2.83 10-10L22 5.18zm-2.21 5.04c.13.57.21 1.17.21 1.78 0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8c1.58 0 3.04.46 4.28 1.25l1.44-1.44C16.1 2.67 14.13 2 12 2 6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10c0-1.19-.22-2.33-.6-3.39l-1.61 1.61z"
-              ></path>
-            </svg>
-          </span>
-           <span class="text">Approve Leave</span>
-            {#if pendingCount > 0}
-              <span class="nav-badge">{pendingCount > 9 ? '9+' : pendingCount}</span>
-            {/if}
-        </a>
+            <path
+              d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm0 2-8 5-8-5h16zm0 12H4V8l8 5 8-5v10z"
+            ></path>
+          </svg>
+        </span>
+        <span class="text">Approve Leave</span>
+        {#if pendingCount > 0}
+          <span class="nav-badge">{pendingCount > 9 ? '9+' : pendingCount}</span>
+        {/if}
+      </a>
 
-      </nav>
-    </div>
+      <a
+        href="/dashboard/manager/chat"
+        class:active={$page.url.pathname.startsWith('/dashboard/manager/chat')}
+        style="margin-top: 2px;"
+      >
+        <span class="ico">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path
+              d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12zM7 9h10v2H7V9zm0 4h6v2H7v-2z"
+            ></path>
+          </svg>
+        </span>
+        <span class="text">Chat</span>
+        {#if unreadChatCount > 0}
+          <span class="nav-badge">{unreadChatCount > 9 ? '9+' : unreadChatCount}</span>
+        {/if}
+      </a>
+
+    </nav>
+  </div>
 
     <div class="bottom">
       <a href="/logout" class="signout">
