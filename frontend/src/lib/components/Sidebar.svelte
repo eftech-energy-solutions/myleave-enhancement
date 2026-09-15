@@ -123,6 +123,8 @@ $: headerAvatarUrl = safeUser.photoUrl
 
   loadingUser = false;
   await loadPendingCount();
+  await loadUnreadChatCount();
+  setInterval(loadUnreadChatCount, 15000);
 
   const handler = () => {
     loadPendingCount();
@@ -137,6 +139,7 @@ $: headerAvatarUrl = safeUser.photoUrl
 
 
   let pendingCount = 0;
+  let unreadChatCount = 0;
 
 async function loadPendingCount() {
   try {
@@ -155,6 +158,19 @@ async function loadPendingCount() {
     console.error("Failed to load pending count:", err);
   }
 }
+
+async function loadUnreadChatCount() {
+    try {
+      const res = await fetch(`${PUBLIC_VITE_API_BASE}/api/chat/unread`, {
+        credentials: 'include'
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      unreadChatCount = data.total || 0;
+    } catch (e) {
+      console.error('Failed to load unread chat count', e);
+    }
+  }
 
 
 function handlePanelKeydown(e) {
@@ -724,6 +740,9 @@ $: pageDesc =
             </span>
 
             <span class="text">Chat</span>
+            {#if unreadChatCount > 0}
+              <span class="nav-badge">{unreadChatCount > 9 ? '9+' : unreadChatCount}</span>
+            {/if}
           </a>
       </nav>
     </div>

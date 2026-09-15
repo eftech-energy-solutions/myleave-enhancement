@@ -9,6 +9,7 @@
   afterNavigate(() => { sidebarOpen = false; });
 
   let selectedFile = null;
+  let unreadChatCount = 0;
   // ---- NAV (staff role) ----
   const roleBase = '/dashboard/staff';
   
@@ -74,11 +75,27 @@ function showToast(message, type = "success", title = "", duration = 3000) {
           ? `${PUBLIC_VITE_API_BASE}${safeUser.photoUrl}` 
           : '';
         console.log('safeUser updated on mount:', safeUser);
-      }
-    } catch (err) {
-      console.error('Error fetching user:', err);
     }
-  });
+  } catch (err) {
+    console.error('Error fetching user:', err);
+  }
+
+  await loadUnreadChatCount();
+  setInterval(loadUnreadChatCount, 15000);
+});
+
+  async function loadUnreadChatCount() {
+    try {
+      const res = await fetch(`${PUBLIC_VITE_API_BASE}/api/chat/unread`, {
+        credentials: 'include'
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      unreadChatCount = data.total || 0;
+    } catch (e) {
+      console.error('Failed to load unread chat count', e);
+    }
+  }
 
   let profileMenuOpen = false;
   // Avatar header preview
@@ -378,6 +395,9 @@ $: pageDesc =
           </span>
 
           <span class="text">Chat</span>
+          {#if unreadChatCount > 0}
+            <span class="nav-badge">{unreadChatCount > 9 ? '9+' : unreadChatCount}</span>
+          {/if}
         </a>
       </nav>
     </div>
@@ -693,6 +713,20 @@ $: pageDesc =
 
   .bottom{ margin-top:auto; }
   .signout{ color:#DC2626; display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:12px; }
+  .nav-badge {
+    margin-left: auto;
+    background: #dc2626;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 9999px;
+    line-height: 1.4;
+    position: relative;
+    top: 1.5px;
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
   .signout:hover{ background:#feecec; }
 /* Header — teal header band */
   .topbar {
