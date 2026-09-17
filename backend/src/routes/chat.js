@@ -1,7 +1,17 @@
 import express from 'express';
 import pool from '../db.js';
+import { encryptChatText, decryptChatText } from '../utils/chatCrypto.js';
 
 const router = express.Router();
+
+function safeDecrypt(payload) {
+  try {
+    return decryptChatText(payload);
+  } catch (err) {
+    console.error('Failed to decrypt chat message:', err.message);
+    return '[Unable to decrypt]';
+  }
+}
 
 const OP_SUPPORT_LIKE = '%operation support%';
 
@@ -152,9 +162,16 @@ router.get('/users', async (req, res) => {
       [...mine.params, me.staff_id, search]
     );
 
+    const users = result.rows.map((u) => {
+      if (u.last_message) {
+        u.last_message = safeDecrypt(u.last_message);
+      }
+      return u;
+    });
+
     return res.json({
       success: true,
-      users: result.rows
+      users
     });
   } catch (error) {
     console.error('Get chat users error:', error);
@@ -240,12 +257,15 @@ const themPred = reachablePredicate(recipient.role, recipient.department, recipi
       )
     ).rows[0];
 
+    const plainText = text;
+    const encryptedText = encryptChatText(text);
+
     const msg = (
       await client.query(
         `INSERT INTO messages (conversation_id, sender_id, text)
          VALUES ($1, $2, $3)
          RETURNING id, sender_id, text, read_at, created_at`,
-        [conv.id, me.staff_id, text]
+        [conv.id, me.staff_id, encryptedText]
       )
     ).rows[0];
 
@@ -255,6 +275,8 @@ const themPred = reachablePredicate(recipient.role, recipient.department, recipi
     );
 
     await client.query('COMMIT');
+
+    msg.text = plainText;
 
     return res.status(201).json({
       success: true,
@@ -312,7 +334,10 @@ router.get('/messages/:conversationId', async (req, res) => {
       [conversationId, beforeId, limit]
     );
 
-    const messages = result.rows.reverse();
+    const messages = result.rows.map((m) => ({
+      ...m,
+      text: safeDecrypt(m.text)
+    })).reverse();
     const hasMore = messages.length === limit;
 
     return res.json({ success: true, conversation_id: conversationId, messages, hasMore });
