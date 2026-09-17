@@ -21,6 +21,10 @@ function isHandler(alias) {
   )`;
 }
 
+function isHandlerPosition(position) {
+  return HANDLER_POSITIONS.includes(String(position || '').toLowerCase().trim());
+}
+
 // A profile row in the Operation Support department that is NOT one of the
 // handlers and NOT an admin — fully hidden from every non-admin chat list.
 function hiddenOpsMember(alias) {
@@ -35,7 +39,7 @@ function hiddenOpsMember(alias) {
 // given table alias) is reachable by a caller with the given role/department.
 // Returns { sql, params } — the predicate may reference `$1` for the caller
 // department when the role needs department overlap matching.
-function reachablePredicate(role, department, alias = 'p') {
+function reachablePredicate(role, department, position, alias = 'p') {
   const r = String(role || '').toLowerCase();
   const full = `(LOWER(${alias}.role) = 'admin' OR ${isHandler(alias)})`;
 
@@ -43,7 +47,11 @@ function reachablePredicate(role, department, alias = 'p') {
     return { sql: '1 = 0', params: [] };
   }
 
-  if (r === 'admin' || String(department || '').toLowerCase().includes('operation support')) {
+  if (
+    r === 'admin'
+    || isHandlerPosition(position)
+    || String(department || '').toLowerCase().includes('operation support')
+  ) {
     return { sql: '1 = 1', params: [] };
   }
 
@@ -86,7 +94,7 @@ router.get('/users', async (req, res) => {
     const me = req.user;
     const search = req.query.search?.trim() || '';
 
-    const mine = reachablePredicate(me.role, me.department, 'u');
+    const mine = reachablePredicate(me.role, me.department, me.position, 'u');
     const meIdx = mine.params.length + 1;
     const searchIdx = meIdx + 1;
 
@@ -181,7 +189,7 @@ router.post('/messages', async (req, res) => {
 
     const recipient = (
       await client.query(
-        `SELECT staff_id, role, department FROM profiles WHERE staff_id = $1 AND termination_date IS NULL LIMIT 1`,
+        `SELECT staff_id, role, department, position FROM profiles WHERE staff_id = $1 AND termination_date IS NULL LIMIT 1`,
         [recipientId]
       )
     ).rows[0];
@@ -190,8 +198,8 @@ router.post('/messages', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Recipient not found' });
     }
 
-    const mePred = reachablePredicate(me.role, me.department);
-    const themPred = reachablePredicate(recipient.role, recipient.department);
+const mePred = reachablePredicate(me.role, me.department, me.position);
+const themPred = reachablePredicate(recipient.role, recipient.department, recipient.position);
 
     const fromMe = await client.query(
       `SELECT 1 FROM profiles p
