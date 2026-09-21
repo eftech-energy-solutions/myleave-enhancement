@@ -374,31 +374,8 @@ async function loadRecent() {
   maxApplyDate.setMonth(maxApplyDate.getMonth() + 6);
   const maxApplyISO = localISO(maxApplyDate);
 
-  const todayISO = localISO(today);
-
-    // ✅ MC boleh backdate max 7 hari
-  const mcBackdateLimit = (() => {
-    const d = new Date(today);
-    d.setDate(d.getDate() - 7);
-    return d;
-  })();
-
-  // ✅ AL boleh backdate max 7 hari
-  const alBackdateLimit = (() => {
-    const d = new Date(today);
-    d.setDate(d.getDate() - 7);
-    return d;
-  })();
-
-  // Earliest selectable "Date from" per leave type (AL: 7 days, MC: 7 days backdate)
-  $: dateFromMin = (() => {
-    if (leaveType === 'AL' || leaveType === 'MC') {
-      const d = new Date(today);
-      d.setDate(d.getDate() - (leaveType === 'AL' ? 7 : 7));
-      return localISO(d);
-    }
-    return '';
-  })();
+  // Backdating allowed without limit — no earliest "Date from" restriction
+  const dateFromMin = '';
 
   let viewBase = atStartOfDay(new Date());
   function clampToWindowMonth(d) {
@@ -818,38 +795,6 @@ async function submitLeave(e) {
   e.preventDefault();
 
   if (!formEl.reportValidity()) return;
-
-  const from = parseLocalISO(dateFrom);
-
-// ❌ selain MC → tak boleh past
-// if (leaveType !== 'MC' && from < today) {
-//   showToast(
-//     "You cannot apply leave for past dates.",
-//     "warning",
-//     "Invalid Date"
-//   );
-//   return;
-// }
-
-// ❌ MC → max 7 hari je
-if (leaveType === 'MC' && from < mcBackdateLimit) {
-  showToast(
-    "Medical Leave can only be backdated up to 7 days.",
-    "warning",
-    "Invalid Date"
-  );
-  return;
-}
-
-// ❌ AL → max 7 hari je
-if (leaveType === 'AL' && from < alBackdateLimit) {
-  showToast(
-    "Annual Leave can only be backdated up to 7 days.",
-    "warning",
-    "Invalid Date"
-  );
-  return;
-}
 
   // ✅ CHECK FOR OVERLAPPING DATES
   const overlapping = checkDateRangeOverlap(dateFrom, dateUntil);
@@ -1321,17 +1266,7 @@ async function loadApprovedUsedDays() {
                   return;
                 }
 
-                // Backdate guard: older than both AL (7d) and MC (7d) windows
-                const clickedISO = localISO(d.date);
-                if (clickedISO < todayISO && clickedISO < localISO(mcBackdateLimit)) {
-                  showToast(
-                    "Leave can only be backdated up to 7 days.",
-                    "warning",
-                    "Backdate Limit"
-                  );
-                  return;
-                }
-
+                // Backdating allowed without limit — past dates are selectable
                 openLeaveForm(d.date);
               }}
 

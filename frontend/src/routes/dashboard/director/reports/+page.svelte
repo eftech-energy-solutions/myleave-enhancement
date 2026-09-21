@@ -381,14 +381,7 @@ async function loadRecent() {
 
   const todayISO = localISO(today);
 
-  let viewBase = atStartOfDay(new Date());
-
-  // ✅ MC boleh backdate max 7 hari
-  const mcBackdateLimit = (() => {
-    const d = new Date(today);
-    d.setDate(d.getDate() - 7);
-    return d;
-  })();
+let viewBase = atStartOfDay(new Date());
 
   function clampToWindowMonth(d) {
     // ⬇️ DIUBAHSUAI: Logik fallback ditambah untuk pastikan ia sentiasa ada nilai
@@ -1214,11 +1207,7 @@ async function submitLeave(e) {
     <div class="dates">
       <label>
         <span>Date from</span>
-        <input type="date" name="dateFrom" bind:value={dateFrom} required min={
-        leaveType === 'MC'
-          ? localISO(mcBackdateLimit)
-          : todayISO
-      } on:change={onFromChange} />
+        <input type="date" name="dateFrom" bind:value={dateFrom} required on:change={onFromChange} />
       </label>
 
       <label>
@@ -1227,11 +1216,7 @@ async function submitLeave(e) {
             type="date"
             name="dateUntil"
             bind:value={dateUntil}
-            min={
-              leaveType === 'MC'
-                ? (dateFrom || localISO(mcBackdateLimit))
-                : (dateFrom || todayISO)
-            }
+            min={dateFrom}
             disabled={duration === 'Half' || endLocked}
             aria-disabled={duration === 'Half' || endLocked}
             readonly={endLocked}

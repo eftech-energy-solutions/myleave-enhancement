@@ -201,15 +201,8 @@ const leaveCodes = {
     return localISO(d);
   };
 
-  // Earliest selectable "Date From" per leave type (AL: 7 days, MC: 7 days backdate)
-  $: dateFromMin = (() => {
-    if (leaveType === "AL" || leaveType === "MC") {
-      const d = atStartOfDay(new Date());
-      d.setDate(d.getDate() - (leaveType === "AL" ? 7 : 7));
-      return localISO(d);
-    }
-    return "";
-  })();
+  // Backdating allowed without limit — no earliest "Date From" restriction
+  const dateFromMin = '';
 
   // Returns applied-for dates that clash with existing
   // pending / approved / cancellation-pending applications.
@@ -605,31 +598,8 @@ async function submitLeave(event) {
     }
 
     // ===============================
-    // 1️⃣b BACKDATE VALIDATION (AL max 7 days, MC max 7 days)
+    // 1️⃣b BACKDATE VALIDATION — backdating allowed without limit
     // ===============================
-    const fromDate = parseLocalISO(dateFrom);
-    if (fromDate) {
-      const backdateDays = Math.floor(
-        (atStartOfDay(new Date()) - atStartOfDay(fromDate)) / 86400000
-      );
-
-      if (leaveType === "AL" && backdateDays > 7) {
-        showToast(
-          "Annual Leave can only be backdated up to 7 days.",
-          "warning",
-          "Invalid Date"
-        );
-        return;
-      }
-      if (leaveType === "MC" && backdateDays > 7) {
-        showToast(
-          "Medical Leave can only be backdated up to 7 days.",
-          "warning",
-          "Invalid Date"
-        );
-        return;
-      }
-    }
 
     // ===============================
     // 1️⃣c OVERLAP VALIDATION — no duplicate dates / inside an applied range

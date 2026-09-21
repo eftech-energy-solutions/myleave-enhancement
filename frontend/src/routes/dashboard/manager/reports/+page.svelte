@@ -386,16 +386,7 @@ async function loadRecent() {
   maxApplyDate.setMonth(maxApplyDate.getMonth() + 6);
   const maxApplyISO = localISO(maxApplyDate);
 
-  const todayISO = localISO(today);
-
   let viewBase = atStartOfDay(new Date());
-
-  // ✅ MC boleh backdate max 7 hari
-  const mcBackdateLimit = (() => {
-    const d = new Date(today);
-    d.setDate(d.getDate() - 7);
-    return d;
-  })();
 
   function clampToWindowMonth(d) {
     // ⬇️ DIUBAHSUAI: Logik fallback ditambah untuk pastikan ia sentiasa ada nilai
@@ -1227,11 +1218,7 @@ async function submitLeave(e) {
             type="date"
             name="dateUntil"
             bind:value={dateUntil}
-            min={
-              leaveType === 'MC'
-                ? (dateFrom || localISO(mcBackdateLimit))
-                : (dateFrom || todayISO)
-            }
+            min={dateFrom}
             disabled={duration === 'Half' || endLocked}
             aria-disabled={duration === 'Half' || endLocked}
             readonly={endLocked}

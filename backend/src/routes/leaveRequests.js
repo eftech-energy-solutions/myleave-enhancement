@@ -306,24 +306,7 @@ router.post("/", upload.single("attachment"), async (req, res) => {
 
     const staffId = user.staff_id;
 
-    // ✅ BACKDATE VALIDATION — AL max 7 days, MC max 7 days
-    const msPerDay = 24 * 60 * 60 * 1000;
-    const now = new Date();
-    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-    const backdateDays = Math.floor(
-      (new Date(todayStr) - new Date(dateFrom)) / msPerDay
-    );
-
-    if (type === "AL" && backdateDays > 7) {
-      return res
-        .status(400)
-        .json({ message: "Annual Leave can only be backdated up to 7 days." });
-    }
-    if (type === "MC" && backdateDays > 7) {
-      return res
-        .status(400)
-        .json({ message: "Medical Leave can only be backdated up to 7 days." });
-    }
+    // ✅ BACKDATED LEAVE ALLOWED WITHOUT LIMIT — no 7-day cap
 
     // let serverDays;
     // if (duration === 'Half') {
@@ -837,24 +820,7 @@ router.patch("/:id/edit", upload.single("attachment"), async (req, res) => {
     if (serverDays <= 0)
       return res.status(400).json({ message: "Invalid date range or no working days" });
 
-    // ✅ BACKDATE VALIDATION — AL max 7 days, MC max 7 days
-    const msPerDay = 24 * 60 * 60 * 1000;
-    const now = new Date();
-    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-    const backdateDays = Math.floor(
-      (new Date(todayStr) - new Date(date_from)) / msPerDay
-    );
-
-    if (leave_type === "AL" && backdateDays > 7) {
-      return res
-        .status(400)
-        .json({ message: "Annual Leave can only be backdated up to 7 days." });
-    }
-    if (leave_type === "MC" && backdateDays > 7) {
-      return res
-        .status(400)
-        .json({ message: "Medical Leave can only be backdated up to 7 days." });
-    }
+    // ✅ BACKDATED LEAVE ALLOWED WITHOUT LIMIT — no 7-day cap
 
     // ✅ CHECK FOR OVERLAPPING DATES (excluding current leave being edited)
     const overlapCheck = await pool.query(
