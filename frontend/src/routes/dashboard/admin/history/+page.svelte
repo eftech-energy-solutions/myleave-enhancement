@@ -256,7 +256,7 @@
   on:close={() => (showExportPanel = false)}
 />
 
-<LeaveDetailModal bind:item={detailItem} />
+<LeaveDetailModal bind:item={detailItem} on:refresh={loadHistory} />
 
 <style>
   .page {

@@ -1457,6 +1457,128 @@ const staffEmail = emailRes.rows[0]?.email;
 
 
 /* ============================================================
+    ADMIN WITHDRAW APPROVED LEAVE — RESTORE BALANCE
+    PATCH /api/leave-requests/:id/withdraw
+============================================================ */
+router.patch("/:id/withdraw", async (req, res) => {
+  try {
+    const user = req.user;
+    if (!user) {
+      return res.status(401).json({ message: "Unauthorised" });
+    }
+    if (String(user.role || "").trim().toLowerCase() !== "admin") {
+      return res.status(403).json({ message: "Only admins can withdraw leave" });
+    }
+
+    const leaveId = req.params.id;
+
+    const find = await pool.query(
+      `SELECT * FROM leave_requests WHERE leave_id=$1`,
+      [leaveId]
+    );
+
+    if (!find.rows.length) {
+      return res.status(404).json({ message: "Leave not found" });
+    }
+
+    const leave = find.rows[0];
+
+    if (String(leave.status || "").trim().toLowerCase() !== "approved") {
+      return res.status(400).json({
+        message: "Only approved leave can be withdrawn."
+      });
+    }
+
+    const staffId = leave.staff_id;
+    const leaveType = String(leave.leave_type || "").trim().toUpperCase();
+    const days = Number(leave.total_days) || 0;
+
+    // ========================================
+    // RESTORE BALANCE BASED ON LEAVE TYPE
+    // ========================================
+    if (leaveType === "AL" || leaveType === "EL") {
+      let deductCF = Number(leave.deduct_cf) || 0;
+      let deductAL = Number(leave.deduct_al) || 0;
+
+      // If deduction split was never recorded, restore everything to AL
+      if (leave.deduct_cf == null && leave.deduct_al == null) {
+        deductCF = 0;
+        deductAL = days;
+      }
+
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+
+        await client.query(
+          `SELECT 1 FROM profiles WHERE staff_id = $1 FOR UPDATE`,
+          [staffId]
+        );
+
+        await client.query(
+          `UPDATE profiles
+           SET carry_forward_balance = carry_forward_balance + $1,
+               leave_entitlement_annual = leave_entitlement_annual + $2
+           WHERE staff_id=$3`,
+          [deductCF, deductAL, staffId]
+        );
+
+        await client.query('COMMIT');
+      } catch (e) {
+        await client.query('ROLLBACK');
+        throw e;
+      } finally {
+        client.release();
+      }
+
+      await updateRemainingLeave(staffId);
+    } else if (leaveType === "MC") {
+      await pool.query(
+        `UPDATE profiles
+         SET leave_entitlement_medical = leave_entitlement_medical + $1
+         WHERE staff_id=$2`,
+        [days, staffId]
+      );
+    } else if (leaveType === "HOSP") {
+      await pool.query(
+        `UPDATE leave_entitlements
+         SET balance = balance + $1
+         WHERE staff_id=$2 AND leave_type='HOSP'`,
+        [days, staffId]
+      );
+    } else if (leaveType !== "UNPAID") {
+      // MAT, PAT, COMP_A, COMP_B, MAR (special entitlements table)
+      await pool.query(
+        `UPDATE leave_entitlements
+         SET balance = balance + $1
+         WHERE staff_id=$2 AND leave_type=$3`,
+        [days, staffId, leaveType]
+      );
+    }
+
+    // Mark leave as cancelled (admin withdrawal)
+    const updated = await pool.query(
+      `UPDATE leave_requests
+       SET status='cancelled'
+       WHERE leave_id=$1
+       RETURNING *`,
+      [leaveId]
+    );
+
+    await logAdminAction(
+      req,
+      'Withdrew Approved Leave',
+      `Admin withdrew approved leave #${leaveId} (${days} day(s)) for ${leave.staff_name}. Balance restored.`
+    );
+
+    return res.json(updated.rows[0]);
+  } catch (err) {
+    console.error("PATCH /:id/withdraw error:", err);
+    return res.status(500).json({ message: "Failed to withdraw leave" });
+  }
+});
+
+/* ============================================================
     DELETE ALL EMPLOYEE LEAVES
 ============================================================ */
 router.delete("/by-staff/:staffId", async (req, res) => {
