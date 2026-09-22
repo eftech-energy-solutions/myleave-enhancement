@@ -1,6 +1,7 @@
 <script lang="ts">
   import Icon from '@iconify/svelte';
   import { goto } from '$app/navigation';
+  import { PUBLIC_VITE_API_BASE } from '$env/static/public';
 
   let email = '';
   let password = '';
@@ -12,7 +13,7 @@
     error = '';
     loading = true;
     try {
-      const res = await fetch('/login', {
+      const res = await fetch(`${PUBLIC_VITE_API_BASE}/api/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
