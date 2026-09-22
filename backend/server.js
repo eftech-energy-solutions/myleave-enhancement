@@ -311,11 +311,48 @@ app.get('/api/me', async (req, res) => {
       ? hospQ.rows[0]
       : { entitlement: 60, balance: 60 }; // fallback if not exist
 
-    // 3) Combine and return all data
+    // 3) Recompute balances the same way the dashboard donut does, so
+    //    MyProfile always matches the graph (source of truth).
+    const myStaffId = me.staffId;
+    const medQ = await pool.query(
+      `SELECT
+        COALESCE(SUM(CASE WHEN leave_type = 'MC' AND status = 'approved' THEN total_days ELSE 0 END), 0)::float AS approved,
+        COALESCE(SUM(CASE WHEN leave_type = 'MC' AND status = 'pending' THEN total_days ELSE 0 END), 0)::float AS pending
+       FROM leave_requests
+       WHERE staff_id = $1 AND EXTRACT(YEAR FROM date_from) = EXTRACT(YEAR FROM CURRENT_DATE)`,
+      [myStaffId]
+    );
+
+    const medicalOriginal = Number(profile.leave_entitlement_medical_original ?? 0);
+    const medicalRemaining = Math.max(0, medicalOriginal - (medQ.rows[0]?.approved || 0) - (medQ.rows[0]?.pending || 0));
+
+    const annQ = await pool.query(
+      `SELECT
+        COALESCE(SUM(CASE WHEN leave_type IN ('AL', 'EL') AND status = 'approved' THEN total_days ELSE 0 END), 0)::float AS approved,
+        COALESCE(SUM(CASE WHEN leave_type IN ('AL', 'EL') AND status = 'pending' THEN total_days ELSE 0 END), 0)::float AS pending
+       FROM leave_requests
+       WHERE staff_id = $1 AND EXTRACT(YEAR FROM date_from) = EXTRACT(YEAR FROM CURRENT_DATE)`,
+      [myStaffId]
+    );
+
+    const cfExpiry = profile.carry_forward_expiry ? new Date(profile.carry_forward_expiry) : null;
+    const cfValid = cfExpiry && new Date() > cfExpiry ? 0 : Number(profile.carry_forward_balance ?? 0);
+    const annualApproved = annQ.rows[0]?.approved || 0;
+    const storedAL = Number(profile.leave_entitlement_annual ?? 0);
+    const annualRemaining = Math.max(0, Number(profile.remaining_leave ?? storedAL));
+
+    // 4) Combine and return all data
     return res.json({
       ...profile,
-      hosp_entitlement: hosp.entitlement,
-      hosp_balance: hosp.balance
+      hospital_entitlement: hosp.entitlement,
+      hospital_balance: hosp.balance,
+      // donut-aligned computed balances (this is what MyProfile should display)
+      medical_entitlement: medicalOriginal,
+      medical_balance: medicalRemaining,
+      medical_spent: medQ.rows[0]?.approved || 0,
+      medical_pending: medQ.rows[0]?.pending || 0,
+      annual_balance: annualRemaining,
+      annual_carry_forward_valid: cfValid
     });
 
   } catch (err) {

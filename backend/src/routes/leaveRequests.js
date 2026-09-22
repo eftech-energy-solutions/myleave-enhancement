@@ -1819,7 +1819,7 @@ cron.schedule('0 0 1 1 *', async () => {
   } else {
     console.error('❌ Yearly leave reset failed!');
   }
-});
+}, { timezone: 'Asia/Kuala_Lumpur' });
 console.log('⏰ Cron scheduled: Yearly reset on January 1 at midnight');
 
 /* ============================================================
@@ -1838,7 +1838,7 @@ cron.schedule('*/1 * * * *', async () => {
 cron.schedule('0 0 1 5 *', async () => {
   console.log('🧹 AUTO: Zeroing out expired carry forward balances...');
   await zeroExpiredCarryForward();
-});
+}, { timezone: 'Asia/Kuala_Lumpur' });
 console.log('⏰ Cron scheduled: Carry forward expiry cleanup on May 1 at midnight');
 
 export default router;
