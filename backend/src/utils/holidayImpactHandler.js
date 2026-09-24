@@ -66,9 +66,26 @@ export async function recalculateAffectedLeaves(affectedDate) {
         [newDays, leave.leave_id]
       );
 
-      // Adjust the staff's leave balance
       const leaveType = String(leave.leave_type || "").trim().toUpperCase();
 
+      // Only adjust balances for APPROVED leaves. Pending leaves were never
+      // deducted, and rejected/cancelled leaves were already restored, so
+      // running the restore+deduct logic would silently take leave days away.
+      const isApproved = String(leave.status || "").trim().toLowerCase() === "approved";
+
+      if (!isApproved) {
+        recalculated.push({
+          leave_id: leave.leave_id,
+          staff_name: leave.staff_name,
+          leave_type: leaveType,
+          old_days: oldDays,
+          new_days: newDays,
+          difference: difference
+        });
+        continue;
+      }
+
+      // Adjust the staff's leave balance
       if (leaveType === "AL" || leaveType === "EL") {
         // For Annual/Emergency leave, we need to recalculate CF/AL split
         await recalculateAnnualLeaveBalance(leave, oldDays, newDays);
