@@ -14,6 +14,7 @@
 
   let canvasEl;
   let addModal;
+  let impactModal;
 
   let holidayDatesByYear = {};
   let holidayNamesByYear = {};
@@ -25,6 +26,12 @@
   let editDate = "";
   let editTitle = "";
   let editDescription = "";
+  let deleting = false;
+  let impactCheck = {
+    loading: false,
+    data: null,
+    error: null
+  };
   let dataByDept = [];
   let totalEmployees = 0;
   // 🟢 helper untuk Svelte binding (fix ternary bind:value)
@@ -493,15 +500,43 @@ const canGoNextYear = () => {
     await tick();
   }
 
-  // FUNGSI INI DIKEMASKINI SEPENUHNYA DENGAN LOGIK 'deleteItem' BARU
+  // ✅ SEMAK IMPACT DAHULU SEBELUM DELETE — TUNJUK SENARAI LEAVE TERJEJAS
  async function deletePublicHoliday() {
+  const date = addDateISO;
+
+  impactCheck = { loading: true, data: null, error: null };
+  if (impactModal && !impactModal.open) impactModal.showModal();
+
+  try {
+    const res = await fetch(
+      `${PUBLIC_VITE_API_BASE}/api/holidays/impact/${date}`,
+      { credentials: "include" }
+    );
+
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      throw new Error(j.error || "Failed to check holiday impact");
+    }
+
+    const data = await res.json();
+    impactCheck = { loading: false, data, error: null };
+  } catch (err) {
+    console.error("❌ Impact check error:", err);
+    impactCheck = { loading: false, data: null, error: err.message || "Failed to check holiday impact" };
+    showToast(
+      err.message || "Unable to check holiday impact.",
+      "error",
+      "Failed to check impact"
+    );
+  }
+}
+
+ async function performDelete() {
   const source = selectedHolidaySource;
   const uid = selectedHolidayUID;
-  const date = addDateISO;
   const id = selectedHolidayId;
 
-  if (!confirm("Are you sure you want to delete/hide this holiday?")) return;
-
+  deleting = true;
   try {
     if (source === "official") {
       const res = await fetch(
@@ -512,7 +547,7 @@ const canGoNextYear = () => {
           credentials: "include",
           body: JSON.stringify({
             uid,
-            date,
+            date: addDateISO,
             reason: "Hidden by admin"
           })
         }
@@ -552,6 +587,7 @@ const canGoNextYear = () => {
       );
     }
 
+    impactModal?.close();
     addModal?.close();
     await loadHolidays();
 
@@ -564,6 +600,8 @@ const canGoNextYear = () => {
       "error",
       "Action Failed"
     );
+  } finally {
+    deleting = false;
   }
 }
 
@@ -817,6 +855,51 @@ const canGoNextYear = () => {
   </form>
 </dialog>
 
+<!-- Delete/Hide Holiday Warning Modal -->
+<dialog bind:this={impactModal} class="leave-modal" aria-labelledby="impact-title">
+  <div class="leave-form">
+    <button type="button" class="close-btn" on:click={() => impactModal.close()} aria-label="Close">✕</button>
+
+    <h2 id="impact-title" class="title">Delete/Hide Holiday?</h2>
+
+    {#if impactCheck.loading}
+      <p class="impact-msg">Checking affected leave requests…</p>
+    {:else if impactCheck.error}
+      <p class="impact-msg">Couldn't check affected leaves: {impactCheck.error}</p>
+    {:else if impactCheck.data}
+      {#if impactCheck.data.affectedCount === 0}
+        <p class="impact-msg">No leave requests overlap <strong>{addDateISO}</strong>. You can safely delete/hide this holiday.</p>
+      {:else}
+        <p class="impact-msg">
+          This will recalculate <strong>{impactCheck.data.affectedCount}</strong> leave request(s)
+          that overlap <strong>{addDateISO}</strong>. Approved leaves will have their day counts and balances adjusted.
+        </p>
+        <ul class="impact-list">
+          {#each impactCheck.data.affectedLeaves as l (l.leave_id)}
+            <li>
+              <strong>{l.staff_name}</strong>
+              <span class="impact-meta">
+                {l.leave_type} · {l.date_from} → {l.date_until} · {l.total_days} day(s)
+              </span>
+            </li>
+          {/each}
+        </ul>
+      {/if}
+    {/if}
+
+    <div class="row-actions">
+      <button type="button" class="cancel-btn" on:click={() => impactModal.close()}>Cancel</button>
+      <button
+        type="button"
+        class="danger-btn"
+        disabled={impactCheck.loading || !!impactCheck.error || deleting}
+        on:click={performDelete}>
+        {deleting ? "Processing…" : "Delete Anyway"}
+      </button>
+    </div>
+  </div>
+</dialog>
+
 {#if toast.show}
   <div class="toast-stack">
     <div class="toast-item {toast.type} {toast.closing ? 'closing' : ''}">
@@ -998,6 +1081,11 @@ const canGoNextYear = () => {
   .leave-form input[readonly], .leave-form textarea[readonly]{ background:#f3f4f6; color:#6b7280; cursor:not-allowed; }
   .leave-form input[required]:invalid { border-color: #DC2626; }
   .row-actions{ display:flex; gap:8px; align-items:center; margin-top:8px; }
+  .impact-msg{ font-size:14px; color:#374151; margin:8px 0; line-height:1.5; }
+  .impact-list{ list-style:none; margin:8px 0 4px; padding:0; max-height:260px; overflow-y:auto; border:1px solid #e5e7eb; border-radius:8px; }
+  .impact-list li{ display:flex; justify-content:space-between; align-items:center; gap:8px; padding:8px 10px; border-bottom:1px solid #f3f4f6; font-size:13px; }
+  .impact-list li:last-child{ border-bottom:none; }
+  .impact-meta{ color:#6b7280; font-size:12px; white-space:nowrap; }
   .submit-btn{ background:#0F9B8E; color:#fff; border:none; border-radius:10px; padding:9px 14px; cursor:pointer; font-weight:600; font-size:14px; }
   .submit-btn:hover{ opacity:.9; }
   .danger-btn{ background:#dc2626; color:#fff; border:1px solid #fecaca; border-radius:8px; padding:9px 12px; cursor:pointer; font-weight:700; }

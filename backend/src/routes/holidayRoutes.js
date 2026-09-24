@@ -93,53 +93,71 @@ router.post("/", async (req, res) => {
   }
 });
 
-// 🟢 DELETE — remove custom holiday WITH RECALCULATION
+// 🟢 DELETE — remove custom holiday WITH RECALCULATION (atomic)
 router.delete("/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!id) return res.status(400).json({ error: "Missing or invalid holiday id" });
 
-    // Get the date before deleting
-    const { rows: holidayRows } = await pool.query(
-      "SELECT date::text FROM public_holidays WHERE id=$1", 
-      [id]
-    );
+    const client = await pool.connect();
+    let inTx = false;
+    try {
+      // Get the date before deleting
+      const { rows: holidayRows } = await client.query(
+        "SELECT date::text FROM public_holidays WHERE id=$1", 
+        [id]
+      );
 
-    if (holidayRows.length === 0) {
-      return res.status(404).json({ error: "Holiday not found" });
+      if (holidayRows.length === 0) {
+        return res.status(404).json({ error: "Holiday not found" });
+      }
+
+      const holidayDate = holidayRows[0].date;
+
+      // Check impact (optional - just for logging)
+      const impact = await checkHolidayImpact(holidayDate);
+
+      if (impact.hasImpact) {
+        console.log(`⚠️ Warning: Deleting holiday will affect ${impact.affectedCount} approved leave(s)`);
+      }
+
+      // Recalculate FIRST, then delete — all inside one transaction so a failed
+      // recalculation leaves the holiday and leave balances untouched.
+      await client.query('BEGIN');
+      inTx = true;
+
+      const recalcResult = await recalculateAffectedLeaves(holidayDate, client);
+
+      const result = await client.query("DELETE FROM public_holidays WHERE id=$1 RETURNING *", [id]);
+
+      if (result.rowCount === 0) {
+        throw new Error("Holiday not found");
+      }
+
+      await client.query('COMMIT');
+      inTx = false;
+
+      console.log(`✅ Holiday deleted. Recalculated ${recalcResult.affectedCount} leave(s)`);
+      await logAdminAction(
+            req, 
+            'Deleted Holiday', 
+            `Deleted public holiday on ${holidayDate}`
+          );
+      res.json({ 
+        success: true,
+        message: recalcResult.affectedCount > 0
+          ? `Holiday deleted. ${recalcResult.affectedCount} approved leave(s) were recalculated.`
+          : "Holiday deleted successfully.",
+        impact: recalcResult
+      });
+    } catch (e) {
+      if (inTx) {
+        try { await client.query('ROLLBACK'); } catch (_) {}
+      }
+      throw e;
+    } finally {
+      client.release();
     }
-
-    const holidayDate = holidayRows[0].date;
-
-    // Check impact (optional - just for logging)
-    const impact = await checkHolidayImpact(holidayDate);
-    
-    if (impact.hasImpact) {
-      console.log(`⚠️ Warning: Deleting holiday will affect ${impact.affectedCount} approved leave(s)`);
-    }
-
-    // Delete the holiday
-    const result = await pool.query("DELETE FROM public_holidays WHERE id=$1 RETURNING *", [id]);
-    
-    if (result.rowCount === 0) {
-      return res.status(404).json({ error: "Holiday not found" });
-    }
-
-    // Recalculate affected leaves
-    const recalcResult = await recalculateAffectedLeaves(holidayDate);
-    console.log(`✅ Holiday deleted. Recalculated ${recalcResult.affectedCount} leave(s)`);
-    await logAdminAction(
-          req, 
-          'Deleted Holiday', 
-          `Deleted public holiday on ${holidayDate}`
-        );
-    res.json({ 
-      success: true,
-      message: recalcResult.affectedCount > 0
-        ? `Holiday deleted. ${recalcResult.affectedCount} approved leave(s) were recalculated.`
-        : "Holiday deleted successfully.",
-      impact: recalcResult
-    });
   } catch (e) {
     console.error("DELETE /api/holidays/:id error:", e);
     res.status(500).json({ error: "Failed to delete holiday" });

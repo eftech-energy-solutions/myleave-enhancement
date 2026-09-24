@@ -8,12 +8,13 @@ import { calculateWorkingDays } from "./calculateWorkingDays.js";
  * @param {string} affectedDate - The date of the holiday that changed (YYYY-MM-DD)
  * @returns {Promise<Object>} - Summary of recalculations
  */
-export async function recalculateAffectedLeaves(affectedDate) {
+export async function recalculateAffectedLeaves(affectedDate, executor) {
+  const db = executor ?? pool;
   try {
     console.log(`🔄 Recalculating leaves affected by holiday change on ${affectedDate}`);
 
-    // Find all APPROVED leaves that include this date
-    const { rows: affectedLeaves } = await pool.query(
+    // Find all leaves that include this date
+    const { rows: affectedLeaves } = await db.query(
       `SELECT leave_id, staff_id, staff_name, leave_type, 
               date_from, date_until, total_days, duration,
               deduct_cf, deduct_al
@@ -59,7 +60,7 @@ export async function recalculateAffectedLeaves(affectedDate) {
       console.log(`🔄 Leave ${leave.leave_id}: ${oldDays} → ${newDays} days (${difference > 0 ? '+' : ''}${difference})`);
 
       // Update the leave request
-      await pool.query(
+      await db.query(
         `UPDATE leave_requests 
          SET total_days = $1 
          WHERE leave_id = $2`,
@@ -88,10 +89,10 @@ export async function recalculateAffectedLeaves(affectedDate) {
       // Adjust the staff's leave balance
       if (leaveType === "AL" || leaveType === "EL") {
         // For Annual/Emergency leave, we need to recalculate CF/AL split
-        await recalculateAnnualLeaveBalance(leave, oldDays, newDays);
+        await recalculateAnnualLeaveBalance(leave, oldDays, newDays, executor);
       } else if (leaveType === "MC") {
         // Medical leave - simple adjustment
-        await pool.query(
+        await db.query(
           `UPDATE profiles 
            SET leave_entitlement_medical = leave_entitlement_medical - $1 
            WHERE staff_id = $2`,
@@ -99,7 +100,7 @@ export async function recalculateAffectedLeaves(affectedDate) {
         );
       } else if (leaveType === "HOSP") {
         // Hospitalization leave
-        await pool.query(
+        await db.query(
           `UPDATE leave_entitlements 
            SET balance = balance - $1 
            WHERE staff_id = $2 AND leave_type = 'HOSP'`,
@@ -107,7 +108,7 @@ export async function recalculateAffectedLeaves(affectedDate) {
         );
       } else if (leaveType !== "UNPAID") {
         // Other special leaves (skip UNPAID)
-        await pool.query(
+        await db.query(
           `UPDATE leave_entitlements 
            SET balance = balance - $1 
            WHERE staff_id = $2 AND leave_type = $3`,
@@ -144,13 +145,14 @@ export async function recalculateAffectedLeaves(affectedDate) {
  * Recalculate Annual Leave balance with proper CF/AL split
  * 🔥 FIX: Removed unused difference parameter
  */
-async function recalculateAnnualLeaveBalance(leave, oldDays, newDays) {
+async function recalculateAnnualLeaveBalance(leave, oldDays, newDays, executor) {
   const staffId = leave.staff_id;
   const leaveDate = new Date(leave.date_from);
 
-  const client = await pool.connect();
+  const ownsClient = !executor;
+  const client = executor ?? await pool.connect();
   try {
-    await client.query('BEGIN');
+    if (ownsClient) await client.query('BEGIN');
 
     // Get current profile data + lock row
     const { rows } = await client.query(
@@ -256,13 +258,13 @@ async function recalculateAnnualLeaveBalance(leave, oldDays, newDays) {
       [finalAL + finalCF, staffId]
     );
 
-    await client.query('COMMIT');
+    if (ownsClient) await client.query('COMMIT');
     console.log(`✅ Updated ${leave.staff_name}: AL=${finalAL}, CF=${finalCF}, Remaining=${finalAL + finalCF}`);
   } catch (e) {
-    await client.query('ROLLBACK');
+    if (ownsClient) await client.query('ROLLBACK');
     throw e;
   } finally {
-    client.release();
+    if (ownsClient) client.release();
   }
 }
 
@@ -278,7 +280,7 @@ export async function checkHolidayImpact(date) {
     `SELECT leave_id, staff_name, leave_type, total_days,
             date_from, date_until
      FROM leave_requests
-     WHERE status IN ('approved', 'rejected', 'pending', 'cancelled', 'cancellation_pending')
+     WHERE status IN ('approved')
        AND date_from <= $1
        AND date_until >= $1
      ORDER BY staff_name`,
