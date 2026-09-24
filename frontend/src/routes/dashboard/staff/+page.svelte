@@ -1434,48 +1434,58 @@
 
 		<button type="submit" class="submit-btn">SUBMIT</button>
 	</form>
+
+	{#if toast.show && modal?.open}
+		<div class="toast-stack in-modal">
+			{@render toastItem()}
+		</div>
+	{/if}
 </dialog>
 
-{#if toast.show}
-	<div class="toast-stack">
-		<div class="toast-item {toast.type} {toast.closing ? 'closing' : ''}">
-			<div class="toast-icon">
-				{#if toast.type === 'success'}
-					<svg viewBox="0 0 24 24" class="toast-svg">
-						<path d="M9.5 16.2L4.8 11.5l1.4-1.4 3.3 3.3 8.1-8.1 1.4 1.4z" />
-					</svg>
-				{/if}
+{#snippet toastItem()}
+	<div class="toast-item {toast.type} {toast.closing ? 'closing' : ''}">
+		<div class="toast-icon">
+			{#if toast.type === 'success'}
+				<svg viewBox="0 0 24 24" class="toast-svg">
+					<path d="M9.5 16.2L4.8 11.5l1.4-1.4 3.3 3.3 8.1-8.1 1.4 1.4z" />
+				</svg>
+			{/if}
 
-				{#if toast.type === 'error'}
-					<svg viewBox="0 0 24 24" class="toast-svg">
-						<path
-							d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm3.5 13.1-1.4 1.4L12 13.4l-2.1 2.1-1.4-1.4L10.6 12 8.5 9.9l1.4-1.4 2.1 2.1 2.1-2.1 1.4 1.4L13.4 12z"
-						/>
-					</svg>
-				{/if}
+			{#if toast.type === 'error'}
+				<svg viewBox="0 0 24 24" class="toast-svg">
+					<path
+						d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm3.5 13.1-1.4 1.4L12 13.4l-2.1 2.1-1.4-1.4L10.6 12 8.5 9.9l1.4-1.4 2.1 2.1 2.1-2.1 1.4 1.4L13.4 12z"
+					/>
+				</svg>
+			{/if}
 
-				{#if toast.type === 'info'}
-					<svg viewBox="0 0 24 24" class="toast-svg">
-						<path
-							d="M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2z"
-						/>
-					</svg>
-				{/if}
+			{#if toast.type === 'info'}
+				<svg viewBox="0 0 24 24" class="toast-svg">
+					<path
+						d="M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2z"
+					/>
+				</svg>
+			{/if}
 
-				{#if toast.type === 'warning'}
-					<svg viewBox="0 0 24 24" class="toast-svg">
-						<path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z" />
-					</svg>
-				{/if}
-			</div>
-
-			<div class="toast-body">
-				<strong>{toast.title}</strong>
-				<p>{toast.message}</p>
-			</div>
-
-			<button class="toast-close" on:click={() => (toast.show = false)}>×</button>
+			{#if toast.type === 'warning'}
+				<svg viewBox="0 0 24 24" class="toast-svg">
+					<path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z" />
+				</svg>
+			{/if}
 		</div>
+
+		<div class="toast-body">
+			<strong>{toast.title}</strong>
+			<p>{toast.message}</p>
+		</div>
+
+		<button class="toast-close" on:click={() => (toast.show = false)}>×</button>
+	</div>
+{/snippet}
+
+{#if toast.show && !modal?.open}
+	<div class="toast-stack">
+		{@render toastItem()}
 	</div>
 {/if}
 
@@ -2002,6 +2012,7 @@
 		padding: 0;
 		max-width: 500px;
 		width: 90%;
+		position: relative;
 	}
 	.leave-modal::backdrop {
 		background: rgba(0, 0, 0, 0.2);
@@ -2116,6 +2127,20 @@
 		top: 20px;
 		right: 20px;
 		z-index: 9999;
+	}
+
+	/* ===== TOAST INSIDE LEAVE MODAL ===== */
+	.toast-stack.in-modal {
+		position: absolute;
+		top: 12px;
+		right: 12px;
+		z-index: 100;
+		max-width: calc(100% - 24px);
+	}
+	.toast-stack.in-modal .toast-item {
+		min-width: 0;
+		width: 100%;
+		max-width: 360px;
 	}
 
 	/* ===== TOAST ITEM ===== */
