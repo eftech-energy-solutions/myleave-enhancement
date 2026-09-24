@@ -48,6 +48,7 @@
   let approvedMC = 0;
   let approvedHOSP = 0;
   let totalALUsed = 0;
+  let totalALPending = 0;
   let totalMCUsed = 0;
   let totalHOSPUsed = 0;
   let pendingAL = 0;
@@ -227,6 +228,12 @@ $: donuts = user ? [
     const [y, m, d] = iso.split('-').map(Number);
     return new Date(y, (m - 1), d);
   };
+  // Sat/Sun cannot be selected as leave dates
+  const isWeekendISO = (iso) => {
+    const d = parseLocalISO(iso);
+    return d ? d.getDay() === 0 || d.getDay() === 6 : false;
+  };
+  const REJECT_WEEKEND_MSG = 'Saturdays and Sundays cannot be selected for leave.';
 
   // Count inclusive days excluding public holidays
   function countDaysExcludingPH(fromISO, untilISO) {
@@ -666,6 +673,20 @@ async function loadRecent() {
     return localISO(d);
   };
 
+  // Inclusive working days excluding weekends (Sat/Sun) & public holidays —
+  // matches the backend's calculateWorkingDays()
+  const countWorkingDays = (fromISO, untilISO) => {
+    const start = parseLocalISO(fromISO);
+    const end = parseLocalISO(untilISO || fromISO);
+    if (!start || !end) return 0;
+    let c = 0;
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const day = d.getDay();
+      if (day !== 0 && day !== 6 && !isHoliday(d)) c++;
+    }
+    return c;
+  };
+
   $: if (
   leaveType !== 'MC' &&
   dateFrom &&
@@ -715,15 +736,34 @@ $: {
     }
   } else if (endLocked) {
     totalDays = dateFrom ? fixedDurations[leaveType] : 0;
-  } else {
+  } else if (['MAT', 'PAT', 'HOSP', 'COMP_A', 'COMP_B'].includes(leaveType)) {
+    // Calendar-day leaves: weekends included
     totalDays = dateFrom ? diffDays(parseLocalISO(dateFrom), parseLocalISO(dateUntil || dateFrom)) : 0;
+  } else {
+    // Working-day leaves (AL, EL, MC, UNPAID): exclude weekends & holidays
+    totalDays = dateFrom ? countWorkingDays(dateFrom, dateUntil || dateFrom) : 0;
   }
 }
 
   function onFromChange() {
     if (!dateFrom) return;
+    if (isWeekendISO(dateFrom)) {
+      showToast(REJECT_WEEKEND_MSG, 'warning', 'Weekend Not Allowed');
+      dateFrom = '';
+      dateUntil = '';
+      return;
+    }
     if (duration === 'Half') dateUntil = dateFrom;
     if (!dateUntil) dateUntil = dateFrom;
+  }
+
+  function onUntilChange() {
+    if (!dateUntil) return;
+    if (isWeekendISO(dateUntil)) {
+      showToast(REJECT_WEEKEND_MSG, 'warning', 'Weekend Not Allowed');
+      dateUntil = dateFrom || '';
+      return;
+    }
   }
 
   async function openLeaveForm(date) {
@@ -751,6 +791,11 @@ async function loadAppliedLeave() {
   totalALUsed = allMine
     .filter(r => ["AL", "EL"].includes(r.leave_type))
     .filter(r => ["approved", "pending", "cancellation_pending"].includes(r.status))
+    .reduce((s, r) => s + Number(r.total_days || 0), 0);
+
+  totalALPending = allMine
+    .filter(r => ["AL", "EL"].includes(r.leave_type))
+    .filter(r => ["pending", "cancellation_pending"].includes(r.status))
     .reduce((s, r) => s + Number(r.total_days || 0), 0);
 
   totalMCUsed = allMine
@@ -842,8 +887,15 @@ async function submitLeave(e) {
   //   current.setDate(current.getDate() + 1);
   // }
 
+  // Current AL balance already excludes approved leave — only add still-valid CF.
+  let validCF = 0;
+  const cfExpiry = user.carry_forward_expiry ? new Date(user.carry_forward_expiry) : null;
+  if (cfExpiry && new Date() <= cfExpiry) {
+    validCF = Number(user.carry_forward_balance || 0);
+  }
+
   const limit = {
-    AL: Number(user.leave_entitlement_annual_original ?? 14),
+    AL: Number(user.leave_entitlement_annual ?? 0) + validCF,
     MC: Number(user.leave_entitlement_medical_original ?? 14),
     HOSP: Number(user.hosp_entitlement ?? 60),
     MAT: 98,
@@ -855,7 +907,8 @@ async function submitLeave(e) {
   }[leaveType];
 
   const totalUsed = {
-  AL: totalALUsed,
+  // Approved AL is already deducted from the AL balance — only pending reserves it
+  AL: totalALPending,
   MC: totalMCUsed,
   HOSP: totalHOSPUsed,
 
@@ -1222,6 +1275,7 @@ async function submitLeave(e) {
             disabled={duration === 'Half' || endLocked}
             aria-disabled={duration === 'Half' || endLocked}
             readonly={endLocked}
+            on:change={onUntilChange}
           />
         {#if duration === 'Half'}
           <input type="hidden" name="dateUntil" value={dateUntil} />

@@ -194,6 +194,12 @@ const leaveCodes = {
     const [y, m, d] = iso.split("-").map(Number);
     return new Date(y, m - 1, d);
   };
+  // Sat/Sun cannot be selected as leave dates
+  const isWeekendISO = (iso) => {
+    const d = parseLocalISO(iso);
+    return d ? d.getDay() === 0 || d.getDay() === 6 : false;
+  };
+  const REJECT_WEEKEND_MSG = "Saturdays and Sundays cannot be selected for leave.";
   const addDaysISO = (iso, n) => {
     const d = parseLocalISO(iso);
     if (!d) return "";
@@ -563,8 +569,18 @@ async function submitLeave(event) {
     // ===============================
     // 1️⃣ LEAVE LIMIT VALIDATION
     // ===============================
+    // Current AL balance already excludes approved leave — only add still-valid CF.
+    let validCF = 0;
+    const cfExpiry = me?.carry_forward_expiry ? new Date(me.carry_forward_expiry) : null;
+    if (cfExpiry && new Date() <= cfExpiry) {
+      validCF = Number(me?.carry_forward_balance || 0);
+    }
+
+    const alLimit = Number(me?.leave_entitlement_annual ?? 0) + validCF;
+
     const limitMap = {
-      AL: 14,
+      AL: alLimit,
+      EL: alLimit,
       MC: 14,
       HOSP: 60,
       MAT: 98,
@@ -576,16 +592,25 @@ async function submitLeave(event) {
 
     const limit = limitMap[leaveType];
 
-    const used = leaves
-      .filter(l => l.type === leaveType)
-      .filter(
-        l =>
-          l.status === "Approved" ||
-          l.status === "Pending" ||
-          l.status === "Cancellation Pending"
-      )
-      .filter(l => l.uuid !== editingUuid)
-      .reduce((s, l) => s + Number(l.totalDays), 0);
+    // Approved AL is already deducted from the AL balance — only pending reserves it.
+    // MC/HOSP balances are not auto-deducted, so count approved for those.
+    const used = ["AL", "EL"].includes(leaveType)
+      ? leaves
+          .filter(l => l.type === "AL" || l.type === "EL")
+          .filter(
+            l => l.status === "Pending" || l.status === "Cancellation Pending"
+          )
+          .filter(l => l.uuid !== editingUuid)
+          .reduce((s, l) => s + Number(l.totalDays), 0)
+      : leaves
+          .filter(l => l.type === leaveType)
+          .filter(
+            l => l.status === "Approved" ||
+              l.status === "Pending" ||
+              l.status === "Cancellation Pending"
+          )
+          .filter(l => l.uuid !== editingUuid)
+          .reduce((s, l) => s + Number(l.totalDays), 0);
 
     if (used + totalDays > limit) {
       showToast(
@@ -772,6 +797,13 @@ function openAddModal() {
 
 function onFromChange() {
   if (!dateFrom) return;
+  if (isWeekendISO(dateFrom)) {
+    showToast(REJECT_WEEKEND_MSG, "warning", "Weekend Not Allowed");
+    dateFrom = "";
+    dateUntil = "";
+    totalDays = 0;
+    return;
+  }
 
   // Half day → same day
   if (duration === "Half") {
@@ -788,6 +820,13 @@ function onFromChange() {
 }
 
 function onUntilChange() {
+  if (!dateUntil) return;
+  if (isWeekendISO(dateUntil)) {
+    showToast(REJECT_WEEKEND_MSG, "warning", "Weekend Not Allowed");
+    dateUntil = dateFrom || "";
+    totalDays = autoCalc(leaveType, dateFrom, dateUntil, duration);
+    return;
+  }
   if (duration === "Half") return;
   totalDays = autoCalc(leaveType, dateFrom, dateUntil, duration);
 }

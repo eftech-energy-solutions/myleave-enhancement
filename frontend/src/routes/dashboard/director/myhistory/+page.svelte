@@ -123,10 +123,16 @@ let attachmentFiles = null;
 // Dashboard helper functions
 const atStartOfDay = (d) => { const x = new Date(d); x.setHours(0,0,0,0); return x; };
 const parseLocalISO = (iso) => {
-  if (!iso) return null;
-  const [y,m,d] = iso.split("-").map(Number);
-  return new Date(y, m - 1, d);
-};
+    if (!iso) return null;
+    const [y, m, d] = iso.split("-").map(Number);
+    return new Date(y, m - 1, d);
+  };
+  // Sat/Sun cannot be selected as leave dates
+  const isWeekendISO = (iso) => {
+    const d = parseLocalISO(iso);
+    return d ? d.getDay() === 0 || d.getDay() === 6 : false;
+  };
+  const REJECT_WEEKEND_MSG = "Saturdays and Sundays cannot be selected for leave.";
 const localISO = (d) => {
   const x = atStartOfDay(d);
   return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}-${String(x.getDate()).padStart(2,"0")}`;
@@ -145,6 +151,19 @@ const addDaysISO = (iso, days) => {
   return localISO(d);
 };
 
+// Inclusive working days (excludes Sat & Sun) — matches backend calculateWorkingDays()
+const countWorkingDays = (fromISO, untilISO) => {
+  const start = parseLocalISO(fromISO);
+  const end = parseLocalISO(untilISO || fromISO);
+  if (!start || !end) return 0;
+  let c = 0;
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const day = d.getDay();
+    if (day !== 0 && day !== 6) c++;
+  }
+  return c;
+};
+
 // ===== Auto-calc totalDays (same as dashboard) =====
 $: {
   
@@ -159,8 +178,13 @@ $: {
     totalDays = fixedDurations[leaveType];
     dateUntil = addDaysISO(dateFrom, totalDays);
   }
-  else {
+  else if (["MAT", "PAT", "HOSP", "COMP_A", "COMP_B"].includes(leaveType)) {
+    // Calendar-day leaves: weekends included
     totalDays = diffDays(parseLocalISO(dateFrom), parseLocalISO(dateUntil || dateFrom));
+  }
+  else {
+    // Working-day leaves (AL, EL, MC, UNPAID): exclude weekends
+    totalDays = countWorkingDays(dateFrom, dateUntil || dateFrom);
   }
 }
 
@@ -484,7 +508,7 @@ async function confirmCancellation() {
 // 1. Annual Leave (AL / EL)
 if (leaveType === "AL" || leaveType === "EL") {
 
-  const annualOriginal = Number(user.leave_entitlement_annual_original ?? 14);
+  const annualBalance = Number(user.leave_entitlement_annual ?? 0);
 
   // CF valid only before expiry
   let carryForward = 0;
@@ -495,7 +519,7 @@ if (leaveType === "AL" || leaveType === "EL") {
     carryForward = Number(user.carry_forward_balance || 0);
   }
 
-  const entitlement = annualOriginal + carryForward;
+  const entitlement = annualBalance + carryForward;
 
   if (totalDays > entitlement) {
     showToast(
@@ -633,6 +657,12 @@ function closeEditModal() {
 }
 function onFromChange() {
   if (!dateFrom) return;
+  if (isWeekendISO(dateFrom)) {
+    showToast(REJECT_WEEKEND_MSG, "warning", "Weekend Not Allowed");
+    dateFrom = "";
+    dateUntil = "";
+    return;
+  }
 
   if (duration === "Half") {
     dateUntil = dateFrom;
@@ -645,6 +675,12 @@ function onFromChange() {
 }
 
 function onUntilChange() {
+  if (!dateUntil) return;
+  if (isWeekendISO(dateUntil)) {
+    showToast(REJECT_WEEKEND_MSG, "warning", "Weekend Not Allowed");
+    dateUntil = dateFrom || "";
+    return;
+  }
   if (duration === "Half") return;
 }
 

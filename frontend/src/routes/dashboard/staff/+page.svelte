@@ -207,10 +207,16 @@
 		const [y, m, d] = iso.split('-').map(Number);
 		return new Date(y, m - 1, d);
 	};
+	// Sat/Sun cannot be selected as leave dates
+	const isWeekendISO = (iso) => {
+		const d = parseLocalISO(iso);
+		return d ? d.getDay() === 0 || d.getDay() === 6 : false;
+	};
+	const REJECT_WEEKEND_MSG = 'Saturdays and Sundays cannot be selected for leave.';
 
-	// Count inclusive days excluding public holidays
-	function countDaysExcludingPH(fromISO, untilISO) {
-		// ... (Fungsi sedia ada dikekalkan) ...
+	// Count inclusive working days excluding weekends (Sat/Sun) & public holidays,
+	// matching the backend's calculateWorkingDays() so the modal total agrees.
+	function countWorkingDays(fromISO, untilISO) {
 		const start = parseLocalISO(fromISO);
 		const end = parseLocalISO(untilISO || fromISO);
 		if (!start || !end) return 0;
@@ -221,7 +227,9 @@
 		let c = 0;
 		const d = new Date(start);
 		for (;;) {
-			if (!isHoliday(d)) c++;
+			const day = d.getDay();
+			const weekend = day === 0 || day === 6;
+			if (!weekend && !isHoliday(d)) c++;
 			if (sameDay(d, end)) break;
 			d.setDate(d.getDate() + 1);
 		}
@@ -773,6 +781,11 @@
 			}
 		} else if (endLocked) {
 			totalDays = dateFrom ? fixedDurations[leaveType] : 0;
+		} else if (['AL', 'EL', 'MC', 'UNPAID'].includes(leaveType)) {
+			// Working-day leave types: exclude weekends & public holidays
+			totalDays = dateFrom
+				? countWorkingDays(dateFrom, dateUntil || dateFrom)
+				: 0;
 		} else {
 			totalDays = dateFrom
 				? diffDays(parseLocalISO(dateFrom), parseLocalISO(dateUntil || dateFrom))
@@ -782,8 +795,23 @@
 
 	function onFromChange() {
 		if (!dateFrom) return;
+		if (isWeekendISO(dateFrom)) {
+			showToast(REJECT_WEEKEND_MSG, 'warning', 'Weekend Not Allowed');
+			dateFrom = '';
+			dateUntil = '';
+			return;
+		}
 		if (duration === 'Half') dateUntil = dateFrom;
 		if (!dateUntil) dateUntil = dateFrom;
+	}
+
+	function onUntilChange() {
+		if (!dateUntil) return;
+		if (isWeekendISO(dateUntil)) {
+			showToast(REJECT_WEEKEND_MSG, 'warning', 'Weekend Not Allowed');
+			dateUntil = dateFrom || '';
+			return;
+		}
 	}
 
 	async function openLeaveForm(date) {
@@ -1367,6 +1395,7 @@
 					disabled={duration === 'Half' || endLocked}
 					aria-disabled={duration === 'Half' || endLocked}
 					readonly={endLocked}
+					on:change={onUntilChange}
 				/>
 				{#if duration === 'Half'}
 					<input type="hidden" name="dateUntil" value={dateUntil} />

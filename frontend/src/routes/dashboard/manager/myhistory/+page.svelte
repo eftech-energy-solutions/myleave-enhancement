@@ -124,10 +124,16 @@ let attachmentFiles = null;
 // Dashboard helper functions
 const atStartOfDay = (d) => { const x = new Date(d); x.setHours(0,0,0,0); return x; };
 const parseLocalISO = (iso) => {
-  if (!iso) return null;
-  const [y,m,d] = iso.split("-").map(Number);
-  return new Date(y, m - 1, d);
-};
+    if (!iso) return null;
+    const [y, m, d] = iso.split("-").map(Number);
+    return new Date(y, m - 1, d);
+  };
+  // Sat/Sun cannot be selected as leave dates
+  const isWeekendISO = (iso) => {
+    const d = parseLocalISO(iso);
+    return d ? d.getDay() === 0 || d.getDay() === 6 : false;
+  };
+  const REJECT_WEEKEND_MSG = "Saturdays and Sundays cannot be selected for leave.";
 const localISO = (d) => {
   const x = atStartOfDay(d);
   return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}-${String(x.getDate()).padStart(2,"0")}`;
@@ -532,7 +538,7 @@ async function confirmCancellation() {
 // 1. Annual Leave (AL / EL)
 if (leaveType === "AL" || leaveType === "EL") {
 
-  const annualOriginal = Number(user.leave_entitlement_annual_original ?? 14);
+  const annualBalance = Number(user.leave_entitlement_annual ?? 0);
 
   // CF valid only before expiry
   let carryForward = 0;
@@ -543,7 +549,7 @@ if (leaveType === "AL" || leaveType === "EL") {
     carryForward = Number(user.carry_forward_balance || 0);
   }
 
-  const entitlement = annualOriginal + carryForward;
+  const entitlement = annualBalance + carryForward;
 
   if (totalDays > entitlement) {
     showToast(
@@ -681,6 +687,13 @@ function closeEditModal() {
 }
 function onFromChange() {
   if (!dateFrom) return;
+  if (isWeekendISO(dateFrom)) {
+    showToast(REJECT_WEEKEND_MSG, "warning", "Weekend Not Allowed");
+    dateFrom = "";
+    dateUntil = "";
+    totalDays = 0;
+    return;
+  }
 
   if (duration === "Half") {
     dateUntil = dateFrom;
@@ -699,6 +712,13 @@ function onFromChange() {
 }
 
 function onUntilChange() {
+  if (!dateUntil) return;
+  if (isWeekendISO(dateUntil)) {
+    showToast(REJECT_WEEKEND_MSG, "warning", "Weekend Not Allowed");
+    dateUntil = dateFrom || "";
+    totalDays = autoCalc(leaveType, dateFrom, dateUntil, duration);
+    return;
+  }
   if (duration === "Half") return;
   totalDays = autoCalc(leaveType, dateFrom, dateUntil, duration);
 }
