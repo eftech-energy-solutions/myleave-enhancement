@@ -242,12 +242,16 @@ const leaveCodes = {
   // =========== LOAD LEAVES FROM BACKEND ============
   onMount(async () => {
     try {
-      // ✅ FIX 1 — Correct URL + credentials included
+      // ✅ FIX 1 — Use /api/me (includes entitlement balances) + credentials included
       const meRes = await fetch(
-  `${PUBLIC_VITE_API_BASE}/api/employee/me`,
+  `${PUBLIC_VITE_API_BASE}/api/me`,
   { credentials: "include" }
 );
-      me = await meRes.json();
+      const profile = await meRes.json();
+      me = {
+        ...profile,
+        staffId: profile.staff_id
+      };
 
       // If failed to get user, do not continue
       if (!me || !me.staffId) {
@@ -449,12 +453,16 @@ async function refreshDashboard() {
 
   leaves = data.filter(l => l.staff_id === me.staffId);
 
-  // 2) 🔥 RELOAD USER PROFILE (IMPORTANT)
+  // 2) 🔥 RELOAD USER PROFILE (IMPORTANT) — /api/me includes entitlements
   const meRes2 = await fetch(
-  `${PUBLIC_VITE_API_BASE}/api/employee/me`,
+  `${PUBLIC_VITE_API_BASE}/api/me`,
   { credentials: "include" }
 );
-  user = await meRes2.json();
+  const profile = await meRes2.json();
+  me = {
+    ...profile,
+    staffId: profile.staff_id
+  };
 
 
   // 3) Force Svelte update
