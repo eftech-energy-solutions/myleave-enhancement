@@ -3,6 +3,8 @@
   import { onMount } from 'svelte';
   import { afterNavigate } from '$app/navigation';
   import { PUBLIC_VITE_API_BASE } from '$env/static/public';
+  import NewsBell from '$lib/components/news/NewsBell.svelte';
+  import NewsCarouselModal from '$lib/components/news/NewsCarouselModal.svelte';
 
   // --- SIDEBAR TOGGLE ---
   let sidebarOpen = false;
@@ -71,6 +73,7 @@ function showToast(message, type = "success", title = "", duration = 3000) {
         const data = await res.json();
         // merge backend data (photoUrl, staffId, etc.) into safeUser
         safeUser = { ...safeUser, ...data };
+        avatarBroken = false;
         profilePhotoUrl = safeUser.photoUrl 
           ? `${PUBLIC_VITE_API_BASE}${safeUser.photoUrl}` 
           : '';
@@ -105,6 +108,7 @@ function showToast(message, type = "success", title = "", duration = 3000) {
   let profileModalOpen = false;
   let activeProfilePane = 'picture'; // 'picture' | 'password'
   let profilePhotoUrl = '';
+  let avatarBroken = false;
 
   // Show/hide new password
   let showPwd1 = false;
@@ -273,6 +277,7 @@ else {
 
       // 🔄 UPDATE DATA (source of truth)
       safeUser.photoUrl = data.photoUrl;
+      avatarBroken = false;
 
       // 🖼️ Modal preview
       profilePhotoUrl = `${PUBLIC_VITE_API_BASE}${data.photoUrl}${bust}`;
@@ -433,14 +438,23 @@ $: pageDesc =
 
       <div class="profile" use:clickOutside>
         <div class="profile-info">
-          {#if safeUser?.photoUrl}
+          <NewsBell />
+
+          {#if safeUser?.photoUrl && !avatarBroken}
             {console.log('Rendering sidebar image URL:', safeUser.photoUrl)}
             <img
               src={`${PUBLIC_VITE_API_BASE}${safeUser.photoUrl}`}
               alt="profile"
               class="avatar-img"
-              on:error={(e) => (e.currentTarget.style.display = 'none')}
+              on:error={() => (avatarBroken = true)}
             />
+          {:else}
+            <div class="avatar-fallback">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="#9ca3af">
+                <circle cx="12" cy="8" r="4"/>
+                <path d="M4 20c0-4.2 4.2-6.5 8-6.5s8 2.3 8 6.5"/>
+              </svg>
+            </div>
           {/if}
             <div class="who">
               <div class="name">{safeUser?.name}</div>
@@ -487,6 +501,8 @@ $: pageDesc =
 </div>
 
 <!-- PROFILE MODAL -->
+<NewsCarouselModal />
+
 {#if profileModalOpen}
   <div class="modal-wrap" role="dialog" aria-modal="true" aria-labelledby="profile-title">
     <div class="modal">
@@ -811,12 +827,22 @@ $: pageDesc =
     align-items: center;
     gap: 10px;
     color: #fff;
+    position: relative;
   }
   .avatar-img {
     height: 70px;
     width: 70px;
     border-radius: 9999px;
     object-fit: cover;
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25);
+  }
+  .avatar-fallback {
+    width: 70px;
+    height: 70px;
+    border-radius: 9999px;
+    display: grid;
+    place-items: center;
+    background: rgba(255, 255, 255, 0.18);
     box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25);
   }
   .who .name{ 
@@ -1106,6 +1132,11 @@ $: pageDesc =
   .avatar-img {
     height: 44px;
     width: 44px;
+  }
+
+  .avatar-fallback {
+    width: 44px;
+    height: 44px;
   }
 }
 </style>

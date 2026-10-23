@@ -15,6 +15,7 @@
     else if (rest === '/leave-approvals') t = 'Approve Leave';
     else if (rest === '/profile') t = 'My Profile';
     else if (rest === '/logs') t = 'Activity Logs';
+    else if (rest === '/bulletin') t = 'Bulletin';
     else if (rest === '/chat') t = 'Chat';
     else if (rest === '/reports') t = 'My Dashboard';
     return `${t} | MyLeave`;

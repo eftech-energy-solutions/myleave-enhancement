@@ -16,6 +16,7 @@ import dashboardRoutes from './src/routes/dashboardRoutes.js';
 import roleSettingRoute from "./src/routes/roleSettingRoute.js";
 import leaveRequestsRoutes from "./src/routes/leaveRequests.js";
 import chatRoutes from './src/routes/chat.js';
+import newsRoutes from './src/routes/newsRoutes.js';
 
 
 import path from "path";
@@ -116,6 +117,7 @@ app.use('/api/auth', authRoutes);
 app.use("/api", roleSettingRoute);
 app.use("/api/leave-requests", leaveRequestsRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/news', newsRoutes);
 
 
 // ============================

@@ -111,7 +111,7 @@ The seeder skips if the email already exists.
 
 ### Step 3 — Verify the Schema
 
-All 8 tables are created on first container start via `backend/db/schema.sql`:
+All tables are created on first container start via `backend/db/schema.sql`:
 
 ```bash
 docker exec myleave-db psql -U myleave -d myleave -c "\dt"
@@ -124,9 +124,14 @@ Expected output:
  Schema |        Name        | Type  |  Owner
 --------+--------------------+-------+---------
  public | admin_logs         | table | myleave
+ public | conversations      | table | myleave
  public | holiday_overrides  | table | myleave
  public | leave_entitlements | table | myleave
  public | leave_requests     | table | myleave
+ public | messages           | table | myleave
+ public | news_items         | table | myleave
+ public | news_reads         | table | myleave
+ public | news_user_state    | table | myleave
  public | password_resets    | table | myleave
  public | profiles           | table | myleave
  public | public_holidays    | table | myleave
@@ -262,6 +267,24 @@ Or manually:
 docker exec -i myleave-db psql -U myleave -d myleave < backend/db/schema.sql
 ```
 
+### Applying the schema to Neon / a remote database
+
+`schema.sql` is written with `CREATE TABLE IF NOT EXISTS`, so it is safe to re-apply to an
+existing database — it only adds what is missing.
+
+```bash
+# Neon / remote DB - use the DATABASE_URL from the root .env
+psql "<DATABASE_URL>" -f backend/db/schema.sql
+```
+
+The Bulletin feature needs three tables to exist: `news_items`, `news_reads` and
+`news_user_state`. Without them every `/api/news` endpoint fails with a 500.
+
+```bash
+# verify
+psql "<DATABASE_URL>" -c "\dt news*"
+```
+
 ### Seeding failed — admin already exists
 
 ```
@@ -291,3 +314,6 @@ Inferred from all route queries in the codebase. See [PROJECT_ANALYSIS.md](./PRO
 | `role_setting` | Role overrides (elevate staff to admin/manager) |
 | `public_holidays` | Custom holidays added by admin |
 | `holiday_overrides` | Hidden official holidays |
+| `news_items` | Bulletin / announcement posts (title, body, optional PNG) |
+| `news_reads` | Per-user read state — drives the notification bell badge |
+| `news_user_state` | Per-user "daily announcement popup already shown" gate |

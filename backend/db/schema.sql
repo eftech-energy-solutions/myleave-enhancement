@@ -154,6 +154,40 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 
 -- ============================================================
+-- TABLE: news_items  (Bulletin / Announcement)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS news_items (
+    id              SERIAL PRIMARY KEY,
+    title           TEXT NOT NULL,
+    body            TEXT NOT NULL,
+    image_path      TEXT,
+    created_by      TEXT NOT NULL,
+    created_by_name TEXT,
+    status          TEXT NOT NULL DEFAULT 'published',
+    created_at      TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMP
+);
+
+-- ============================================================
+-- TABLE: news_reads  (per-user read state -> bell badge count)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS news_reads (
+    id       SERIAL PRIMARY KEY,
+    news_id  INTEGER NOT NULL REFERENCES news_items(id) ON DELETE CASCADE,
+    staff_id TEXT NOT NULL,
+    read_at  TIMESTAMP NOT NULL DEFAULT NOW(),
+    UNIQUE (news_id, staff_id)
+);
+
+-- ============================================================
+-- TABLE: news_user_state  ("already popped the daily modal" gate)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS news_user_state (
+    staff_id        TEXT PRIMARY KEY,
+    last_popup_date DATE
+);
+
+-- ============================================================
 -- INDEXES
 -- ============================================================
 CREATE INDEX IF NOT EXISTS idx_profiles_email_lower ON profiles (LOWER(email));
@@ -177,3 +211,6 @@ CREATE INDEX IF NOT EXISTS idx_conversations_last_message ON conversations (last
 CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages (conversation_id, id);
 CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages (sender_id);
 CREATE INDEX IF NOT EXISTS idx_messages_read ON messages (conversation_id, read_at);
+CREATE INDEX IF NOT EXISTS idx_news_items_created_at ON news_items (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_news_reads_staff ON news_reads (staff_id);
+CREATE INDEX IF NOT EXISTS idx_news_reads_news ON news_reads (news_id);

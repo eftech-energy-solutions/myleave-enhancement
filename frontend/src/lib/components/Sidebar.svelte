@@ -5,6 +5,8 @@
   import { apiFetch } from '$lib/api';
   import { PUBLIC_VITE_API_BASE } from '$env/static/public';
   import AdminLeaveApprovals from '$lib/components/AdminLeaveApprovals.svelte';
+  import NewsBell from '$lib/components/news/NewsBell.svelte';
+  import NewsCarouselModal from '$lib/components/news/NewsCarouselModal.svelte';
 
   // --- SIDEBAR TOGGLE ---
   let sidebarOpen = false;
@@ -19,6 +21,7 @@
   let profilePhotoUrl = '';
   let showPwd1 = false;
   let loadingUser = true;
+  let avatarBroken = false;
 
   let safeUser = {
     name: '',
@@ -96,6 +99,7 @@ $: headerAvatarUrl = safeUser.photoUrl
     if (res.ok) {
       const data = await res.json();
       safeUser = { ...safeUser, ...data };
+      avatarBroken = false;
 
       const bust = `?v=${Date.now()}`;
       safeUser.photoUrl = data.photoUrl;
@@ -406,6 +410,7 @@ async function saveProfile(e) {
 
       // success
       safeUser.photoUrl = data.photoUrl;
+      avatarBroken = false;
       profilePhotoUrl = data.photoUrl.startsWith('http')
         ? data.photoUrl
         : `${PUBLIC_VITE_API_BASE}${data.photoUrl}`;
@@ -624,6 +629,8 @@ $: pageTitle =
     ? 'Approve Leave'
     : $page.url.pathname.startsWith('/dashboard/admin/logs')
     ? 'Activity Logs'
+    : $page.url.pathname.startsWith('/dashboard/admin/bulletin')
+    ? 'Bulletin'
     : $page.url.pathname.startsWith('/dashboard/admin/chat')
     ? 'Chat'
     : $page.url.pathname.startsWith('/dashboard/admin/profile')
@@ -729,6 +736,17 @@ $: pageDesc =
           </span>
           <span class="text">Activity Logs</span>
         </a>
+        <a
+            href="/dashboard/admin/bulletin"
+            class:active={isActive('/dashboard/admin/bulletin')}
+          >
+            <span class="ico">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/>
+              </svg>
+            </span>
+            <span class="text">Bulletin</span>
+          </a>
           <a
             href="/dashboard/admin/chat"
             class:active={isActive('/dashboard/admin/chat')}
@@ -788,11 +806,14 @@ $: pageDesc =
 
       <div class="profile" use:clickOutside>
         <div class="profile-info">
-          {#if safeUser.photoUrl}
+          <NewsBell />
+
+          {#if safeUser.photoUrl && !avatarBroken}
             <img
               src={`${PUBLIC_VITE_API_BASE}${safeUser.photoUrl}`}
               class="avatar-img"
               alt="profile"
+              on:error={() => (avatarBroken = true)}
             />
           {:else}
             <div class="avatar-fallback">
@@ -877,6 +898,8 @@ $: pageDesc =
 {/if}
 
 <svelte:window on:keydown={handlePanelKeydown} />
+
+<NewsCarouselModal />
 
 {#if profileModalOpen}
   <div class="modal-wrap">
@@ -1250,7 +1273,7 @@ $: pageDesc =
   .icon-btn{ border:none; background:transparent; cursor:pointer; font-size:18px; line-height:1; padding:6px; border-radius:8px; color:#fff; }
   .icon-btn:hover{ background:rgba(255,255,255,.12); }
   .caret{ font-size:16px; }
-  .profile-info{ display:flex; align-items:center; gap:10px; color:#fff; }
+  .profile-info{ display:flex; align-items:center; gap:10px; color:#fff; position:relative; }
   .avatar-img {
     height: 70px;
     width: 70px;
@@ -1259,12 +1282,13 @@ $: pageDesc =
     box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25);
   }
 .avatar-fallback {
-  width: 38px;
-  height: 38px;
+  width: 70px;
+  height: 70px;
   border-radius: 9999px;
   display: grid;
   place-items: center;
-  background: #e5e7eb;
+  background: rgba(255, 255, 255, 0.18);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25);
 }
   .who .name{ 
     font-size:14px; 
@@ -1893,6 +1917,11 @@ $: pageDesc =
   .avatar-img {
     height: 44px;
     width: 44px;
+  }
+
+  .avatar-fallback {
+    width: 44px;
+    height: 44px;
   }
 }
 
